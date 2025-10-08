@@ -83,7 +83,11 @@ jobs:
               perl \
               zip \
               flex \
-              g++
+              g++ \
+              texinfo \
+              python3 \
+              gawk \
+              grep
           run: |
             cd /build
             sh scripts/build.sh \

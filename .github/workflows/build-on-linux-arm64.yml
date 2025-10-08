@@ -75,7 +75,11 @@ jobs:
                 patch \
                 perl \
                 flex \
-                g++ && \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep && \
               cd /build && \
               sh scripts/build.sh \
                 -LDP \

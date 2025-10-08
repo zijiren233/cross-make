@@ -19,6 +19,13 @@ function Init() {
         PATH="$TMP_BIN_DIR:$PATH"
         trap "rm -rf \"$TMP_BIN_DIR\"" EXIT
 
+        # Create symlink for gmake/gnumake to ensure glibc configure finds the right version
+        if [ -x "$(command -v gmake)" ]; then
+            GMAKE_PATH="$(command -v gmake)"
+            ln -s "$GMAKE_PATH" "$TMP_BIN_DIR/gnumake"
+            ln -s "$GMAKE_PATH" "$TMP_BIN_DIR/make"
+        fi
+
         if [ -x "$(command -v gsed)" ]; then
             SED_PATH="$(command -v gsed)"
             ln -s "$SED_PATH" "$TMP_BIN_DIR/sed"
@@ -93,6 +100,7 @@ function Init() {
         DEFAULT_CONFIG_SUB_REV="a2287c3041a3"
         DEFAULT_GCC_VER="14.3.0"
         DEFAULT_MUSL_VER="1.2.5"
+        DEFAULT_GLIBC_VER="2.42"
         DEFAULT_BINUTILS_VER="2.45"
         DEFAULT_GMP_VER="6.3.0"
         DEFAULT_MPC_VER="1.3.1"
@@ -108,6 +116,9 @@ function Init() {
         fi
         if [ -z "${MUSL_VER+x}" ]; then
             MUSL_VER="$DEFAULT_MUSL_VER"
+        fi
+        if [ -z "${GLIBC_VER+x}" ]; then
+            GLIBC_VER="$DEFAULT_GLIBC_VER"
         fi
         if [ ! "$BINUTILS_VER" ]; then
             BINUTILS_VER="$DEFAULT_BINUTILS_VER"
@@ -228,8 +239,6 @@ function FixArgs() {
         fi
     fi
 
-    MAKE="$MAKE -j${CPU_NUM}"
-
     if [ "$SOURCES_ONLY" ]; then
         WriteConfig
         $MAKE SOURCES_ONLY="true" extract_all
@@ -253,13 +262,32 @@ function Date() {
 }
 
 function WriteConfig() {
+    # Determine which libc to use based on TARGET
+    local USE_MUSL=""
+    local USE_GLIBC=""
+
+    if [[ "$TARGET" == *"mingw"* ]]; then
+        # mingw target, no musl or glibc
+        USE_MUSL=""
+        USE_GLIBC=""
+    elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
+        # glibc target
+        USE_MUSL=""
+        USE_GLIBC="${GLIBC_VER}"
+    else
+        # musl target (default)
+        USE_MUSL="${MUSL_VER}"
+        USE_GLIBC=""
+    fi
+
     cat >config.mak <<EOF
 CONFIG_SUB_REV = ${CONFIG_SUB_REV}
 TARGET = ${TARGET}
 NATIVE = ${NATIVE}
 OUTPUT = ${OUTPUT}
 GCC_VER = ${GCC_VER}
-MUSL_VER = ${MUSL_VER}
+MUSL_VER = ${USE_MUSL}
+GLIBC_VER = ${USE_GLIBC}
 BINUTILS_VER = ${BINUTILS_VER}
 
 GMP_VER = ${GMP_VER}
@@ -364,7 +392,7 @@ function Build() {
             fi
         done < <(
             set +e
-            $MAKE $MORE_ARGS install 2>&1
+            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
             echo $? >"${CROSS_DIST_NAME}.exit"
             set -e
         )
@@ -411,7 +439,7 @@ function Build() {
             fi
         done < <(
             set +e
-            $MAKE $MORE_ARGS install 2>&1
+            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
             echo $? >"${NATIVE_DIST_NAME}.exit"
             set -e
         )
@@ -432,7 +460,6 @@ function Build() {
             echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.tgz success"
             if [[ $TARGET =~ mingw ]]; then
                 find "${NATIVE_DIST_NAME}" -type l -delete
-                (cd ${NATIVE_DIST_NAME} && [ -d ${TARGET}/include ] || cp -R include ${TARGET})
                 zip -rq "${NATIVE_DIST_NAME}.zip" "${NATIVE_DIST_NAME}"
                 echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.zip success"
             fi
@@ -441,6 +468,8 @@ function Build() {
 }
 
 ALL_TARGETS='aarch64-linux-musl
+arm-linux-musleabi
+arm-linux-musleabihf
 armv5-linux-musleabi
 armv6-linux-musleabi
 armv6-linux-musleabihf
@@ -462,6 +491,28 @@ s390x-linux-musl
 i586-linux-musl
 i686-linux-musl
 x86_64-linux-musl
+aarch64-linux-gnu
+arm-linux-gnueabi
+arm-linux-gnueabihf
+armv5-linux-gnueabi
+armv6-linux-gnueabi
+armv6-linux-gnueabihf
+armv7-linux-gnueabi
+armv7-linux-gnueabihf
+loongarch64-linux-gnu
+mips-linux-gnu
+mips-linux-gnusf
+mipsel-linux-gnu
+mipsel-linux-gnusf
+mips64-linux-gnu
+mips64-linux-gnusf
+mips64el-linux-gnu
+mips64el-linux-gnusf
+powerpc64-linux-gnu
+powerpc64le-linux-gnu
+riscv64-linux-gnu
+s390x-linux-gnu
+x86_64-linux-gnu
 i586-w64-mingw32
 i686-w64-mingw32
 x86_64-w64-mingw32'

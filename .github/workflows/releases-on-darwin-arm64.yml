@@ -64,7 +64,9 @@ jobs:
             findutils \
             gcc@14 \
             perl \
-            libtool
+            libtool \
+            bison \
+            texinfo
 
       - uses: actions/download-artifact@v4
         with:
