@@ -100,7 +100,7 @@ function Init() {
         DEFAULT_CONFIG_SUB_REV="a2287c3041a3"
         DEFAULT_GCC_VER="14.3.0"
         DEFAULT_MUSL_VER="1.2.5"
-        DEFAULT_GLIBC_VER="2.42"
+        DEFAULT_GLIBC_VER="2.36"
         DEFAULT_BINUTILS_VER="2.45"
         DEFAULT_GMP_VER="6.3.0"
         DEFAULT_MPC_VER="1.3.1"

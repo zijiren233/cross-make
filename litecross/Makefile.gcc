@@ -39,7 +39,7 @@ endif
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
 XGCC = $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib
 XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR)
-XGXX = $(XGCC_DIR)/xg++$(EXE_EXT)
+XGXX = $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib
 XAS = $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT)
 XLD = $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT)
 XGPROF = $(CURDIR)/obj_binutils/gprof/gprof$(EXE_EXT)
