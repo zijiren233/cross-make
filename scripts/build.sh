@@ -512,6 +512,8 @@ powerpc64-linux-gnu
 powerpc64le-linux-gnu
 riscv64-linux-gnu
 s390x-linux-gnu
+i586-linux-gnu
+i686-linux-gnu
 x86_64-linux-gnu
 i586-w64-mingw32
 i686-w64-mingw32
