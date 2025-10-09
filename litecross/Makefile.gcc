@@ -13,7 +13,7 @@ MINGW_HEADERS_CONFIG =
 GLIBC_CONFIG =
 OPTIMIZE_LEVEL =
 GCC_PIE_CONFIG = --enable-default-pie --enable-static-pie
-COMMON_FLAGS = -O2 -g0 -pipe -Wno-error -w -Werror=format-security
+COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
 
 ifeq ($(OS),Windows_NT)
@@ -513,8 +513,8 @@ obj_sysroot/lib64: | obj_sysroot
 
 ifneq ($(HOST),)
 # native build
-obj_gcc/.lc_configured: export CC_FOR_TARGET:=$(TARGET)-gcc$(EXE_EXT) $(STAT) -v
-obj_gcc/.lc_configured: export CXX_FOR_TARGET:=$(TARGET)-g++$(EXE_EXT) $(STAT) -v
+obj_gcc/.lc_configured: export CC_FOR_TARGET:=$(TARGET)-gcc$(EXE_EXT) $(STAT)
+obj_gcc/.lc_configured: export CXX_FOR_TARGET:=$(TARGET)-g++$(EXE_EXT) $(STAT)
 obj_gcc/.lc_configured: export CC_FOR_BUILD:=$(CC) $(STAT)
 obj_gcc/.lc_configured: export CXX_FOR_BUILD:=$(CXX) $(STAT)
 obj_binutils/.lc_configured: export CC_FOR_TARGET:=$(TARGET)-gcc$(EXE_EXT) $(STAT)
