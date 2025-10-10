@@ -13,6 +13,7 @@ MINGW_HEADERS_CONFIG =
 GLIBC_CONFIG =
 OPTIMIZE_LEVEL =
 GCC_PIE_CONFIG = --enable-default-pie --enable-static-pie
+GCC_SSP_CONFIG = --enable-default-ssp
 COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
 
@@ -89,19 +90,19 @@ ifneq ($(filter aarch64%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv8-a --with-abi=lp64
 endif
 
-ifneq ($(filter arm-%eabi,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=armv5te --with-tune=arm926ej-s --with-float=soft --with-abi=aapcs-linux
-endif
-
-ifneq ($(filter arm-%eabihf,$(TARGET)),)
+ifneq ($(filter arm-%,$(TARGET)),)
+ifneq ($(filter %hf,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv6kz --with-tune=arm1176jzf-s --with-fpu=vfpv2 --with-abi=aapcs-linux
+else
+GCC_CONFIG_FOR_TARGET += --with-arch=armv5te --with-tune=arm926ej-s --with-float=soft --with-abi=aapcs-linux
+endif
 endif
 
-ifneq ($(filter armv5%eabi,$(TARGET)),)
+ifneq ($(filter armv5%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv5te --with-tune=arm926ej-s --with-float=soft --with-abi=aapcs-linux
 endif
 
-ifneq ($(filter armv6%eabi,$(TARGET)),)
+ifneq ($(filter armv6%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv6kz --with-tune=arm1176jzf-s --with-abi=aapcs-linux
 ifneq ($(filter %hf,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-fpu=vfpv2
@@ -110,7 +111,7 @@ GCC_CONFIG_FOR_TARGET += --with-float=soft
 endif
 endif
 
-ifneq ($(filter armv7%eabi,$(TARGET)),)
+ifneq ($(filter armv7%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv7-a --with-tune=generic-armv7-a --with-abi=aapcs-linux --with-mode=thumb
 ifneq ($(filter %hf,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-fpu=vfpv3-d16
@@ -180,6 +181,13 @@ GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--enable-threads \
 	--enable-tls
 
+ifeq ($(patsubst i%86,,$(firstword $(subst -, ,$(TARGET)))),)
+# https://bugs.gentoo.org/706210
+# https://www.openwall.com/lists/musl/2014/03/22/8
+# Pthreads are required to build libatomic
+GCC_SSP_CONFIG = --disable-default-ssp
+endif
+
 else ifneq ($(findstring mingw,$(TARGET)),)
 # build mingw
 MUSL_SRCDIR :=
@@ -207,19 +215,6 @@ MINGW_SRCDIR :=
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--disable-symvers \
 	--enable-tls
-
-# glibc configuration
-GLIBC_CONFIG := --enable-kernel=5.4 \
-	--enable-stack-protector=strong \
-	--disable-nscd \
-	--disable-crypt \
-	--disable-debug \
-	--disable-dependency-tracking \
-	--disable-silent-rules \
-	--disable-werror \
-	--without-gd \
-	--without-selinux \
-	$(GLIBC_CONFIG)
 
 ifneq ($(filter arm%,$(TARGET)),)
 GCC_PIE_CONFIG = --disable-default-pie --disable-static-pie
@@ -276,7 +271,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-libstdcxx-filesystem-ts=yes \
 	$(GCC_PIE_CONFIG) \
 	--enable-host-pie \
-	--enable-default-ssp \
+	$(GCC_SSP_CONFIG) \
 	--disable-decimal-float \
 	--disable-cet \
 	$(if $(GLIBC_SRCDIR),--with-glibc-version=$(GLIBC_VER)) \
@@ -295,6 +290,18 @@ BINUTILS_CONFIG := --disable-gprofng \
 	--enable-threads \
 	--with-mmap \
 	$(BINUTILS_CONFIG)
+
+GLIBC_CONFIG := --enable-kernel=5.4 \
+	--enable-stack-protector=strong \
+	--disable-nscd \
+	--disable-crypt \
+	--disable-debug \
+	--disable-dependency-tracking \
+	--disable-silent-rules \
+	--disable-werror \
+	--without-gd \
+	--without-selinux \
+	$(GLIBC_CONFIG)
 
 # when prefix is empty, msys will set prefix to /usr in config.site
 export MSYSTEM_PREFIX=
