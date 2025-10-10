@@ -12,8 +12,8 @@ MINGW_CRT_CONFIG =
 MINGW_HEADERS_CONFIG =
 GLIBC_CONFIG =
 OPTIMIZE_LEVEL =
+CCACHE =
 GCC_PIE_CONFIG = --enable-default-pie --enable-static-pie
-GCC_SSP_CONFIG = --enable-default-ssp
 COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
 
@@ -38,9 +38,9 @@ endif
 -include config.mak
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
-XGCC = $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib
-XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR)
-XGXX = $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib
+XGCC = $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
+XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
+XGXX = $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
 XAS = $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT)
 XLD = $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT)
 XGPROF = $(CURDIR)/obj_binutils/gprof/gprof$(EXE_EXT)
@@ -181,12 +181,8 @@ GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--enable-threads \
 	--enable-tls
 
-ifeq ($(patsubst i%86,,$(firstword $(subst -, ,$(TARGET)))),)
-# https://bugs.gentoo.org/706210
-# https://www.openwall.com/lists/musl/2014/03/22/8
-# Pthreads are required to build libatomic
-GCC_SSP_CONFIG = --disable-default-ssp
-endif
+# use __stack_chk_fail_local
+GCC_CONFIG_FOR_TARGET += --disable-libssp
 
 else ifneq ($(findstring mingw,$(TARGET)),)
 # build mingw
@@ -271,7 +267,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-libstdcxx-filesystem-ts=yes \
 	$(GCC_PIE_CONFIG) \
 	--enable-host-pie \
-	$(GCC_SSP_CONFIG) \
+	--enable-default-ssp \
 	--disable-decimal-float \
 	--disable-cet \
 	$(if $(GLIBC_SRCDIR),--with-glibc-version=$(GLIBC_VER)) \
@@ -334,6 +330,13 @@ FULL_MINGW_CRT_CONFIG = $(MINGW_CONFIG) $(MINGW_CRT_CONFIG) \
 
 FULL_MINGW_PTHREADS_CONFIG = $(MINGW_CONFIG) \
 	--prefix= --host=$(TARGET) --with-sysroot=$(SYSROOT)
+
+# obj_gcc/.lc_configured: export CC:=$(CCACHE) $(CC) $(STAT)
+# obj_gcc/.lc_configured: export CXX:=$(CCACHE) $(CXX) $(STAT)
+# obj_gcc/.lc_configured: export LDFLAGS:=$(LDFLAGS) $(STAT)
+# obj_binutils/.lc_configured: export CC:=$(CCACHE) $(CC) $(STAT)
+# obj_binutils/.lc_configured: export CXX:=$(CCACHE) $(CXX) $(STAT)
+# obj_binutils/.lc_configured: export LDFLAGS:=$(LDFLAGS) $(STAT)
 
 ifeq ($(HOST),)
 # build cross
@@ -411,6 +414,11 @@ obj_musl/.lc_built: | obj_sysroot/.lc_headers
 obj_glibc/.lc_built: | obj_sysroot/.lc_headers
 obj_gcc/gcc/.lc_built: | obj_sysroot/.lc_headers
 
+# export CC_FOR_TARGET:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT) $(STAT)
+# export CXX_FOR_TARGET:=$(CCACHE) $(TARGET)-g++$(EXE_EXT) $(STAT)
+# export CC_FOR_BUILD:=$(CCACHE) $(CC) $(STAT)
+# export CXX_FOR_BUILD:=$(CCACHE) $(CXX) $(STAT)
+
 endif
 
 ifeq ($(TARGET),)
@@ -468,6 +476,11 @@ src_glibc: | $(GLIBC_SRCDIR)
 
 src_mingw: | $(MINGW_SRCDIR)
 	ln -sf $(MINGW_SRCDIR) $@
+
+ifneq ($(MUSL_SRCDIR),)
+src_ssp: | $(SSP_SRCDIR)
+	ln -sf $(SSP_SRCDIR) $@
+endif
 
 ifneq ($(GMP_SRCDIR),)
 src_gcc: src_gmp
@@ -623,8 +636,21 @@ obj_sysroot/.lc_libs: | obj_glibc/.lc_built
 	touch $@
 else
 # musl
-obj_sysroot/.lc_libs: | obj_musl/.lc_built
+obj_sysroot/.lc_libs: | obj_musl/.lc_built src_ssp
 	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot install
+ifeq ($(HOST),)
+	# Cross build: Build libssp_nonshared.a for musl SSP support
+	$(XGCC) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(XAR) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(XRANLIB) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
+	rm -f $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+else
+	# Native build: Build libssp_nonshared.a for musl SSP support
+	$(CCACHE) $(TARGET)-gcc$(EXE_EXT) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(TARGET)-ar$(EXE_EXT) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(TARGET)-ranlib$(EXE_EXT) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
+	rm -f $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+endif
 	touch $@
 endif
 
@@ -635,6 +661,9 @@ obj_gcc/.lc_built: | obj_gcc/gcc/.lc_built
 
 install-musl: | obj_sysroot/.lc_libs
 	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT) install
+	# Install libssp_nonshared.a for musl SSP support
+	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
+	cp -f $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 
 install-glibc: | obj_sysroot/.lc_libs
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT)

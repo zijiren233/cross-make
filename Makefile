@@ -263,10 +263,12 @@ ifeq ($(SOURCES_ONLY),)
 	mkdir $@.tmp
 	( cd $@.tmp && $(COWPATCH) -C ../$< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
-		if [ -z "$(findstring mingw,$(TARGET))" ]; then \
-			cat $(filter-out %-mingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
+			cat $(filter-out %-musl.diff %-gnu.diff %-no-mingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+		elif [ -n "$(findstring musl,$(TARGET))" ]; then \
+			cat $(filter-out %-mingw.diff %-gnu.diff %-no-musl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		else \
-			cat $(filter-out %-musl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-mingw.diff %-musl.diff %-no-gnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		fi \
 	fi
 	( cd $@.tmp && find -L . -name config.sub -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
@@ -308,6 +310,7 @@ $(BUILD_DIR)/config.mak: | $(BUILD_DIR)
 	$(if $(GCC_VER),"GCC_SRCDIR = $(REL_TOP)/gcc-$(GCC_VER)") \
 	$(if $(BINUTILS_VER),"BINUTILS_SRCDIR = $(REL_TOP)/binutils-$(BINUTILS_VER)") \
 	$(if $(MUSL_VER),"MUSL_SRCDIR = $(REL_TOP)/musl-$(MUSL_VER)") \
+	$(if $(MUSL_VER),"SSP_SRCDIR = $(REL_TOP)/extra/ssp") \
 	$(if $(GLIBC_VER),"GLIBC_SRCDIR = $(REL_TOP)/glibc-$(GLIBC_VER)") \
 	$(if $(GMP_VER),"GMP_SRCDIR = $(REL_TOP)/gmp-$(GMP_VER)") \
 	$(if $(MPC_VER),"MPC_SRCDIR = $(REL_TOP)/mpc-$(MPC_VER)") \

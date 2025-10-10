@@ -161,10 +161,11 @@ function Help() {
     echo "-d: download sources only"
     echo "-D: disable log print date prefix"
     echo "-P: disable log print target prefix"
+    echo "-b: enable ccache"
 }
 
 function ParseArgs() {
-    while getopts "haT:Cc:x:nLlO:j:NdDP" arg; do
+    while getopts "haT:Cc:x:nLlO:j:NdDPb" arg; do
         case $arg in
         h)
             Help
@@ -217,6 +218,9 @@ function ParseArgs() {
             ;;
         P)
             DISABLE_LOG_PRINT_TARGET_PREFIX="true"
+            ;;
+        b)
+            CCACHE="ccache"
             ;;
         ?)
             echo "unkonw argument"
@@ -309,6 +313,8 @@ CHINA = ${USE_CHINA_MIRROR}
 
 COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
 
+CCACHE = ${CCACHE}
+
 EOF
     for arg in "$@"; do
         echo "$arg" >>config.mak
@@ -376,7 +382,7 @@ function Build() {
             NATIVE=""
             WriteConfig
         }
-        $MAKE clean
+        $MAKE -j${CPU_NUM} clean
         rm -rf "${CROSS_DIST_NAME}" "${CROSS_LOG_FILE}"
         while IFS= read -r line; do
             CURRENT_DATE=$(Date)
@@ -423,7 +429,7 @@ function Build() {
             NATIVE="true"
             WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
         }
-        $MAKE clean
+        $MAKE -j${CPU_NUM} clean
         rm -rf "${NATIVE_DIST_NAME}" "${NATIVE_LOG_FILE}"
         while IFS= read -r line; do
             CURRENT_DATE=$(Date)
