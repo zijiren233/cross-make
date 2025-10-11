@@ -264,11 +264,11 @@ ifeq ($(SOURCES_ONLY),)
 	( cd $@.tmp && $(COWPATCH) -C ../$< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
 		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
-			cat $(filter-out %-musl.diff %-gnu.diff %-no-mingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-musl.diff %-gnu.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		elif [ -n "$(findstring musl,$(TARGET))" ]; then \
-			cat $(filter-out %-mingw.diff %-gnu.diff %-no-musl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-mingw.diff %-gnu.diff %-nonmusl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		else \
-			cat $(filter-out %-mingw.diff %-musl.diff %-no-gnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-mingw.diff %-musl.diff %-nongnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		fi \
 	fi
 	( cd $@.tmp && find -L . -name config.sub -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
