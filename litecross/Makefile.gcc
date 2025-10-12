@@ -130,7 +130,7 @@ endif
 ifneq ($(filter powerpc%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --enable-secureplt --enable-decimal-float=no
 ifneq ($(findstring 64,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-abi=elfv2 --enable-targets=powerpcle-linux --with-cpu=970
+GCC_CONFIG_FOR_TARGET += --with-abi=elfv2 --enable-secureplt --enable-decimal-float=no --enable-targets=powerpcle-linux
 endif
 endif
 
@@ -210,23 +210,13 @@ MINGW_CRT_CONFIG += --enable-lib32 --disable-lib64
 endif
 
 else
-# build glibc (default for gnu targets)
+# build glibc
 MUSL_SRCDIR :=
 MINGW_SRCDIR :=
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--disable-symvers \
 	--enable-tls
-
-ifneq ($(filter arm%,$(TARGET)),)
-GCC_PIE_CONFIG = --disable-default-pie --disable-static-pie
-endif
-ifneq ($(filter mips%,$(TARGET)),)
-GCC_PIE_CONFIG = --disable-default-pie --disable-static-pie
-endif
-ifneq ($(filter powerpc%,$(TARGET)),)
-GCC_PIE_CONFIG = --disable-default-pie --disable-static-pie
-endif
 
 endif
 
@@ -628,6 +618,7 @@ else ifneq ($(GLIBC_SRCDIR),)
 # glibc
 obj_sysroot/.lc_libs: | obj_glibc/.lc_built
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(CURDIR)/obj_sysroot
+	find $(CURDIR)/obj_sysroot/lib -name "*.so" -type f -exec sh -c 'head -n1 "$$1" 2>/dev/null | grep -q "GNU ld script" && sed -i "s|/lib/||g" "$$1"' sh {} \; || true
 	touch $@
 else
 # musl
@@ -662,6 +653,7 @@ install-musl: | obj_sysroot/.lc_libs
 
 install-glibc: | obj_sysroot/.lc_libs
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT)
+	find $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib -name "*.so" -type f -exec sh -c 'head -n1 "$$1" 2>/dev/null | grep -q "GNU ld script" && sed -i "s|/lib/||g" "$$1"' sh {} \; || true
 
 install-binutils: | obj_binutils/.lc_built
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
