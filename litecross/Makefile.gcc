@@ -28,11 +28,14 @@ CXX = g++$(EXE_EXT)
 CFLAGS = 
 CXXFLAGS = 
 LDFLAGS = -s
+HOSTCC = gcc$(EXE_EXT)
 
-ifeq ($(shell uname -s),Darwin)
-STAT = 
-else
+ifeq ($(HOST),)
+# build cross
 STAT = -static --static
+endif
+ifeq ($(shell uname -s),Darwin)
+STAT =
 endif
 
 -include config.mak
@@ -70,7 +73,10 @@ endif
 # x86 configurations
 ifneq ($(findstring x86_64,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=x86-64 --with-tune=generic
+ifeq ($(findstring mingw,$(TARGET)),)
+# not mingw
 BINUTILS_CONFIG_FOR_TARGET += --enable-targets=x86_64-pep
+endif
 endif
 
 ifneq ($(filter i486%,$(TARGET)),)
@@ -331,15 +337,15 @@ FULL_MINGW_CRT_CONFIG = $(MINGW_CONFIG) $(MINGW_CRT_CONFIG) \
 FULL_MINGW_PTHREADS_CONFIG = $(MINGW_CONFIG) \
 	--prefix= --host=$(TARGET) --with-sysroot=$(SYSROOT)
 
-# obj_gcc/.lc_configured: export CC:=$(CCACHE) $(CC) $(STAT)
-# obj_gcc/.lc_configured: export CXX:=$(CCACHE) $(CXX) $(STAT)
-# obj_gcc/.lc_configured: export LDFLAGS:=$(LDFLAGS) $(STAT)
-# obj_binutils/.lc_configured: export CC:=$(CCACHE) $(CC) $(STAT)
-# obj_binutils/.lc_configured: export CXX:=$(CCACHE) $(CXX) $(STAT)
-# obj_binutils/.lc_configured: export LDFLAGS:=$(LDFLAGS) $(STAT)
-
 ifeq ($(HOST),)
 # build cross
+obj_gcc/%: export CC:=$(CCACHE) $(CC) $(STAT)
+obj_gcc/%: export CXX:=$(CCACHE) $(CXX) $(STAT)
+obj_gcc/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
+obj_binutils/%: export CC:=$(CCACHE) $(CC) $(STAT)
+obj_binutils/%: export CXX:=$(CCACHE) $(CXX) $(STAT)
+obj_binutils/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
+
 FULL_BINUTILS_CONFIG += --host=$(BUILD)
 FULL_GCC_CONFIG += --host=$(BUILD)
 GCC_MAKE_ARGS += AR_FOR_TARGET="$(XAR)" \
@@ -414,10 +420,18 @@ obj_musl/.lc_built: | obj_sysroot/.lc_headers
 obj_glibc/.lc_built: | obj_sysroot/.lc_headers
 obj_gcc/gcc/.lc_built: | obj_sysroot/.lc_headers
 
-# export CC_FOR_TARGET:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT) $(STAT)
-# export CXX_FOR_TARGET:=$(CCACHE) $(TARGET)-g++$(EXE_EXT) $(STAT)
-# export CC_FOR_BUILD:=$(CCACHE) $(CC) $(STAT)
-# export CXX_FOR_BUILD:=$(CCACHE) $(CXX) $(STAT)
+export CC_FOR_TARGET:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
+export CXX_FOR_TARGET:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
+export CC_FOR_BUILD:=$(CCACHE) $(CC)
+export CXX_FOR_BUILD:=$(CCACHE) $(CXX)
+obj_gcc/%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
+obj_gcc/%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
+obj_binutils/%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
+obj_binutils/%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
+obj_musl/%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
+obj_musl/%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
+obj_mingw%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
+obj_mingw%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
 
 endif
 
@@ -530,25 +544,6 @@ obj_sysroot/lib32: | obj_sysroot
 
 obj_sysroot/lib64: | obj_sysroot
 	ln -sf lib $@
-
-ifneq ($(HOST),)
-# native build
-obj_gcc/.lc_configured: export CC_FOR_TARGET:=$(TARGET)-gcc$(EXE_EXT) $(STAT)
-obj_gcc/.lc_configured: export CXX_FOR_TARGET:=$(TARGET)-g++$(EXE_EXT) $(STAT)
-obj_gcc/.lc_configured: export CC_FOR_BUILD:=$(CC) $(STAT)
-obj_gcc/.lc_configured: export CXX_FOR_BUILD:=$(CXX) $(STAT)
-obj_binutils/.lc_configured: export CC_FOR_TARGET:=$(TARGET)-gcc$(EXE_EXT) $(STAT)
-obj_binutils/.lc_configured: export CXX_FOR_TARGET:=$(TARGET)-g++$(EXE_EXT) $(STAT)
-obj_binutils/.lc_configured: export CC_FOR_BUILD:=$(CC) $(STAT)
-obj_binutils/.lc_configured: export CXX_FOR_BUILD:=$(CXX) $(STAT)
-else
-obj_gcc/.lc_configured: export CC:=$(CC) $(STAT)
-obj_gcc/.lc_configured: export CXX:=$(CXX) $(STAT)
-obj_binutils/.lc_configured: export CC:=$(CC) $(STAT)
-obj_binutils/.lc_configured: export CXX:=$(CXX) $(STAT)
-endif
-obj_gcc/.lc_configured: export LDFLAGS:=$(LDFLAGS) $(STAT)
-obj_binutils/.lc_configured: export LDFLAGS:=$(LDFLAGS) $(STAT)
 
 obj_binutils/.lc_configured: | obj_binutils src_binutils
 	cd obj_binutils && ../src_binutils/configure $(FULL_BINUTILS_CONFIG) || (cat config.log && exit 1)
@@ -730,7 +725,7 @@ src_kernel_headers: | $(LINUX_SRCDIR)
 	ln -sf "$(LINUX_SRCDIR)" $@
 obj_kernel_headers/.lc_built: | src_kernel_headers
 	mkdir -p $(CURDIR)/obj_kernel_headers/staged
-	cd src_kernel_headers && $(MAKE) $(MAKE_ARGS) ARCH=$(LINUX_ARCH) O=$(CURDIR)/obj_kernel_headers INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/staged HOSTCC="$(CC) $(STAT)" headers_install
+	cd src_kernel_headers && $(MAKE) $(MAKE_ARGS) ARCH=$(LINUX_ARCH) O=$(CURDIR)/obj_kernel_headers INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/staged HOSTCC="$(HOSTCC) $(STAT)" headers_install
 	find obj_kernel_headers/staged/include '(' -name .install -o -name ..install.cmd ')' -exec rm {} +
 	touch $@
 obj_kernel_headers/.lc_headers_installed: | obj_kernel_headers/.lc_built obj_sysroot
