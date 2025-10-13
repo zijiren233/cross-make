@@ -41,9 +41,9 @@ endif
 -include config.mak
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
-XGCC = $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
+XGCC = $(CCACHE) $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
 XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
-XGXX = $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
+XGXX = $(CCACHE) $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
 XAS = $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT)
 XLD = $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT)
 XGPROF = $(CURDIR)/obj_binutils/gprof/gprof$(EXE_EXT)
@@ -223,6 +223,7 @@ endif
 MAKE += MULTILIB_OSDIRNAMES=
 MAKE += INFO_DEPS= infodir=
 MAKE += ac_cv_prog_lex_root=lex.yy
+MAKE += MAKEINFO=true
 
 ifeq ($(BUILD),)
 GUESS = $(shell cd $(GCC_SRCDIR) && ./config.guess)
@@ -243,6 +244,7 @@ COMMON_CONFIG := --disable-werror \
 	--disable-bootstrap \
 	--disable-nls \
 	--with-zstd=no \
+	--with-system-zlib \
 	--enable-lto \
 	--enable-libgomp \
 	--enable-deterministic-archives \
@@ -541,6 +543,20 @@ obj_binutils/.lc_configured: | obj_binutils src_binutils
 
 obj_binutils/.lc_built: | obj_binutils/.lc_configured
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" all
+ifeq ($(HOST),)
+	# Create symlinks without -new suffix for glibc configure to find (cross build only)
+	cd $(XBINUTILS_DIR) && for f in *-new$(EXE_EXT); do \
+		if [ -f "$$f" ]; then \
+			ln -sf "$$f" "$${f%-new$(EXE_EXT)}$(EXE_EXT)"; \
+		fi; \
+	done
+	if [ -f $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT) ]; then \
+		ln -sf $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT) $(XBINUTILS_DIR)/ld$(EXE_EXT); \
+	fi
+	if [ -f $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT) ]; then \
+		ln -sf $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT) $(XBINUTILS_DIR)/as$(EXE_EXT); \
+	fi
+endif
 	touch $@
 
 obj_gcc/.lc_configured: | obj_gcc src_gcc
