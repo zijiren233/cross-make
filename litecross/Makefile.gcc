@@ -182,6 +182,8 @@ ifneq ($(findstring musl,$(TARGET)),)
 MINGW_SRCDIR :=
 GLIBC_SRCDIR :=
 
+MAKE += MAKEINFO=false
+
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--disable-symvers \
 	--enable-threads \
@@ -195,6 +197,8 @@ else ifneq ($(findstring mingw,$(TARGET)),)
 MUSL_SRCDIR :=
 GLIBC_SRCDIR :=
 LINUX_SRCDIR :=
+
+MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
@@ -223,7 +227,6 @@ endif
 MAKE += MULTILIB_OSDIRNAMES=
 MAKE += INFO_DEPS= infodir=
 MAKE += ac_cv_prog_lex_root=lex.yy
-MAKE += MAKEINFO=true
 
 ifeq ($(BUILD),)
 GUESS = $(shell cd $(GCC_SRCDIR) && ./config.guess)
@@ -244,7 +247,6 @@ COMMON_CONFIG := --disable-werror \
 	--disable-bootstrap \
 	--disable-nls \
 	--with-zstd=no \
-	--with-system-zlib \
 	--enable-lto \
 	--enable-libgomp \
 	--enable-deterministic-archives \
