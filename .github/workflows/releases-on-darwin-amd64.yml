@@ -53,6 +53,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+          path: sources
+
+      - name: Create Case-sensitive volume
+        run: |
+          diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
+          cp -r ./* /Volumes/cross
+
       - name: Init Dependencies
         run: |
           brew install \
@@ -68,13 +78,9 @@ jobs:
             bison \
             texinfo
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: sources
-          path: sources
-
       - name: Build
         id: build
+        working-directory: /Volumes/cross
         run: |
           export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}"
           bash scripts/build.sh \
@@ -90,5 +96,4 @@ jobs:
           prerelease: false
           append_body: false
           fail_on_unmatched_files: true
-          files: |
-            dist/*.*
+          files: /Volumes/cross/dist/*.*

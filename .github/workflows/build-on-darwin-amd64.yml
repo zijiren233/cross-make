@@ -48,6 +48,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+          path: sources
+
+      - name: Create Case-sensitive volume
+        run: |
+          diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
+          cp -r ./* /Volumes/cross
+
       - name: Init Dependencies
         run: |
           brew install \
@@ -63,12 +73,8 @@ jobs:
             bison \
             texinfo
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: sources
-          path: sources
-
       - name: Build
+        working-directory: /Volumes/cross
         run: |
           bash scripts/build.sh \
             -LDP \
@@ -79,4 +85,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.targets }}
-          path: dist
+          path: /Volumes/cross/dist
