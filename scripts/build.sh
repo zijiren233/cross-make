@@ -302,7 +302,7 @@ function FixArgs() {
 
     if [ "$SOURCES_ONLY" ]; then
         WriteConfig
-        $MAKE SOURCES_ONLY="true" extract_all
+        $MAKE -j${CPU_NUM} SOURCES_ONLY="true" extract_all
         exit $?
     fi
 

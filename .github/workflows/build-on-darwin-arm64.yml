@@ -74,6 +74,7 @@ jobs:
             texinfo
 
       - name: Build
+        working-directory: /Volumes/cross
         run: |
           bash scripts/build.sh \
             -LDP \
@@ -84,4 +85,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.targets }}
-          path: dist
+          path: /Volumes/cross/dist
