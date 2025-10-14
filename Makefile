@@ -51,7 +51,8 @@ LIBXML2_SITE ?= https://mirrors.ustc.edu.cn/gnome/sources/libxml2
 
 GLIBC_SITE ?= https://mirrors.ustc.edu.cn/gnu/glibc
 else
-GNU_SITE ?= https://ftp.gnu.org/gnu
+# GNU_SITE ?= https://ftp.gnu.org/gnu
+GNU_SITE ?= https://ftpmirror.gnu.org/gnu
 
 SOURCEFORGE_MIRROT ?= https://downloads.sourceforge.net
 
