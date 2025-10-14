@@ -61,7 +61,7 @@ jobs:
       - name: Create Case-sensitive volume
         run: |
           diskutil list
-          diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
+          diskutil apfs addVolume disk1 "Case-sensitive APFS" cross
           cp -r ./* /Volumes/cross
 
       - name: Init Dependencies
