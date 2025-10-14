@@ -96,3 +96,6 @@
 # where to look for source files.
 
 # COMMON_CONFIG += --with-debug-prefix-map=$(CURDIR)=
+
+# maybe need make version less then 4.4 to fix build stdio-common hang
+# GLIBC_VER = 2.28

@@ -287,7 +287,7 @@ BINUTILS_CONFIG := --disable-gprofng \
 	--with-mmap \
 	$(BINUTILS_CONFIG)
 
-GLIBC_CONFIG := --enable-kernel=5.4 \
+GLIBC_CONFIG := --enable-kernel=3.2.0 \
 	--enable-stack-protector=strong \
 	--disable-nscd \
 	--disable-crypt \
