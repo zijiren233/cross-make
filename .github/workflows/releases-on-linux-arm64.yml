@@ -6,8 +6,7 @@ on:
       - "v*"
 
 env:
-  USE_NATIVE_VERSION: v0.0.0
-  UNAMESPACER: linux-arm64
+  UNAMESPACER: linux-aarch64
 
 jobs:
   init:
@@ -82,6 +81,7 @@ jobs:
                 gawk \
                 grep && \
               cd /build && \
+              export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
               sh scripts/build.sh \
                 -LDP \
                 -a \

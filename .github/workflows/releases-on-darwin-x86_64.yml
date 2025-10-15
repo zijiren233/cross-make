@@ -1,7 +1,12 @@
-name: build-on-darwin-amd64
+name: releases-on-darwin-x86_64
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+env:
+  UNAMESPACER: darwin-x86_64
 
 jobs:
   init:
@@ -36,7 +41,7 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_macos_amd64:
+  releases_targets_on_macos_x86_64:
     name: Build
     runs-on: macos-15-intel
     needs:
@@ -75,15 +80,21 @@ jobs:
             texinfo
 
       - name: Build
+        id: build
         working-directory: /Volumes/cross
         run: |
+          export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}"
           bash scripts/build.sh \
             -LDP \
             -c "gcc-14" -x "g++-14" \
+            -a \
             -T "${{ matrix.targets }}"
 
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
+      - name: Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: ${{ matrix.targets }}
-          path: /Volumes/cross/dist
+          draft: false
+          prerelease: false
+          append_body: false
+          fail_on_unmatched_files: true
+          files: /Volumes/cross/dist/*.*

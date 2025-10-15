@@ -1,4 +1,4 @@
-name: releases-on-linux-amd64
+name: releases-on-linux-x86_64
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
       - "v*"
 
 env:
-  USE_NATIVE_VERSION: v0.0.0
-  UNAMESPACER: linux-amd64
+  UNAMESPACER: linux-x86_64
 
 jobs:
   init:
@@ -42,7 +41,7 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_linux_amd64:
+  build_targets_on_linux_x86_64:
     name: Build
     runs-on: ubuntu-latest
     needs:
@@ -59,42 +58,37 @@ jobs:
           name: sources
           path: sources
 
-      - uses: uraimo/run-on-arch-action@v2
-        name: Build
+      - name: Build
         id: build
-        with:
-          arch: none
-          distro: none
-          base_image: amd64/alpine:latest
-          githubToken: ${{ github.token }}
-          dockerRunArgs: |
-            --volume "${PWD}:/build"
-          shell: /bin/sh
-          install: |
-            apk add --no-cache \
-              coreutils \
-              curl \
-              bzip2 \
-              xz \
-              make \
-              bison \
-              rsync \
-              patch \
-              perl \
-              zip \
-              flex \
-              g++ \
-              texinfo \
-              python3 \
-              gawk \
-              grep
-          run: |
-            cd /build
-            sh scripts/build.sh \
+        run: |
+          docker run --rm \
+            --volume "${PWD}:/build" \
+            amd64/alpine:latest \
+            /bin/sh -c '
+              apk add --no-cache \
+                coreutils \
+                curl \
+                bzip2 \
+                xz \
+                make \
+                bison \
+                rsync \
+                patch \
+                perl \
+                zip \
+                flex \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep && \
+              cd /build && \
+              export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
+              sh scripts/build.sh \
                 -LDP \
                 -n \
                 -a \
-                -T "${{ matrix.targets }}"
+                -T "${{ matrix.targets }}"'
 
       - name: Release
         uses: softprops/action-gh-release@v2

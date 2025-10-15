@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  USE_NATIVE_VERSION: v0.0.0
-  UNAMESPACER: linux-arm32v7
+  UNAMESPACER: linux-armv7
 
 jobs:
   init:
@@ -56,6 +55,9 @@ jobs:
         with:
           name: sources
           path: sources
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Build
         id: build

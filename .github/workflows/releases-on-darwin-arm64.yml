@@ -6,7 +6,7 @@ on:
       - "v*"
 
 env:
-  UNAMESPACER: darwin-arm64
+  UNAMESPACER: darwin-aarch64
 
 jobs:
   init:
