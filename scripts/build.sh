@@ -97,8 +97,9 @@ function Init() {
         BISON_VERSION=""
 
         # First check Homebrew bison (usually newer)
-        if [ -x "/opt/homebrew/opt/bison/bin/bison" ]; then
-            BISON_PATH="/opt/homebrew/opt/bison/bin/bison"
+        brew --prefix bison
+        if [ -x "$(brew --prefix bison)/bin/bison" ]; then
+            BISON_PATH="$(brew --prefix bison)/bin/bison"
             BISON_VERSION=$("$BISON_PATH" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
         elif [ -x "$(command -v bison)" ]; then
             BISON_PATH="$(command -v bison)"
@@ -117,36 +118,16 @@ function Init() {
             else
                 echo "Warn: bison version $BISON_VERSION is too old (need >= 2.7)"
                 echo "Warn: glibc build requires bison >= 2.7"
-                echo "Warn: Installing newer bison via Homebrew..."
-                if brew install bison 2>/dev/null; then
-                    if [ -x "/opt/homebrew/opt/bison/bin/bison" ]; then
-                        ln -s "/opt/homebrew/opt/bison/bin/bison" "$TMP_BIN_DIR/bison"
-                        NEW_VERSION=$("/opt/homebrew/opt/bison/bin/bison" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
-                        echo "Info: Installed bison $NEW_VERSION from Homebrew"
-                    fi
-                else
-                    echo "Warn: Failed to install bison via Homebrew"
-                    echo "Warn: Please manually install: brew install bison"
-                    echo "Warn: Then add to PATH: export PATH=\"/opt/homebrew/opt/bison/bin:\$PATH\""
-                    sleep 3
-                fi
-            fi
-        else
-            echo "Warn: bison not found"
-            echo "Warn: glibc build requires bison >= 2.7"
-            echo "Warn: Installing bison via Homebrew..."
-            if brew install bison 2>/dev/null; then
-                if [ -x "/opt/homebrew/opt/bison/bin/bison" ]; then
-                    ln -s "/opt/homebrew/opt/bison/bin/bison" "$TMP_BIN_DIR/bison"
-                    NEW_VERSION=$("/opt/homebrew/opt/bison/bin/bison" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
-                    echo "Info: Installed bison $NEW_VERSION from Homebrew"
-                fi
-            else
-                echo "Warn: Failed to install bison via Homebrew"
                 echo "Warn: Please manually install: brew install bison"
                 echo "Warn: Then add to PATH: export PATH=\"/opt/homebrew/opt/bison/bin:\$PATH\""
                 sleep 3
             fi
+        else
+            echo "Warn: bison not found"
+            echo "Warn: glibc build requires bison >= 2.7"
+            echo "Warn: Please manually install: brew install bison"
+            echo "Warn: Then add to PATH: export PATH=\"/opt/homebrew/opt/bison/bin:\$PATH\""
+            sleep 3
         fi
 
     else
