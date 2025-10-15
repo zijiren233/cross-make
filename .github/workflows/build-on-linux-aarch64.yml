@@ -57,6 +57,7 @@ jobs:
         id: build
         run: |
           docker run --rm \
+            --platform linux/arm64 \
             --volume "${PWD}:/build" \
             arm64v8/alpine:latest \
             /bin/sh -c '

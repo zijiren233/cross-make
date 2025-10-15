@@ -65,6 +65,7 @@ jobs:
         id: build
         run: |
           docker run --rm \
+            --platform linux/riscv64 \
             --volume "${PWD}:/build" \
             riscv64/alpine:edge \
             /bin/sh -c '
