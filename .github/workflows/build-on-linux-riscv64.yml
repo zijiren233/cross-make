@@ -3,9 +3,6 @@ name: build-on-linux-riscv64
 on:
   workflow_dispatch:
 
-env:
-  UNAMESPACER: linux-riscv64
-
 jobs:
   init:
     name: Init

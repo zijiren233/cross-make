@@ -1,12 +1,7 @@
-name: releases-on-linux-arm32v7
+name: build-on-linux-powerpc64le
 
 on:
-  push:
-    tags:
-      - "v*"
-
-env:
-  UNAMESPACER: linux-armv7
+  workflow_dispatch:
 
 jobs:
   init:
@@ -41,9 +36,9 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_linux_arm32v7_cross:
+  build_targets_on_linux_powerpc64le_cross:
     name: Build cross
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     needs:
       - init
     strategy:
@@ -57,6 +52,7 @@ jobs:
         with:
           name: sources
           path: sources
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -65,7 +61,7 @@ jobs:
         run: |
           docker run --rm \
             --volume "${PWD}:/build" \
-            arm32v7/alpine:latest \
+            ppc64le/alpine:latest \
             /bin/sh -c '
               apk add --no-cache \
                 coreutils \
@@ -84,18 +80,12 @@ jobs:
                 gawk \
                 grep && \
               cd /build && \
-              export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
               sh scripts/build.sh \
                 -LDP \
-                -a \
                 -T "${{ matrix.targets }}"'
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
         with:
-          draft: false
-          prerelease: false
-          append_body: false
-          fail_on_unmatched_files: true
-          files: |
-            dist/*.*
+          name: ${{ matrix.targets }}
+          path: dist

@@ -1,12 +1,7 @@
-name: releases-on-linux-ppc64le
+name: build-on-linux-armv7
 
 on:
-  push:
-    tags:
-      - "v*"
-
-env:
-  UNAMESPACER: linux-ppc64le
+  workflow_dispatch:
 
 jobs:
   init:
@@ -41,9 +36,9 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_linux_ppc64le_cross:
+  build_targets_on_linux_armv7_cross:
     name: Build cross
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     needs:
       - init
     strategy:
@@ -66,7 +61,7 @@ jobs:
         run: |
           docker run --rm \
             --volume "${PWD}:/build" \
-            ppc64le/alpine:latest \
+            arm32v7/alpine:latest \
             /bin/sh -c '
               apk add --no-cache \
                 coreutils \
@@ -83,20 +78,14 @@ jobs:
                 texinfo \
                 python3 \
                 gawk \
-                grep && \
+                grep  && \
               cd /build && \
-              export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
               sh scripts/build.sh \
                 -LDP \
-                -a \
                 -T "${{ matrix.targets }}"'
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
         with:
-          draft: false
-          prerelease: false
-          append_body: false
-          fail_on_unmatched_files: true
-          files: |
-            dist/*.*
+          name: ${{ matrix.targets }}
+          path: dist

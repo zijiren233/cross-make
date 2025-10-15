@@ -1,10 +1,7 @@
-name: build-on-linux-arm32v7
+name: build-on-darwin-aarch64
 
 on:
   workflow_dispatch:
-
-env:
-  UNAMESPACER: linux-armv7
 
 jobs:
   init:
@@ -39,9 +36,9 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_linux_arm32v7_cross:
-    name: Build cross
-    runs-on: ubuntu-24.04-arm
+  build_targets_on_macos_aarch64:
+    name: Build
+    runs-on: macos-15
     needs:
       - init
     strategy:
@@ -56,39 +53,37 @@ jobs:
           name: sources
           path: sources
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Create Case-sensitive volume
+        run: |
+          diskutil list
+          diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
+          cp -r ./* /Volumes/cross
+
+      - name: Init Dependencies
+        run: |
+          brew install \
+            make \
+            gnu-sed \
+            gawk \
+            gpatch \
+            coreutils \
+            findutils \
+            gcc@14 \
+            perl \
+            libtool \
+            bison \
+            texinfo
 
       - name: Build
-        id: build
+        working-directory: /Volumes/cross
         run: |
-          docker run --rm \
-            --volume "${PWD}:/build" \
-            arm32v7/alpine:latest \
-            /bin/sh -c '
-              apk add --no-cache \
-                coreutils \
-                curl \
-                bzip2 \
-                xz \
-                make \
-                bison \
-                rsync \
-                patch \
-                perl \
-                flex \
-                g++ \
-                texinfo \
-                python3 \
-                gawk \
-                grep  && \
-              cd /build && \
-              sh scripts/build.sh \
-                -LDP \
-                -T "${{ matrix.targets }}"'
+          bash scripts/build.sh \
+            -LDP \
+            -c "gcc-14" -x "g++-14" \
+            -T "${{ matrix.targets }}"
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.targets }}
-          path: dist
+          path: /Volumes/cross/dist

@@ -3,9 +3,6 @@ name: build-on-linux-x86_64
 on:
   workflow_dispatch:
 
-env:
-  UNAMESPACER: linux-x86_64
-
 jobs:
   init:
     name: Init

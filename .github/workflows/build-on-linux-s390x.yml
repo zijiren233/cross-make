@@ -3,9 +3,6 @@ name: build-on-linux-s390x
 on:
   workflow_dispatch:
 
-env:
-  UNAMESPACER: linux-s390x
-
 jobs:
   init:
     name: Init

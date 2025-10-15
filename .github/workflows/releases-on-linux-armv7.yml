@@ -1,4 +1,4 @@
-name: releases-on-linux-arm64
+name: releases-on-linux-armv7
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - "v*"
 
 env:
-  UNAMESPACER: linux-aarch64
+  UNAMESPACER: linux-armv7
 
 jobs:
   init:
@@ -41,7 +41,7 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_linux_arm64_cross:
+  build_targets_on_linux_armv7_cross:
     name: Build cross
     runs-on: ubuntu-24.04-arm
     needs:
@@ -57,12 +57,15 @@ jobs:
         with:
           name: sources
           path: sources
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Build
         id: build
         run: |
           docker run --rm \
             --volume "${PWD}:/build" \
-            arm64v8/alpine:latest \
+            arm32v7/alpine:latest \
             /bin/sh -c '
               apk add --no-cache \
                 coreutils \
@@ -76,7 +79,7 @@ jobs:
                 perl \
                 flex \
                 g++ \
-                texinfo  \
+                texinfo \
                 python3 \
                 gawk \
                 grep && \
