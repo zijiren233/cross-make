@@ -57,8 +57,6 @@ jobs:
         with:
           name: sources
           path: sources
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Build
         id: build
