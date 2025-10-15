@@ -322,6 +322,42 @@ function WriteConfig() {
         USE_GLIBC=""
     fi
 
+    if [[ "$TARGET" == "loongarch64-linux-gnu" ]]; then
+        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
+        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
+        local required_major=2
+        local required_minor=36
+
+        if [ "$current_major" -lt "$required_major" ] || \
+           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
+            USE_GLIBC="2.36"
+        fi
+    fi
+
+    if [[ "$TARGET" == powerpc*-linux-gnu ]]; then
+        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
+        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
+        local required_major=2
+        local required_minor=31
+
+        if [ "$current_major" -lt "$required_major" ] || \
+           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
+            USE_GLIBC="2.31"
+        fi
+    fi
+
+    if [[ "$TARGET" == riscv64*-linux-gnu ]]; then
+        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
+        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
+        local required_major=2
+        local required_minor=35
+
+        if [ "$current_major" -lt "$required_major" ] || \
+           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
+            USE_GLIBC="2.35"
+        fi
+    fi
+
     cat >config.mak <<EOF
 CONFIG_SUB_REV = ${CONFIG_SUB_REV}
 TARGET = ${TARGET}
