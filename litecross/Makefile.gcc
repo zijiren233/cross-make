@@ -73,10 +73,6 @@ endif
 # x86 configurations
 ifneq ($(findstring x86_64,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=x86-64 --with-tune=generic
-ifeq ($(findstring mingw,$(TARGET)),)
-# not mingw
-BINUTILS_CONFIG_FOR_TARGET += --enable-targets=x86_64-pep
-endif
 endif
 
 ifneq ($(filter i486%,$(TARGET)),)
@@ -129,8 +125,8 @@ endif
 # PowerPC configurations
 ifneq ($(filter powerpc%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --enable-secureplt --enable-decimal-float=no
-ifneq ($(findstring 64,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-abi=elfv2 --enable-secureplt --enable-decimal-float=no --enable-targets=powerpcle-linux
+ifneq ($(findstring 64le,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
 endif
 endif
 
@@ -185,12 +181,15 @@ GLIBC_SRCDIR :=
 MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-symvers \
-	--enable-threads \
+	--enable-threads=posix \
 	--enable-tls
 
 # use __stack_chk_fail_local
 GCC_CONFIG_FOR_TARGET += --disable-libssp
+
+ifneq ($(filter powerpc64%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
+endif
 
 else ifneq ($(findstring mingw,$(TARGET)),)
 # build mingw
@@ -219,7 +218,7 @@ MUSL_SRCDIR :=
 MINGW_SRCDIR :=
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-symvers \
+	--enable-threads=posix \
 	--enable-tls
 
 endif
