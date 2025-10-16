@@ -487,6 +487,8 @@ function Build() {
             exit $EXIT_CODE
         else
             echo "build cross ${DIST_NAME_PREFIX}${TARGET} success"
+            TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc"
+            TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++"
             TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc -static --static"
             TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++ -static --static"
         fi
