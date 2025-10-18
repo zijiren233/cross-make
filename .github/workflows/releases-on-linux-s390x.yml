@@ -6,7 +6,6 @@ on:
       - "v*"
 
 env:
-  USE_NATIVE_VERSION: v0.0.0
   UNAMESPACER: linux-s390x
 
 jobs:
@@ -59,35 +58,39 @@ jobs:
           name: sources
           path: sources
 
-      - uses: uraimo/run-on-arch-action@v2
-        name: Build
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build
         id: build
-        with:
-          arch: s390x
-          distro: alpine_latest
-          githubToken: ${{ github.token }}
-          dockerRunArgs: |
-            --volume "${PWD}:/build"
-          shell: /bin/sh
-          install: |
-            apk add --no-cache \
-              coreutils \
-              curl \
-              bzip2 \
-              xz \
-              make \
-              bison \
-              rsync \
-              patch \
-              perl \
-              flex \
-              g++
-          run: |
-            cd /build
-            sh scripts/build.sh \
+        run: |
+          docker run --rm \
+            --platform linux/s390x \
+            --volume "${PWD}:/build" \
+            s390x/alpine:latest \
+            /bin/sh -c '
+              apk add --no-cache \
+                coreutils \
+                curl \
+                bzip2 \
+                xz \
+                make \
+                bison \
+                rsync \
+                patch \
+                perl \
+                flex \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep && \
+              cd /build && \
+              export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
+              sh scripts/build.sh \
                 -LDP \
                 -a \
-                -T "${{ matrix.targets }}"
+                -T "${{ matrix.targets }}"'
 
       - name: Release
         uses: softprops/action-gh-release@v2

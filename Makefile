@@ -7,6 +7,7 @@ CONFIG_GUESS_REV = a2287c3041a3
 LLVM_VER = 18.1.4
 GCC_VER = 14.3.0
 MUSL_VER = 1.2.5
+GLIBC_VER = 2.28
 BINUTILS_VER = 2.45
 GMP_VER = 6.3.0
 MPC_VER = 1.3.1
@@ -47,8 +48,11 @@ GCC_SNAP ?= https://mirrors.tuna.tsinghua.edu.cn/sourceware/gcc/snapshots
 LINUX_SITE ?= https://mirrors.ustc.edu.cn/kernel.org/linux/kernel
 
 LIBXML2_SITE ?= https://mirrors.ustc.edu.cn/gnome/sources/libxml2
+
+GLIBC_SITE ?= https://mirrors.ustc.edu.cn/gnu/glibc
 else
-GNU_SITE ?= https://ftp.gnu.org/gnu
+# GNU_SITE ?= https://ftp.gnu.org/gnu
+GNU_SITE ?= https://ftpmirror.gnu.org/gnu
 
 SOURCEFORGE_MIRROT ?= https://downloads.sourceforge.net
 
@@ -57,6 +61,8 @@ GCC_SNAP ?= https://sourceware.org/pub/gcc/snapshots
 LINUX_SITE ?= https://cdn.kernel.org/pub/linux/kernel
 
 LIBXML2_SITE ?= https://download.gnome.org/sources/libxml2
+
+GLIBC_SITE ?= $(GNU_SITE)/glibc
 endif
 
 MUSL_SITE ?= https://musl.libc.org/releases
@@ -94,13 +100,14 @@ endif
 
 SRC_DIRS = $(if $(GCC_VER),gcc-$(GCC_VER)) \
 	$(if $(BINUTILS_VER),binutils-$(BINUTILS_VER)) \
-    $(if $(MUSL_VER),musl-$(MUSL_VER)) \
+	$(if $(MUSL_VER),musl-$(MUSL_VER)) \
+	$(if $(GLIBC_VER),glibc-$(GLIBC_VER)) \
 	$(if $(GMP_VER),gmp-$(GMP_VER)) \
 	$(if $(MPC_VER),mpc-$(MPC_VER)) \
 	$(if $(MPFR_VER),mpfr-$(MPFR_VER)) \
 	$(if $(ISL_VER),isl-$(ISL_VER)) \
 	$(if $(LINUX_VER),linux-$(LINUX_VER)) \
-    $(if $(MINGW_VER),mingw-w64-$(MINGW_VER)) \
+	$(if $(MINGW_VER),mingw-w64-$(MINGW_VER)) \
 	$(if $(LLVM_VER),llvm-project-$(LLVM_VER).src) \
 	$(if $(ZLIB_VER),zlib-$(ZLIB_VER)) \
 	$(if $(ZSTD_VER),zstd-$(ZSTD_VER)) \
@@ -111,18 +118,19 @@ all:
 clean:
 	( cd $(CURDIR) && \
 	find . -maxdepth 1 \( \
-    	-name "gcc-*" \
-    	-o -name "binutils-*" \
-    	-o -name "musl-*" \
-    	-o -name "gmp-*" \
-    	-o -name "mpc-*" \
-    	-o -name "mpfr-*" \
-    	-o -name "isl-*" \
-    	-o -name "build" \
-    	-o -name "build-*" \
-    	-o -name "linux-*" \
-    	-o -name "mingw-w64-*" \
-    	-o -name "llvm-project-*" \
+		-name "gcc-*" \
+		-o -name "binutils-*" \
+		-o -name "musl-*" \
+		-o -name "glibc-*" \
+		-o -name "gmp-*" \
+		-o -name "mpc-*" \
+		-o -name "mpfr-*" \
+		-o -name "isl-*" \
+		-o -name "build" \
+		-o -name "build-*" \
+		-o -name "linux-*" \
+		-o -name "mingw-w64-*" \
+		-o -name "llvm-project-*" \
 		-o -name "zlib-*" \
 		-o -name "zstd-*" \
 		-o -name "libxml2-*" \
@@ -133,7 +141,7 @@ clean:
 	-exec rm -rf {} + )
 
 distclean:
-	( cd $(CURDIR) && rm -rf sources gcc-* binutils-* musl-* gmp-* mpc-* mpfr-* isl-* build build-* linux-* mingw-w64-* llvm-project-* zlib-* zstd-* libxml2-* )
+	( cd $(CURDIR) && rm -rf sources gcc-* binutils-* musl-* glibc-* gmp-* mpc-* mpfr-* isl-* build build-* linux-* mingw-w64-* llvm-project-* zlib-* zstd-* libxml2-* )
 
 check:
 	@echo "check bzip2"
@@ -164,6 +172,7 @@ $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/binutils*)): SITE = $(BI
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gcc-*)): SITE = $(GCC_SITE)/$(basename $(basename $(notdir $@)))
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gcc-*-*)): SITE = $(GCC_SNAP)/$(subst gcc-,,$(basename $(basename $(notdir $@))))
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/musl*)): SITE = $(MUSL_SITE)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/glibc*)): SITE = $(GLIBC_SITE)
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-6*)): SITE = $(LINUX_SITE)/v6.x
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-5*)): SITE = $(LINUX_SITE)/v5.x
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-4*)): SITE = $(LINUX_SITE)/v4.x
@@ -255,10 +264,12 @@ ifeq ($(SOURCES_ONLY),)
 	mkdir $@.tmp
 	( cd $@.tmp && $(COWPATCH) -C ../$< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
-		if [ -z "$(findstring mingw,$(TARGET))" ]; then \
-			cat $(filter-out %-mingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
+			cat $(filter-out %-musl.diff %-gnu.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+		elif [ -n "$(findstring musl,$(TARGET))" ]; then \
+			cat $(filter-out %-mingw.diff %-gnu.diff %-nonmusl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		else \
-			cat $(filter-out %-musl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-mingw.diff %-musl.diff %-nongnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		fi \
 	fi
 	( cd $@.tmp && find -L . -name config.sub -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
@@ -269,20 +280,21 @@ ifeq ($(SOURCES_ONLY),)
 	mv $@.tmp $@
 
 ifneq ($(findstring mingw,$(TARGET)),)
-extract_all: | $(filter-out linux-% musl-%,$(SRC_DIRS))
+extract_all: | $(filter-out linux-% musl-% glibc-%,$(SRC_DIRS))
+else ifneq ($(findstring musl,$(TARGET)),)
+extract_all: | $(filter-out mingw-w64-% glibc-%,$(SRC_DIRS))
+else ifneq ($(findstring gnu,$(TARGET))$(findstring glibc,$(TARGET)),)
+extract_all: | $(filter-out mingw-w64-% musl-%,$(SRC_DIRS))
 else
-ifneq ($(findstring musl,$(TARGET)),)
-extract_all: | $(filter-out mingw-w64-%,$(SRC_DIRS))
-else
-extract_all: | $(SRC_DIRS)
-endif
+# Default to glibc for standard Linux targets
+extract_all: | $(filter-out mingw-w64-% musl-%,$(SRC_DIRS))
 endif
 
 else
 extract_all: | $(patsubst %.sha1,%, $(foreach item,$(SRC_DIRS),$(call find_and_prefix,$(item)))) $(SOURCES)/config.sub $(SOURCES)/config.guess
 endif
 # Add deps for all patched source dirs on their patchsets
-$(foreach dir,$(notdir $(basename $(basename $(basename $(wildcard hashes/*))))),$(eval $(dir): $$(wildcard patches/$(dir) patches/$(dir)/*)))
+$(foreach dir,$(notdir $(basename $(basename $(basename $(wildcard hashes/*))))),$(eval $(dir): $(wildcard patches/$(dir) patches/$(dir)/*)))
 
 # Rules for building.
 
@@ -299,6 +311,8 @@ $(BUILD_DIR)/config.mak: | $(BUILD_DIR)
 	$(if $(GCC_VER),"GCC_SRCDIR = $(REL_TOP)/gcc-$(GCC_VER)") \
 	$(if $(BINUTILS_VER),"BINUTILS_SRCDIR = $(REL_TOP)/binutils-$(BINUTILS_VER)") \
 	$(if $(MUSL_VER),"MUSL_SRCDIR = $(REL_TOP)/musl-$(MUSL_VER)") \
+	$(if $(MUSL_VER),"SSP_SRCDIR = $(REL_TOP)/extra/ssp") \
+	$(if $(GLIBC_VER),"GLIBC_SRCDIR = $(REL_TOP)/glibc-$(GLIBC_VER)") \
 	$(if $(GMP_VER),"GMP_SRCDIR = $(REL_TOP)/gmp-$(GMP_VER)") \
 	$(if $(MPC_VER),"MPC_SRCDIR = $(REL_TOP)/mpc-$(MPC_VER)") \
 	$(if $(MPFR_VER),"MPFR_SRCDIR = $(REL_TOP)/mpfr-$(MPFR_VER)") \

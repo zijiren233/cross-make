@@ -1,0 +1,23 @@
+diff --git a/nptl/lowlevellock.c b/nptl/lowlevellock.c
+--- a/nptl/lowlevellock.c
++++ b/nptl/lowlevellock.c
+@@ -25,4 +25,7 @@
+ 
+ void
++#ifndef IS_IN_libpthread
++__attribute__((weak))
++#endif
+ __lll_lock_wait_private (int *futex)
+ {
+
+diff --git a/sysdeps/sparc/sparc32/lowlevellock.c b/sysdeps/sparc/sparc32/lowlevellock.c
+--- a/sysdeps/sparc/sparc32/lowlevellock.c
++++ b/sysdeps/sparc/sparc32/lowlevellock.c
+@@ -25,4 +25,7 @@
+ 
+ void
++#ifndef IS_IN_libpthread
++__attribute__((weak))
++#endif
+ __lll_lock_wait_private (int *futex)
+ {

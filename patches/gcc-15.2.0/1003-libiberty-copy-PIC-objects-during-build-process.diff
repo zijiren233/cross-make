@@ -1,0 +1,14 @@
+diff --git a/libiberty/Makefile.in b/libiberty/Makefile.in
+index ce54d88278d..10c212a1ad3 100644
+--- a/libiberty/Makefile.in
++++ b/libiberty/Makefile.in
+@@ -266,6 +266,7 @@ $(TARGETLIB): $(REQUIRED_OFILES) $(EXTRA_OFILES) $(LIBOBJS)
+ 	  $(AR) $(AR_FLAGS) $(TARGETLIB) \
+ 	    $(REQUIRED_OFILES) $(EXTRA_OFILES) $(LIBOBJS); \
+ 	  $(RANLIB) $(TARGETLIB); \
++	  cp $(TARGETLIB) ../ ; \
+ 	  cd ..; \
+ 	else true; fi
+ 
+-- 
+2.50.1

@@ -19,6 +19,13 @@ function Init() {
         PATH="$TMP_BIN_DIR:$PATH"
         trap "rm -rf \"$TMP_BIN_DIR\"" EXIT
 
+        # Create symlink for gmake/gnumake to ensure glibc configure finds the right version
+        if [ -x "$(command -v gmake)" ]; then
+            GMAKE_PATH="$(command -v gmake)"
+            ln -s "$GMAKE_PATH" "$TMP_BIN_DIR/gnumake"
+            ln -s "$GMAKE_PATH" "$TMP_BIN_DIR/make"
+        fi
+
         if [ -x "$(command -v gsed)" ]; then
             SED_PATH="$(command -v gsed)"
             ln -s "$SED_PATH" "$TMP_BIN_DIR/sed"
@@ -85,6 +92,44 @@ function Init() {
             sleep 3
         fi
 
+        # Check for bison version - glibc 2.40 requires bison >= 2.7
+        BISON_PATH=""
+        BISON_VERSION=""
+
+        # First check Homebrew bison (usually newer)
+        brew --prefix bison
+        if [ -x "$(brew --prefix bison)/bin/bison" ]; then
+            BISON_PATH="$(brew --prefix bison)/bin/bison"
+            BISON_VERSION=$("$BISON_PATH" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+        elif [ -x "$(command -v bison)" ]; then
+            BISON_PATH="$(command -v bison)"
+            BISON_VERSION=$("$BISON_PATH" --version | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+        fi
+
+        if [ -n "$BISON_PATH" ] && [ -n "$BISON_VERSION" ]; then
+            # Extract major and minor version
+            BISON_MAJOR=$(echo "$BISON_VERSION" | cut -d. -f1)
+            BISON_MINOR=$(echo "$BISON_VERSION" | cut -d. -f2)
+
+            # Check if version is >= 2.7
+            if [ "$BISON_MAJOR" -gt 2 ] || ([ "$BISON_MAJOR" -eq 2 ] && [ "$BISON_MINOR" -ge 7 ]); then
+                ln -s "$BISON_PATH" "$TMP_BIN_DIR/bison"
+                echo "Info: Using bison $BISON_VERSION from $BISON_PATH"
+            else
+                echo "Warn: bison version $BISON_VERSION is too old (need >= 2.7)"
+                echo "Warn: glibc build requires bison >= 2.7"
+                echo "Warn: Please manually install: brew install bison"
+                echo "Warn: Then add to PATH: export PATH=\"/opt/homebrew/opt/bison/bin:\$PATH\""
+                sleep 3
+            fi
+        else
+            echo "Warn: bison not found"
+            echo "Warn: glibc build requires bison >= 2.7"
+            echo "Warn: Please manually install: brew install bison"
+            echo "Warn: Then add to PATH: export PATH=\"/opt/homebrew/opt/bison/bin:\$PATH\""
+            sleep 3
+        fi
+
     else
         MAKE="make"
     fi
@@ -93,6 +138,7 @@ function Init() {
         DEFAULT_CONFIG_SUB_REV="a2287c3041a3"
         DEFAULT_GCC_VER="14.3.0"
         DEFAULT_MUSL_VER="1.2.5"
+        DEFAULT_GLIBC_VER="2.28"
         DEFAULT_BINUTILS_VER="2.45"
         DEFAULT_GMP_VER="6.3.0"
         DEFAULT_MPC_VER="1.3.1"
@@ -108,6 +154,9 @@ function Init() {
         fi
         if [ -z "${MUSL_VER+x}" ]; then
             MUSL_VER="$DEFAULT_MUSL_VER"
+        fi
+        if [ -z "${GLIBC_VER+x}" ]; then
+            GLIBC_VER="$DEFAULT_GLIBC_VER"
         fi
         if [ ! "$BINUTILS_VER" ]; then
             BINUTILS_VER="$DEFAULT_BINUTILS_VER"
@@ -150,10 +199,11 @@ function Help() {
     echo "-d: download sources only"
     echo "-D: disable log print date prefix"
     echo "-P: disable log print target prefix"
+    echo "-b: enable ccache"
 }
 
 function ParseArgs() {
-    while getopts "haT:Cc:x:nLlO:j:NdDP" arg; do
+    while getopts "haT:Cc:x:nLlO:j:NdDPb" arg; do
         case $arg in
         h)
             Help
@@ -207,6 +257,9 @@ function ParseArgs() {
         P)
             DISABLE_LOG_PRINT_TARGET_PREFIX="true"
             ;;
+        b)
+            CCACHE="ccache"
+            ;;
         ?)
             echo "unkonw argument"
             exit 1
@@ -228,11 +281,9 @@ function FixArgs() {
         fi
     fi
 
-    MAKE="$MAKE -j${CPU_NUM}"
-
     if [ "$SOURCES_ONLY" ]; then
         WriteConfig
-        $MAKE SOURCES_ONLY="true" extract_all
+        $MAKE -j${CPU_NUM} SOURCES_ONLY="true" extract_all
         exit $?
     fi
 
@@ -253,13 +304,68 @@ function Date() {
 }
 
 function WriteConfig() {
+    # Determine which libc to use based on TARGET
+    local USE_MUSL=""
+    local USE_GLIBC=""
+
+    if [[ "$TARGET" == *"mingw"* ]]; then
+        # mingw target, no musl or glibc
+        USE_MUSL=""
+        USE_GLIBC=""
+    elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
+        # glibc target
+        USE_MUSL=""
+        USE_GLIBC="${GLIBC_VER}"
+    else
+        # musl target (default)
+        USE_MUSL="${MUSL_VER}"
+        USE_GLIBC=""
+    fi
+
+    if [[ "$TARGET" == "loongarch64-linux-gnu" ]]; then
+        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
+        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
+        local required_major=2
+        local required_minor=36
+
+        if [ "$current_major" -lt "$required_major" ] || \
+           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
+            USE_GLIBC="2.36"
+        fi
+    fi
+
+    if [[ "$TARGET" == powerpc*-linux-gnu ]]; then
+        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
+        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
+        local required_major=2
+        local required_minor=31
+
+        if [ "$current_major" -lt "$required_major" ] || \
+           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
+            USE_GLIBC="2.31"
+        fi
+    fi
+
+    if [[ "$TARGET" == riscv64*-linux-gnu ]]; then
+        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
+        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
+        local required_major=2
+        local required_minor=35
+
+        if [ "$current_major" -lt "$required_major" ] || \
+           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
+            USE_GLIBC="2.35"
+        fi
+    fi
+
     cat >config.mak <<EOF
 CONFIG_SUB_REV = ${CONFIG_SUB_REV}
 TARGET = ${TARGET}
 NATIVE = ${NATIVE}
 OUTPUT = ${OUTPUT}
 GCC_VER = ${GCC_VER}
-MUSL_VER = ${MUSL_VER}
+MUSL_VER = ${USE_MUSL}
+GLIBC_VER = ${USE_GLIBC}
 BINUTILS_VER = ${BINUTILS_VER}
 
 GMP_VER = ${GMP_VER}
@@ -280,6 +386,8 @@ endif
 CHINA = ${USE_CHINA_MIRROR}
 
 COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
+
+CCACHE = ${CCACHE}
 
 EOF
     for arg in "$@"; do
@@ -348,7 +456,7 @@ function Build() {
             NATIVE=""
             WriteConfig
         }
-        $MAKE clean
+        $MAKE -j${CPU_NUM} clean
         rm -rf "${CROSS_DIST_NAME}" "${CROSS_LOG_FILE}"
         while IFS= read -r line; do
             CURRENT_DATE=$(Date)
@@ -364,7 +472,7 @@ function Build() {
             fi
         done < <(
             set +e
-            $MAKE $MORE_ARGS install 2>&1
+            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
             echo $? >"${CROSS_DIST_NAME}.exit"
             set -e
         )
@@ -379,6 +487,8 @@ function Build() {
             exit $EXIT_CODE
         else
             echo "build cross ${DIST_NAME_PREFIX}${TARGET} success"
+            TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc"
+            TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++"
             TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc -static --static"
             TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++ -static --static"
         fi
@@ -395,7 +505,7 @@ function Build() {
             NATIVE="true"
             WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
         }
-        $MAKE clean
+        $MAKE -j${CPU_NUM} clean
         rm -rf "${NATIVE_DIST_NAME}" "${NATIVE_LOG_FILE}"
         while IFS= read -r line; do
             CURRENT_DATE=$(Date)
@@ -411,7 +521,7 @@ function Build() {
             fi
         done < <(
             set +e
-            $MAKE $MORE_ARGS install 2>&1
+            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
             echo $? >"${NATIVE_DIST_NAME}.exit"
             set -e
         )
@@ -432,7 +542,6 @@ function Build() {
             echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.tgz success"
             if [[ $TARGET =~ mingw ]]; then
                 find "${NATIVE_DIST_NAME}" -type l -delete
-                (cd ${NATIVE_DIST_NAME} && [ -d ${TARGET}/include ] || cp -R include ${TARGET})
                 zip -rq "${NATIVE_DIST_NAME}.zip" "${NATIVE_DIST_NAME}"
                 echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.zip success"
             fi
@@ -441,6 +550,8 @@ function Build() {
 }
 
 ALL_TARGETS='aarch64-linux-musl
+arm-linux-musleabi
+arm-linux-musleabihf
 armv5-linux-musleabi
 armv6-linux-musleabi
 armv6-linux-musleabihf
@@ -462,6 +573,30 @@ s390x-linux-musl
 i586-linux-musl
 i686-linux-musl
 x86_64-linux-musl
+aarch64-linux-gnu
+arm-linux-gnueabi
+arm-linux-gnueabihf
+armv5-linux-gnueabi
+armv6-linux-gnueabi
+armv6-linux-gnueabihf
+armv7-linux-gnueabi
+armv7-linux-gnueabihf
+loongarch64-linux-gnu
+mips-linux-gnu
+mips-linux-gnusf
+mipsel-linux-gnu
+mipsel-linux-gnusf
+mips64-linux-gnu
+mips64-linux-gnusf
+mips64el-linux-gnu
+mips64el-linux-gnusf
+powerpc64-linux-gnu
+powerpc64le-linux-gnu
+riscv64-linux-gnu
+s390x-linux-gnu
+i586-linux-gnu
+i686-linux-gnu
+x86_64-linux-gnu
 i586-w64-mingw32
 i686-w64-mingw32
 x86_64-w64-mingw32'

@@ -1,12 +1,7 @@
-name: releases-on-linux-riscv64
+name: build-on-linux-powerpc64le
 
 on:
-  push:
-    tags:
-      - "v*"
-
-env:
-  UNAMESPACER: linux-riscv64
+  workflow_dispatch:
 
 jobs:
   init:
@@ -41,7 +36,7 @@ jobs:
           name: sources
           path: sources
 
-  build_targets_on_linux_riscv64_cross:
+  build_targets_on_linux_powerpc64le_cross:
     name: Build cross
     runs-on: ubuntu-latest
     needs:
@@ -65,9 +60,9 @@ jobs:
         id: build
         run: |
           docker run --rm \
-            --platform linux/riscv64 \
+            --platform linux/ppc64le \
             --volume "${PWD}:/build" \
-            riscv64/alpine:edge \
+            ppc64le/alpine:latest \
             /bin/sh -c '
               apk add --no-cache \
                 coreutils \
@@ -86,18 +81,12 @@ jobs:
                 gawk \
                 grep && \
               cd /build && \
-              export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
               sh scripts/build.sh \
                 -LDP \
-                -a \
                 -T "${{ matrix.targets }}"'
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
         with:
-          draft: false
-          prerelease: false
-          append_body: false
-          fail_on_unmatched_files: true
-          files: |
-            dist/*.*
+          name: ${{ matrix.targets }}
+          path: dist
