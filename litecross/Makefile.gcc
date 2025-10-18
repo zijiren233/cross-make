@@ -13,7 +13,6 @@ MINGW_HEADERS_CONFIG =
 GLIBC_CONFIG =
 OPTIMIZE_LEVEL =
 CCACHE =
-GCC_PIE_CONFIG = --enable-default-pie --enable-static-pie
 COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
 
@@ -264,8 +263,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
 	--enable-libstdcxx-filesystem-ts=yes \
-	$(GCC_PIE_CONFIG) \
-	--enable-host-pie \
+	--enable-default-pie \
 	--enable-default-ssp \
 	--disable-decimal-float \
 	--disable-cet \
@@ -287,6 +285,7 @@ BINUTILS_CONFIG := --disable-gprofng \
 	$(BINUTILS_CONFIG)
 
 GLIBC_CONFIG := --enable-kernel=3.2.0 \
+	--enable-static-pie \
 	--enable-stack-protector=strong \
 	--disable-nscd \
 	--disable-crypt \
@@ -318,7 +317,8 @@ FULL_GLIBC_CONFIG = $(GLIBC_CONFIG) \
 	--with-headers=$(CURDIR)/obj_sysroot/include \
 	libc_cv_forced_unwind=yes \
 	libc_cv_c_cleanup=yes \
-	libc_cv_ssp=no libc_cv_ssp_strong=no
+	libc_cv_ssp=no libc_cv_ssp_strong=no \
+	libc_cv_ld_static_pie=yes
 
 FULL_MINGW_HEADERS_CONFIG = $(MINGW_CONFIG) $(MINGW_HEADERS_CONFIG) \
 	--prefix= --host=$(TARGET) --enable-sdk=all \
