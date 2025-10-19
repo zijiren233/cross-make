@@ -81,9 +81,10 @@ jobs:
                 python3 \
                 gawk \
                 grep && \
-              cd /build && \
+              cd /build \
+              bash && \
               export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
-              sh scripts/build.sh \
+              bash scripts/build.sh \
                 -LDP \
                 -a \
                 -T "${{ matrix.targets }}"'

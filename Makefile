@@ -164,26 +164,26 @@ check:
 
 ifeq ($(SOURCES),sources)
 
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gmp*)): SITE = $(GMP_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mpc*)): SITE = $(MPC_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mpfr*)): SITE = $(MPFR_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/isl*)): SITE = $(ISL_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/binutils*)): SITE = $(BINUTILS_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gcc-*)): SITE = $(GCC_SITE)/$(basename $(basename $(notdir $@)))
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gcc-*-*)): SITE = $(GCC_SNAP)/$(subst gcc-,,$(basename $(basename $(notdir $@))))
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/musl*)): SITE = $(MUSL_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/glibc*)): SITE = $(GLIBC_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-6*)): SITE = $(LINUX_SITE)/v6.x
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-5*)): SITE = $(LINUX_SITE)/v5.x
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-4*)): SITE = $(LINUX_SITE)/v4.x
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-3*)): SITE = $(LINUX_SITE)/v3.x
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-2.6*)): SITE = $(LINUX_SITE)/v2.6
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-headers-*)): SITE = $(LINUX_HEADERS_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mingw-w64*)): SITE = $(MINGW_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/llvm-project-*)): SITE = $(LLVM_SITE)/llvmorg-$(patsubst llvm-project-%.src,%,$(basename $(basename $(notdir $@))))
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zlib-*)): SITE = $(ZLIB_SITE)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zstd-*)): SITE = $(ZSTD_SITE)/v$(patsubst zstd-%.tar.gz,%,$(notdir $@))
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/libxml2-*)): SITE = $(LIBXML2_SITE)/$(shell echo $(patsubst libxml2-%.tar.xz,%,$(notdir $@)) | cut -d. -f1,2)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gmp*)): SITE = $(GMP_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mpc*)): SITE = $(MPC_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mpfr*)): SITE = $(MPFR_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/isl*)): SITE = $(ISL_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/binutils*)): SITE = $(BINUTILS_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gcc-*)): SITE = $(GCC_SITE)/$(basename $(basename $(notdir $@)))/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gcc-*-*)): SITE = $(GCC_SNAP)/$(subst gcc-,,$(basename $(basename $(notdir $@))))/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/musl*)): SITE = $(MUSL_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/glibc*)): SITE = $(GLIBC_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-6*)): SITE = $(LINUX_SITE)/v6.x/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-5*)): SITE = $(LINUX_SITE)/v5.x/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-4*)): SITE = $(LINUX_SITE)/v4.x/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-3*)): SITE = $(LINUX_SITE)/v3.x/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-2.6*)): SITE = $(LINUX_SITE)/v2.6/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-headers-*)): SITE = $(LINUX_HEADERS_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mingw-w64*)): SITE = $(MINGW_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/llvm-project-*)): SITE = $(LLVM_SITE)/llvmorg-$(patsubst llvm-project-%.src,%,$(basename $(basename $(notdir $@))))/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zlib-*)): SITE = $(ZLIB_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zstd-*)): SITE = $(ZSTD_SITE)/v$(patsubst zstd-%.tar.gz,%,$(notdir $@))/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/libxml2-*)): SITE = $(LIBXML2_SITE)/$(shell echo $(patsubst libxml2-%.tar.xz,%,$(notdir $@)) | cut -d. -f1,2)/$(notdir $@)
 
 $(SOURCES):
 	mkdir -p $@
@@ -206,7 +206,7 @@ $(SOURCES)/config.guess: | $(SOURCES)
 
 $(SOURCES)/%: hashes/%.sha1 | $(SOURCES)
 	mkdir -p $@.tmp
-	cd $@.tmp && $(DL_CMD) $(notdir $@) $(SITE)/$(notdir $@)
+	cd $@.tmp && $(DL_CMD) $(notdir $@) $(SITE)
 	cd $@.tmp && touch $(notdir $@)
 	cd $@.tmp && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).sha1
 	mv $@.tmp/$(notdir $@) $@
@@ -226,30 +226,27 @@ musl-git-%:
 %.orig: $(SOURCES)/%.tar.gz
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
-	mkdir $@.tmp
-	( cd $@.tmp && tar -zxf - ) < $<
+	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
+	( tar -zxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
-	touch $@.tmp/$(patsubst %.orig,%,$@)
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
 
 %.orig: $(SOURCES)/%.tar.bz2
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
-	mkdir $@.tmp
-	( cd $@.tmp && tar -jxf - ) < $<
+	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
+	( tar -jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
-	touch $@.tmp/$(patsubst %.orig,%,$@)
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
 
 %.orig: $(SOURCES)/%.tar.xz
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
-	mkdir $@.tmp
-	( cd $@.tmp && tar -Jxf - ) < $<
+	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
+	( tar -Jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
-	touch $@.tmp/$(patsubst %.orig,%,$@)
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
 

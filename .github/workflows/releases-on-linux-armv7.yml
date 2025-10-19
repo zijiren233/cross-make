@@ -81,10 +81,11 @@ jobs:
                 texinfo \
                 python3 \
                 gawk \
-                grep && \
+                grep \
+                bash && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
-              sh scripts/build.sh \
+              bash scripts/build.sh \
                 -LDP \
                 -a \
                 -T "${{ matrix.targets }}"'

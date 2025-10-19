@@ -76,9 +76,10 @@ jobs:
                 texinfo \
                 python3 \
                 gawk \
-                grep && \
+                grep \
+                bash && \
               cd /build && \
-              sh scripts/build.sh \
+              bash scripts/build.sh \
                 -LDP \
                 -T "${{ matrix.targets }}"'
 
