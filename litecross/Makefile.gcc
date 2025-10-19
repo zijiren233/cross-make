@@ -366,9 +366,7 @@ done \
 && if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
 	rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
 fi \
-&& if [ -f libc.so.7 ] && [ ! -e libc.so ]; then \
-	ln -sf libc.so.7 libc.so; \
-fi
+&& ln -sf libc.so.7 libc.so
 endef
 
 ifeq ($(HOST),)
@@ -647,7 +645,7 @@ obj_sysroot/.lc_headers: | obj_mingw_headers/.lc_configured obj_sysroot
 	touch $@
 else ifneq ($(FREEBSD_SRCDIR),)
 # freebsd - use prebuilt libc from base.txz
-obj_sysroot/.lc_headers: | obj_freebsd/.lc_built obj_sysroot obj_sysroot/.lc_libs
+obj_sysroot/.lc_headers: | obj_freebsd/.lc_built obj_sysroot
 	# Copy headers from prebuilt FreeBSD base
 	mkdir -p $(CURDIR)/obj_sysroot/include
 	rsync -a $(FREEBSD_SRCDIR)/usr/include/ $(CURDIR)/obj_sysroot/include/
