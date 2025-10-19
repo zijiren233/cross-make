@@ -80,7 +80,8 @@ jobs:
                 python3 \
                 gawk \
                 grep \
-                bash && \
+                bash \
+                tar && \
               cd /build && \
               bash scripts/build.sh \
                 -LDP \

@@ -146,6 +146,7 @@ function Init() {
         DEFAULT_ISL_VER="0.27"
         DEFAULT_LINUX_VER="6.12.33"
         DEFAULT_MINGW_VER="v13.0.0"
+        DEFAULT_FREEBSD_VER="14.3"
         if [ ! "$CONFIG_SUB_REV" ]; then
             CONFIG_SUB_REV="$DEFAULT_CONFIG_SUB_REV"
         fi
@@ -178,6 +179,9 @@ function Init() {
         fi
         if [ -z "${MINGW_VER+x}" ]; then
             MINGW_VER="$DEFAULT_MINGW_VER"
+        fi
+        if [ -z "${FREEBSD_VER+x}" ]; then
+            FREEBSD_VER="$DEFAULT_FREEBSD_VER"
         fi
     }
 }
@@ -307,19 +311,28 @@ function WriteConfig() {
     # Determine which libc to use based on TARGET
     local USE_MUSL=""
     local USE_GLIBC=""
+    local USE_FREEBSD=""
 
     if [[ "$TARGET" == *"mingw"* ]]; then
         # mingw target, no musl or glibc
         USE_MUSL=""
         USE_GLIBC=""
+        USE_FREEBSD=""
+    elif [[ "$TARGET" == *"freebsd"* ]]; then
+        # freebsd target
+        USE_MUSL=""
+        USE_GLIBC=""
+        USE_FREEBSD="${FREEBSD_VER}"
     elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
         # glibc target
         USE_MUSL=""
         USE_GLIBC="${GLIBC_VER}"
+        USE_FREEBSD=""
     else
         # musl target (default)
         USE_MUSL="${MUSL_VER}"
         USE_GLIBC=""
+        USE_FREEBSD=""
     fi
 
     if [[ "$TARGET" == "loongarch64-linux-gnu" ]]; then
@@ -366,6 +379,7 @@ OUTPUT = ${OUTPUT}
 GCC_VER = ${GCC_VER}
 MUSL_VER = ${USE_MUSL}
 GLIBC_VER = ${USE_GLIBC}
+FREEBSD_VER = ${USE_FREEBSD}
 BINUTILS_VER = ${BINUTILS_VER}
 
 GMP_VER = ${GMP_VER}
@@ -599,7 +613,13 @@ i686-linux-gnu
 x86_64-linux-gnu
 i586-w64-mingw32
 i686-w64-mingw32
-x86_64-w64-mingw32'
+x86_64-w64-mingw32
+x86_64-unknown-freebsd14
+aarch64-unknown-freebsd14
+powerpc-unknown-freebsd14
+powerpc64-unknown-freebsd14
+powerpc64le-unknown-freebsd14
+riscv64-unknown-freebsd14'
 
 function BuildAll() {
     if [ "$TARGETS_FILE" ]; then

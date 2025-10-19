@@ -80,7 +80,8 @@ jobs:
                 texinfo  \
                 python3 \
                 gawk \
-                grep && \
+                grep \
+                tar && \
               cd /build \
               bash && \
               export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \

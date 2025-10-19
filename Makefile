@@ -15,6 +15,7 @@ MPFR_VER = 4.2.2
 ISL_VER = 0.27
 LINUX_VER = 6.12.33
 MINGW_VER = v13.0.0
+FREEBSD_VER = 14.3
 ZLIB_VER = 1.3.1
 ZSTD_VER = 1.5.6
 LIBXML2_VER = 2.13.3
@@ -66,6 +67,7 @@ GLIBC_SITE ?= $(GNU_SITE)/glibc
 endif
 
 MUSL_SITE ?= https://musl.libc.org/releases
+FREEBSD_SITE ?= https://download.freebsd.org/ftp/releases
 GITHUB ?= https://github.com
 GCC_SITE ?= $(GNU_SITE)/gcc
 BINUTILS_SITE ?= $(GNU_SITE)/binutils
@@ -98,6 +100,8 @@ override MINGW_VER =
 
 endif
 
+FREEBSD_ARCH_DIR = $(if $(FREEBSD_VER),$(if $(findstring x86_64,$(TARGET)),freebsd-$(FREEBSD_VER)-amd64,$(if $(findstring aarch64,$(TARGET)),freebsd-$(FREEBSD_VER)-aarch64,$(if $(findstring amd64,$(TARGET)),freebsd-$(FREEBSD_VER)-amd64,$(if $(findstring powerpc64le,$(TARGET)),freebsd-$(FREEBSD_VER)-powerpc64le,$(if $(findstring powerpc64,$(TARGET)),freebsd-$(FREEBSD_VER)-powerpc64,$(if $(findstring powerpc,$(TARGET)),freebsd-$(FREEBSD_VER)-powerpc,$(if $(findstring riscv64,$(TARGET)),freebsd-$(FREEBSD_VER)-riscv64))))))))
+
 SRC_DIRS = $(if $(GCC_VER),gcc-$(GCC_VER)) \
 	$(if $(BINUTILS_VER),binutils-$(BINUTILS_VER)) \
 	$(if $(MUSL_VER),musl-$(MUSL_VER)) \
@@ -108,6 +112,7 @@ SRC_DIRS = $(if $(GCC_VER),gcc-$(GCC_VER)) \
 	$(if $(ISL_VER),isl-$(ISL_VER)) \
 	$(if $(LINUX_VER),linux-$(LINUX_VER)) \
 	$(if $(MINGW_VER),mingw-w64-$(MINGW_VER)) \
+	$(FREEBSD_ARCH_DIR) \
 	$(if $(LLVM_VER),llvm-project-$(LLVM_VER).src) \
 	$(if $(ZLIB_VER),zlib-$(ZLIB_VER)) \
 	$(if $(ZSTD_VER),zstd-$(ZSTD_VER)) \
@@ -130,6 +135,7 @@ clean:
 		-o -name "build-*" \
 		-o -name "linux-*" \
 		-o -name "mingw-w64-*" \
+		-o -name "freebsd-*" \
 		-o -name "llvm-project-*" \
 		-o -name "zlib-*" \
 		-o -name "zstd-*" \
@@ -140,8 +146,8 @@ clean:
 	-exec echo rm -rf {} \; \
 	-exec rm -rf {} + )
 
-distclean:
-	( cd $(CURDIR) && rm -rf sources gcc-* binutils-* musl-* glibc-* gmp-* mpc-* mpfr-* isl-* build build-* linux-* mingw-w64-* llvm-project-* zlib-* zstd-* libxml2-* )
+srcclean:
+	( cd $(CURDIR) && rm -rf sources gcc-* binutils-* musl-* glibc-* gmp-* mpc-* mpfr-* isl-* build build-* linux-* mingw-w64-* freebsd-* llvm-project-* zlib-* zstd-* libxml2-* )
 
 check:
 	@echo "check bzip2"
@@ -204,6 +210,27 @@ $(SOURCES)/config.guess: | $(SOURCES)
 	mv $@.tmp/$(notdir $@) $@
 	rm -rf $@.tmp
 
+# Define template for FreeBSD base.txz download rules
+# $(1) = architecture suffix (e.g., amd64, aarch64, powerpc64le)
+# $(2) = download path (e.g., amd64, arm64/aarch64, powerpc/powerpc64le)
+define FREEBSD_DOWNLOAD_RULE
+$$(SOURCES)/freebsd-%-$(1).tar.xz: hashes/freebsd-%-$(1).tar.xz.sha1 | $$(SOURCES)
+	mkdir -p $$@.tmp
+	cd $$@.tmp && $$(DL_CMD) $$(notdir $$@) $$(FREEBSD_SITE)/$(2)/$$*-RELEASE/base.txz
+	cd $$@.tmp && touch $$(notdir $$@)
+	cd $$@.tmp && $$(SHA1_CMD) $$(CURDIR)/hashes/$$(notdir $$@).sha1
+	mv $$@.tmp/$$(notdir $$@) $$@
+	rm -rf $$@.tmp
+endef
+
+# Generate download rules for each FreeBSD architecture
+$(eval $(call FREEBSD_DOWNLOAD_RULE,amd64,amd64))
+$(eval $(call FREEBSD_DOWNLOAD_RULE,aarch64,arm64/aarch64))
+$(eval $(call FREEBSD_DOWNLOAD_RULE,powerpc,powerpc/powerpc))
+$(eval $(call FREEBSD_DOWNLOAD_RULE,powerpc64,powerpc/powerpc64))
+$(eval $(call FREEBSD_DOWNLOAD_RULE,powerpc64le,powerpc/powerpc64le))
+$(eval $(call FREEBSD_DOWNLOAD_RULE,riscv64,riscv/riscv64))
+
 $(SOURCES)/%: hashes/%.sha1 | $(SOURCES)
 	mkdir -p $@.tmp
 	cd $@.tmp && $(DL_CMD) $(notdir $@) $(SITE)
@@ -227,7 +254,7 @@ musl-git-%:
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -zxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	( tar -zxf - --hard-dereference --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
@@ -236,7 +263,7 @@ musl-git-%:
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	( tar -jxf - --hard-dereference --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
@@ -245,7 +272,7 @@ musl-git-%:
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -Jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	( tar -Jxf - --hard-dereference --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
@@ -262,11 +289,13 @@ ifeq ($(SOURCES_ONLY),)
 	( cd $@.tmp && $(COWPATCH) -C ../$< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
 		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
-			cat $(filter-out %-musl.diff %-gnu.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-musl.diff %-gnu.diff %-freebsd.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+		elif [ -n "$(findstring freebsd,$(TARGET))" ]; then \
+			cat $(filter-out %-mingw.diff %-gnu.diff %-musl.diff %-nofreebsd.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		elif [ -n "$(findstring musl,$(TARGET))" ]; then \
-			cat $(filter-out %-mingw.diff %-gnu.diff %-nonmusl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-mingw.diff %-gnu.diff %-freebsd.diff %-nonmusl.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		else \
-			cat $(filter-out %-mingw.diff %-musl.diff %-nongnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
+			cat $(filter-out %-mingw.diff %-musl.diff %-freebsd.diff %-nongnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		fi \
 	fi
 	( cd $@.tmp && find -L . -name config.sub -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
@@ -277,14 +306,16 @@ ifeq ($(SOURCES_ONLY),)
 	mv $@.tmp $@
 
 ifneq ($(findstring mingw,$(TARGET)),)
-extract_all: | $(filter-out linux-% musl-% glibc-%,$(SRC_DIRS))
+extract_all: | $(filter-out linux-% musl-% glibc-% freebsd-%,$(SRC_DIRS))
+else ifneq ($(findstring freebsd,$(TARGET)),)
+extract_all: | $(filter-out mingw-w64-% musl-% glibc-%,$(SRC_DIRS))
 else ifneq ($(findstring musl,$(TARGET)),)
-extract_all: | $(filter-out mingw-w64-% glibc-%,$(SRC_DIRS))
+extract_all: | $(filter-out mingw-w64-% glibc-% freebsd-%,$(SRC_DIRS))
 else ifneq ($(findstring gnu,$(TARGET))$(findstring glibc,$(TARGET)),)
-extract_all: | $(filter-out mingw-w64-% musl-%,$(SRC_DIRS))
+extract_all: | $(filter-out mingw-w64-% musl-% freebsd-%,$(SRC_DIRS))
 else
 # Default to glibc for standard Linux targets
-extract_all: | $(filter-out mingw-w64-% musl-%,$(SRC_DIRS))
+extract_all: | $(filter-out mingw-w64-% musl-% freebsd-%,$(SRC_DIRS))
 endif
 
 else
@@ -310,6 +341,7 @@ $(BUILD_DIR)/config.mak: | $(BUILD_DIR)
 	$(if $(MUSL_VER),"MUSL_SRCDIR = $(REL_TOP)/musl-$(MUSL_VER)") \
 	$(if $(MUSL_VER),"SSP_SRCDIR = $(REL_TOP)/extra/ssp") \
 	$(if $(GLIBC_VER),"GLIBC_SRCDIR = $(REL_TOP)/glibc-$(GLIBC_VER)") \
+	$(if $(FREEBSD_VER),$(if $(findstring x86_64,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-amd64",$(if $(findstring aarch64,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-aarch64",$(if $(findstring amd64,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-amd64",$(if $(findstring powerpc64le,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-powerpc64le",$(if $(findstring powerpc64,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-powerpc64",$(if $(findstring powerpc,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-powerpc",$(if $(findstring riscv64,$(TARGET)),"FREEBSD_SRCDIR = $(REL_TOP)/freebsd-$(FREEBSD_VER)-riscv64")))))))) \
 	$(if $(GMP_VER),"GMP_SRCDIR = $(REL_TOP)/gmp-$(GMP_VER)") \
 	$(if $(MPC_VER),"MPC_SRCDIR = $(REL_TOP)/mpc-$(MPC_VER)") \
 	$(if $(MPFR_VER),"MPFR_SRCDIR = $(REL_TOP)/mpfr-$(MPFR_VER)") \

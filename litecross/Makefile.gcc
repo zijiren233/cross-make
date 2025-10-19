@@ -3,6 +3,7 @@ OUTPUT = $(CURDIR)/output-gcc
 BINUTILS_SRCDIR = BINUTILS_SRCDIR_not_set
 GCC_SRCDIR = GCC_SRCDIR_not_set
 GLIBC_SRCDIR = GLIBC_SRCDIR_not_set
+FREEBSD_SRCDIR = FREEBSD_SRCDIR_not_set
 
 MAKE_ARGS =
 GCC_CONFIG_FOR_TARGET =
@@ -11,6 +12,7 @@ GCC_CONFIG =
 MINGW_CRT_CONFIG =
 MINGW_HEADERS_CONFIG =
 GLIBC_CONFIG =
+FREEBSD_CONFIG =
 OPTIMIZE_LEVEL =
 CCACHE =
 COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
@@ -127,6 +129,12 @@ GCC_CONFIG_FOR_TARGET += --enable-secureplt --enable-decimal-float=no
 ifneq ($(findstring 64le,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
 endif
+# FreeBSD uses ELFv2 ABI for powerpc64 (big-endian too)
+ifneq ($(findstring freebsd,$(TARGET)),)
+ifneq ($(findstring 64,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
+endif
+endif
 endif
 
 # MIPS configurations
@@ -210,6 +218,19 @@ MINGW_CRT_CONFIG += --disable-lib32 --enable-lib64
 else
 MINGW_CRT_CONFIG += --enable-lib32 --disable-lib64
 endif
+
+else ifneq ($(findstring freebsd,$(TARGET)),)
+# build freebsd
+MUSL_SRCDIR :=
+MINGW_SRCDIR :=
+GLIBC_SRCDIR :=
+LINUX_SRCDIR :=
+
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
+	--enable-threads=posix \
+	--enable-tls \
+	--disable-default-pie \
+	--disable-shared
 
 else
 # build glibc
@@ -330,6 +351,20 @@ FULL_MINGW_CRT_CONFIG = $(MINGW_CONFIG) $(MINGW_CRT_CONFIG) \
 FULL_MINGW_PTHREADS_CONFIG = $(MINGW_CONFIG) \
 	--prefix= --host=$(TARGET) --with-sysroot=$(SYSROOT)
 
+# Shell script to fix FreeBSD broken symlinks (../../lib/foo -> foo)
+# Usage: cd target_lib_dir && $(FREEBSD_FIX_SYMLINKS)
+define FREEBSD_FIX_SYMLINKS
+find . -type l | while read link; do \
+	target=$$(readlink "$$link") || continue; \
+	case "$$target" in \
+		../../lib/*) \
+			real_target=$${target#../../lib/}; \
+			rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
+			;; \
+	esac; \
+done
+endef
+
 ifeq ($(HOST),)
 # build cross
 obj_gcc/%: export CC:=$(CCACHE) $(CC) $(STAT)
@@ -443,6 +478,10 @@ all: mingw gcc binutils
 install: install-mingw install-gcc install-binutils
 	(cd $(DESTDIR)$(OUTPUT) && unlink usr || ln -sf . usr)
 	(cd $(DESTDIR)$(OUTPUT) && cp -R include $(TARGET))
+else ifneq ($(FREEBSD_SRCDIR),)
+all: freebsd gcc binutils
+install: install-freebsd install-gcc install-binutils
+	(cd $(DESTDIR)$(OUTPUT) && unlink usr || ln -sf . usr)
 else ifneq ($(GLIBC_SRCDIR),)
 all: glibc gcc binutils
 install: install-glibc install-gcc install-binutils
@@ -457,6 +496,8 @@ musl: obj_musl/.lc_built
 
 glibc: obj_glibc/.lc_built
 
+freebsd: obj_freebsd/.lc_built
+
 mingw: obj_mingw_headers/.lc_built obj_mingw_crt/.lc_built obj_mingw_pthreads/.lc_built
 
 toolchain: gcc binutils
@@ -467,7 +508,7 @@ gcc: obj_gcc/.lc_built
 
 binutils: obj_binutils/.lc_built
 
-.PHONY: all musl glibc mingw toolchain install-musl install-glibc install-mingw install-toolchain clean
+.PHONY: all musl glibc freebsd mingw toolchain install-musl install-glibc install-freebsd install-mingw install-toolchain clean
 
 src_binutils: | $(BINUTILS_SRCDIR)
 	ln -sf $(BINUTILS_SRCDIR) $@
@@ -480,6 +521,9 @@ src_musl: | $(MUSL_SRCDIR)
 
 src_glibc: | $(GLIBC_SRCDIR)
 	ln -sf $(GLIBC_SRCDIR) $@
+
+src_freebsd: | $(FREEBSD_SRCDIR)
+	ln -sf $(FREEBSD_SRCDIR) $@
 
 src_mingw: | $(MINGW_SRCDIR)
 	ln -sf $(MINGW_SRCDIR) $@
@@ -595,6 +639,24 @@ obj_sysroot/.lc_headers: | obj_mingw_headers/.lc_configured obj_sysroot
 	rm -f $(CURDIR)/obj_sysroot/mingw
 	ln -s . $(CURDIR)/obj_sysroot/mingw
 	touch $@
+else ifneq ($(FREEBSD_SRCDIR),)
+# freebsd - use prebuilt libc from base.txz
+obj_sysroot/.lc_headers: | obj_freebsd/.lc_built obj_sysroot
+	# Copy headers from prebuilt FreeBSD base
+	mkdir -p $(CURDIR)/obj_sysroot/include
+	rsync -a $(FREEBSD_SRCDIR)/usr/include/ $(CURDIR)/obj_sysroot/include/
+	# Copy startup files
+	mkdir -p $(CURDIR)/obj_sysroot/lib
+	if [ -f $(FREEBSD_SRCDIR)/usr/lib/crt1.o ]; then \
+		cp $(FREEBSD_SRCDIR)/usr/lib/crt1.o $(CURDIR)/obj_sysroot/lib/; \
+		cp $(FREEBSD_SRCDIR)/usr/lib/crti.o $(CURDIR)/obj_sysroot/lib/; \
+		cp $(FREEBSD_SRCDIR)/usr/lib/crtn.o $(CURDIR)/obj_sysroot/lib/; \
+	fi
+	# Copy libc stub for libgcc
+	if [ -f $(FREEBSD_SRCDIR)/lib/libc.so.7 ]; then \
+		ln -sf libc.so.7 $(CURDIR)/obj_sysroot/lib/libc.so; \
+	fi
+	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
 obj_sysroot/.lc_headers: | obj_glibc/.lc_configured obj_sysroot
@@ -627,9 +689,28 @@ obj_glibc/.lc_built: | obj_glibc/.lc_configured
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS)
 	touch $@
 
+obj_freebsd/.lc_built: | obj_freebsd src_freebsd
+	# FreeBSD uses prebuilt libc, no build needed
+	touch $@
+
 ifneq ($(MINGW_SRCDIR),)
 # mingw
 obj_sysroot/.lc_libs: | obj_sysroot/.lc_libs_pthreads obj_sysroot/.lc_libs_crt
+	touch $@
+else ifneq ($(FREEBSD_SRCDIR),)
+# freebsd - copy prebuilt libraries
+obj_sysroot/.lc_libs: | obj_freebsd/.lc_built
+	# Copy all libraries from prebuilt FreeBSD base
+	mkdir -p $(CURDIR)/obj_sysroot/lib
+	rsync -a $(FREEBSD_SRCDIR)/lib/ $(CURDIR)/obj_sysroot/lib/
+	rsync -a $(FREEBSD_SRCDIR)/usr/lib/ $(CURDIR)/obj_sysroot/lib/
+	# Fix broken symlinks (FreeBSD base.txz uses absolute paths like ../../lib/)
+	cd $(CURDIR)/obj_sysroot/lib && $(FREEBSD_FIX_SYMLINKS)
+	# Fix dangling libgcc_s.so symlink if needed
+	cd $(CURDIR)/obj_sysroot/lib && \
+	if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
+		rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
+	fi
 	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
@@ -672,11 +753,34 @@ install-glibc: | obj_sysroot/.lc_libs
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT)
 	find $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib -name "*.so" -type f -exec sh -c 'head -n1 "$$1" 2>/dev/null | grep -q "GNU ld script" && sed -i "s|/lib/||g" "$$1"' sh {} \; || true
 
+install-freebsd: | obj_sysroot/.lc_libs
+	# Install prebuilt FreeBSD libraries and headers
+	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/include
+	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
+	rsync -a $(CURDIR)/obj_sysroot/include/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/include/
+	rsync -a $(CURDIR)/obj_sysroot/lib/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
+	# Fix broken symlinks (already fixed in obj_sysroot, but rsync may preserve them)
+	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FREEBSD_FIX_SYMLINKS)
+	# Fix dangling libgcc_s.so symlink if needed
+	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && \
+	if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
+		rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
+	fi
+
 install-binutils: | obj_binutils/.lc_built
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
 
 install-gcc: | obj_gcc/.lc_built
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
+ifneq ($(findstring freebsd,$(TARGET)),)
+	# Fix FreeBSD crti.o/crtn.o - GCC generates empty ones, use system files instead
+	cd $(DESTDIR)$(OUTPUT)/lib/gcc/$(TARGET)/$$($(DESTDIR)$(OUTPUT)/bin/$(TARGET)-gcc -dumpversion) && \
+	if [ -f crti.o ] && [ -f $(DESTDIR)$(OUTPUT)/$(TARGET)/lib/crti.o ]; then \
+		rm -f crti.o crtn.o; \
+		ln -s ../../../../$(TARGET)/lib/crti.o crti.o; \
+		ln -s ../../../../$(TARGET)/lib/crtn.o crtn.o; \
+	fi
+endif
 
 obj_mingw_headers/.lc_configured: | obj_mingw_headers src_mingw
 	cd obj_mingw_headers && ../src_mingw/mingw-w64-headers/configure $(FULL_MINGW_HEADERS_CONFIG) || (cat config.log && exit 1)

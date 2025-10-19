@@ -85,7 +85,8 @@ jobs:
                 python3 \
                 gawk \
                 grep \
-                bash && \
+                bash \
+                tar && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
               bash scripts/build.sh \
