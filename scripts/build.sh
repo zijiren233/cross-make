@@ -496,7 +496,7 @@ function Build() {
         {
             OUTPUT="${CROSS_DIST_NAME}"
             NATIVE=""
-            WriteConfig
+            WriteConfig "export PATH=$PATH"
         }
         $MAKE -j${CPU_NUM} clean
         rm -rf "${CROSS_DIST_NAME}" "${CROSS_LOG_FILE}"

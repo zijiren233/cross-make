@@ -254,7 +254,7 @@ musl-git-%:
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -zxf - --hard-dereference --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	( tar -zxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
@@ -263,7 +263,7 @@ musl-git-%:
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -jxf - --hard-dereference --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	( tar -jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
@@ -272,7 +272,7 @@ musl-git-%:
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -Jxf - --hard-dereference --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	( tar -Jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
 	rm -rf $@
 	mv $@.tmp/$(patsubst %.orig,%,$@) $@
 	rm -rf $@.tmp
