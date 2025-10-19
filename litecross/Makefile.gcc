@@ -362,7 +362,10 @@ find . -type l | while read link; do \
 			rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
 			;; \
 	esac; \
-done
+done \
+&& if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
+	rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
+fi
 endef
 
 ifeq ($(HOST),)
@@ -706,11 +709,6 @@ obj_sysroot/.lc_libs: | obj_freebsd/.lc_built
 	rsync -a $(FREEBSD_SRCDIR)/usr/lib/ $(CURDIR)/obj_sysroot/lib/
 	# Fix broken symlinks (FreeBSD base.txz uses absolute paths like ../../lib/)
 	cd $(CURDIR)/obj_sysroot/lib && $(FREEBSD_FIX_SYMLINKS)
-	# Fix dangling libgcc_s.so symlink if needed
-	cd $(CURDIR)/obj_sysroot/lib && \
-	if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
-		rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
-	fi
 	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
@@ -761,11 +759,6 @@ install-freebsd: | obj_sysroot/.lc_libs
 	rsync -a $(CURDIR)/obj_sysroot/lib/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 	# Fix broken symlinks (already fixed in obj_sysroot, but rsync may preserve them)
 	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FREEBSD_FIX_SYMLINKS)
-	# Fix dangling libgcc_s.so symlink if needed
-	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && \
-	if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
-		rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
-	fi
 
 install-binutils: | obj_binutils/.lc_built
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install

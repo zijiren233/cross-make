@@ -147,6 +147,8 @@ function Init() {
         DEFAULT_LINUX_VER="6.12.33"
         DEFAULT_MINGW_VER="v13.0.0"
         DEFAULT_FREEBSD_VER="14.3"
+        DEFAULT_FREEBSD13_VER="13.5"
+        DEFAULT_FREEBSD14_VER="14.3"
         if [ ! "$CONFIG_SUB_REV" ]; then
             CONFIG_SUB_REV="$DEFAULT_CONFIG_SUB_REV"
         fi
@@ -182,6 +184,12 @@ function Init() {
         fi
         if [ -z "${FREEBSD_VER+x}" ]; then
             FREEBSD_VER="$DEFAULT_FREEBSD_VER"
+        fi
+        if [ -z "${FREEBSD13_VER+x}" ]; then
+            FREEBSD13_VER="$DEFAULT_FREEBSD13_VER"
+        fi
+        if [ -z "${FREEBSD14_VER+x}" ]; then
+            FREEBSD14_VER="$DEFAULT_FREEBSD14_VER"
         fi
     }
 }
@@ -322,7 +330,27 @@ function WriteConfig() {
         # freebsd target
         USE_MUSL=""
         USE_GLIBC=""
-        USE_FREEBSD="${FREEBSD_VER}"
+        # Parse FreeBSD version from target
+        # Examples: x86_64-unknown-freebsd13.0 -> 13.0
+        #           x86_64-unknown-freebsd13 -> use FREEBSD13_VER
+        #           x86_64-unknown-freebsd14 -> use FREEBSD14_VER
+        if [[ "$TARGET" =~ freebsd([0-9]+)\.([0-9]+) ]]; then
+            # Full version specified in target (e.g., freebsd13.0)
+            USE_FREEBSD="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+        elif [[ "$TARGET" =~ freebsd([0-9]+)$ ]]; then
+            # Only major version specified (e.g., freebsd13)
+            local major_ver="${BASH_REMATCH[1]}"
+            local var_name="FREEBSD${major_ver}_VER"
+            # Use indirect variable expansion to get FREEBSD13_VER, FREEBSD14_VER, etc.
+            USE_FREEBSD="${!var_name}"
+            # Fallback to FREEBSD_VER if specific version not defined
+            if [ -z "$USE_FREEBSD" ]; then
+                USE_FREEBSD="${FREEBSD_VER}"
+            fi
+        else
+            # No version in target, use default FREEBSD_VER
+            USE_FREEBSD="${FREEBSD_VER}"
+        fi
     elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
         # glibc target
         USE_MUSL=""
@@ -614,6 +642,12 @@ x86_64-linux-gnu
 i586-w64-mingw32
 i686-w64-mingw32
 x86_64-w64-mingw32
+x86_64-unknown-freebsd13
+aarch64-unknown-freebsd13
+powerpc-unknown-freebsd13
+powerpc64-unknown-freebsd13
+powerpc64le-unknown-freebsd13
+riscv64-unknown-freebsd13
 x86_64-unknown-freebsd14
 aarch64-unknown-freebsd14
 powerpc-unknown-freebsd14
