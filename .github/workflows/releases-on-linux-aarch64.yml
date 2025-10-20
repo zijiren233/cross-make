@@ -81,6 +81,7 @@ jobs:
                 python3 \
                 gawk \
                 grep \
+                bash \
                 tar \
                 file && \
               cd /build \
