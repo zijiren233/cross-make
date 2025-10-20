@@ -2,8 +2,6 @@ OUTPUT = $(CURDIR)/output-gcc
 
 BINUTILS_SRCDIR = BINUTILS_SRCDIR_not_set
 GCC_SRCDIR = GCC_SRCDIR_not_set
-GLIBC_SRCDIR = GLIBC_SRCDIR_not_set
-FREEBSD_SRCDIR = FREEBSD_SRCDIR_not_set
 
 MAKE_ARGS =
 GCC_CONFIG_FOR_TARGET =
@@ -182,8 +180,9 @@ endif
 
 ifneq ($(findstring musl,$(TARGET)),)
 # build musl
-MINGW_SRCDIR :=
-GLIBC_SRCDIR :=
+override MINGW_SRCDIR =
+override GLIBC_SRCDIR =
+override FREEBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
@@ -200,9 +199,10 @@ endif
 
 else ifneq ($(findstring mingw,$(TARGET)),)
 # build mingw
-MUSL_SRCDIR :=
-GLIBC_SRCDIR :=
-LINUX_SRCDIR :=
+override MUSL_SRCDIR =
+override GLIBC_SRCDIR =
+override LINUX_SRCDIR =
+override FREEBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
@@ -221,21 +221,23 @@ endif
 
 else ifneq ($(findstring freebsd,$(TARGET)),)
 # build freebsd
-MUSL_SRCDIR :=
-MINGW_SRCDIR :=
-GLIBC_SRCDIR :=
-LINUX_SRCDIR :=
+override MUSL_SRCDIR =
+override MINGW_SRCDIR =
+override GLIBC_SRCDIR =
+override LINUX_SRCDIR =
+
+MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--enable-threads=posix \
 	--enable-tls \
-	--disable-default-pie \
 	--disable-shared
 
 else
 # build glibc
-MUSL_SRCDIR :=
-MINGW_SRCDIR :=
+override MUSL_SRCDIR =
+override MINGW_SRCDIR =
+override FREEBSD_SRCDIR =
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--enable-threads=posix \
@@ -757,15 +759,6 @@ install-binutils: | obj_binutils/.lc_built
 
 install-gcc: | obj_gcc/.lc_built
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
-ifneq ($(findstring freebsd,$(TARGET)),)
-	# Fix FreeBSD crti.o/crtn.o - GCC generates empty ones, use system files instead
-	cd $(DESTDIR)$(OUTPUT)/lib/gcc/$(TARGET)/$$($(DESTDIR)$(OUTPUT)/bin/$(TARGET)-gcc -dumpversion) && \
-	if [ -f crti.o ] && [ -f $(DESTDIR)$(OUTPUT)/$(TARGET)/lib/crti.o ]; then \
-		rm -f crti.o crtn.o; \
-		ln -s ../../../../$(TARGET)/lib/crti.o crti.o; \
-		ln -s ../../../../$(TARGET)/lib/crtn.o crtn.o; \
-	fi
-endif
 
 obj_mingw_headers/.lc_configured: | obj_mingw_headers src_mingw
 	cd obj_mingw_headers && ../src_mingw/mingw-w64-headers/configure $(FULL_MINGW_HEADERS_CONFIG) || (cat config.log && exit 1)
