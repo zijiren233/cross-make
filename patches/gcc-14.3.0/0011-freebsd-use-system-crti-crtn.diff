@@ -1,0 +1,20 @@
+--- a/libgcc/config.host
++++ b/libgcc/config.host
+@@ -1229,7 +1229,7 @@ powerpc-*-darwin* | powerpc64-*-darwin*)
+ 	;;
+ powerpc*-*-freebsd*)
+ 	tmake_file="${tmake_file} rs6000/t-ppccomm rs6000/t-savresfgpr rs6000/t-crtstuff rs6000/t-freebsd t-softfp-sfdf t-softfp-excl t-softfp"
+-	extra_parts="$extra_parts crtbeginT.o ecrti.o ecrtn.o ncrti.o ncrtn.o"
++	extra_parts="$extra_parts crtbeginT.o"
+ 	case ${host} in
+ 	  powerpc64*)
+ 	    tmake_file="${tmake_file} rs6000/t-freebsd64"
+@@ -1358,7 +1358,7 @@ riscv*-*-linux*)
+ 	;;
+ riscv*-*-freebsd*)
+ 	tmake_file="${tmake_file} riscv/t-crtstuff riscv/t-softfp${host_address} t-softfp riscv/t-elf riscv/t-elf${host_address} t-slibgcc-libgcc"
+-	extra_parts="$extra_parts crtbegin.o crtend.o crti.o crtn.o crtendS.o crtbeginT.o"
++	extra_parts="$extra_parts crtbegin.o crtend.o crtendS.o crtbeginT.o"
+ 	;;
+ riscv*-*-*)
+ 	tmake_file="${tmake_file} riscv/t-softfp${host_address} t-softfp riscv/t-elf riscv/t-elf${host_address}"

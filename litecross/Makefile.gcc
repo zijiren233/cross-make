@@ -15,6 +15,7 @@ OPTIMIZE_LEVEL =
 CCACHE =
 COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
+PIE_CONFIG = --enable-default-pie
 
 ifeq ($(OS),Windows_NT)
 EXE_EXT = .exe
@@ -233,6 +234,8 @@ GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--enable-tls \
 	--disable-shared
 
+PIE_CONFIG = --disable-default-pie
+
 else
 # build glibc
 override MUSL_SRCDIR =
@@ -286,7 +289,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
 	--enable-libstdcxx-filesystem-ts=yes \
-	--enable-default-pie \
+	$(PIE_CONFIG) \
 	--enable-default-ssp \
 	--disable-decimal-float \
 	--disable-cet \
