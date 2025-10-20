@@ -81,7 +81,8 @@ jobs:
                 gawk \
                 grep \
                 bash \
-                tar && \
+                tar \
+                file && \
               cd /build && \
               bash scripts/build.sh \
                 -LDP \

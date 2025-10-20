@@ -86,7 +86,8 @@ jobs:
                 gawk \
                 grep \
                 bash \
-                tar && \
+                tar \
+                file && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-${{ env.UNAMESPACER }}" && \
               bash scripts/build.sh \
