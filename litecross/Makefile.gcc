@@ -362,11 +362,13 @@ find . -type l | while read link; do \
 			rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
 			;; \
 	esac; \
-done \
-&& if [ -L libgcc_s.so ] && [ ! -e libgcc_s.so ] && [ -f libgcc_s.so.1 ]; then \
+done; \
+if [ -f libgcc_s.so.1 ]; then \
 	rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
-fi \
-&& ln -sf libc.so.7 libc.so
+fi; \
+if [ -f libc.so.7 ]; then \
+	rm -f libc.so && ln -sf libc.so.7 libc.so; \
+fi
 endef
 
 ifeq ($(HOST),)
