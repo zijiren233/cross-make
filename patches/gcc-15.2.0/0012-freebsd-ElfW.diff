@@ -1,0 +1,20 @@
+--- a/libgcc/unwind-dw2-fde-dip.c
++++ b/libgcc/unwind-dw2-fde-dip.c
+@@ -66,7 +66,9 @@
+ #if !defined(inhibit_libc) && defined(HAVE_LD_EH_FRAME_HDR) \
+     && defined(TARGET_DL_ITERATE_PHDR) \
+     && (defined(__DragonFly__) || defined(__FreeBSD__))
++# ifndef ElfW
+ # define ElfW __ElfN
++# endif
+ # define USE_PT_GNU_EH_FRAME
+ #endif
+
+--- a/libgcc/config/aarch64/t-aarch64
++++ b/libgcc/config/aarch64/t-aarch64
+@@ -30,4 +30,4 @@ LIB2ADDEH += \
+ 	$(srcdir)/config/aarch64/__arm_za_disable.S
+
+ SHLIB_MAPFILES += $(srcdir)/config/aarch64/libgcc-sme.ver
+-LIBGCC2_CFLAGS += -Werror -Wno-prio-ctor-dtor
++LIBGCC2_CFLAGS += -Wno-error -Wno-prio-ctor-dtor
