@@ -1,0 +1,31 @@
+name: get-targets
+
+on:
+  workflow_call:
+    outputs:
+      TARGETS:
+        description: "Array of all targets from scripts/triples.txt"
+        value: ${{ jobs.get_targets.outputs.TARGETS }}
+
+jobs:
+  get_targets:
+    name: Get All Targets
+    runs-on: ubuntu-latest
+    outputs:
+      TARGETS: ${{ steps.get_all_targets.outputs.TARGETS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get all targets
+        id: get_all_targets
+        run: |
+          declare -a arr=()
+          while IFS= read -r line; do
+          if [ -z "$line" ] || [ "${line:0:1}" == "#" ]; then
+            continue
+          fi
+          arr+=("$line")
+          done < scripts/triples.txt
+          printf -v json '"%s",' "${arr[@]}"
+          json="[${json%,}]"
+          echo "TARGETS=$json" >> $GITHUB_OUTPUT

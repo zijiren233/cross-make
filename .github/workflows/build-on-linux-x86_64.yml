@@ -2,39 +2,11 @@ name: build-on-linux-x86_64
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   init:
-    name: Init
-    runs-on: ubuntu-latest
-    outputs:
-      TARGETS: ${{ steps.get_all_targets.outputs.TARGETS }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get all targets
-        id: get_all_targets
-        run: |
-          declare -a arr=()
-          while IFS= read -r line; do
-          if [ -z "$line" ] || [ "${line:0:1}" == "#" ]; then
-            continue
-          fi
-          arr+=("$line")
-          done < scripts/triples.txt
-          printf -v json '"%s",' "${arr[@]}"
-          json="[${json%,}]"
-          echo "TARGETS=$json" >> $GITHUB_OUTPUT
-
-      - name: Download sources
-        run: |
-          bash scripts/build.sh -d
-
-      - name: Upload sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: sources
-          path: sources
+    uses: ./.github/workflows/get-targets.yml
 
   build_targets_on_linux_x86_64:
     name: Build
@@ -47,11 +19,6 @@ jobs:
         targets: ${{ fromJSON(needs.init.outputs.TARGETS) }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: sources
-          path: sources
 
       - name: Build
         id: build
@@ -71,6 +38,7 @@ jobs:
                 rsync \
                 patch \
                 perl \
+                zip \
                 flex \
                 g++ \
                 texinfo \
@@ -81,13 +49,17 @@ jobs:
                 tar \
                 file && \
               cd /build && \
+              export CROSS_DIST_NAME_SUFFIX="-linux-x86_64" && \
               bash scripts/build.sh \
-                -LDPO1 \
+                -LDP \
                 -n \
+                -a \
                 -T "${{ matrix.targets }}"'
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.targets }}
-          path: dist
+          name: ${{ matrix.targets }}-linux-x86_64
+          path: |
+            dist
+            !dist/*.log

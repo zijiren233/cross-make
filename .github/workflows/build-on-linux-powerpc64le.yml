@@ -2,39 +2,11 @@ name: build-on-linux-powerpc64le
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   init:
-    name: Init
-    runs-on: ubuntu-latest
-    outputs:
-      TARGETS: ${{ steps.get_all_targets.outputs.TARGETS }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get all targets
-        id: get_all_targets
-        run: |
-          declare -a arr=()
-          while IFS= read -r line; do
-          if [ -z "$line" ] || [ "${line:0:1}" == "#" ]; then
-            continue
-          fi
-          arr+=("$line")
-          done < scripts/triples.txt
-          printf -v json '"%s",' "${arr[@]}"
-          json="[${json%,}]"
-          echo "TARGETS=$json" >> $GITHUB_OUTPUT
-
-      - name: Download sources
-        run: |
-          bash scripts/build.sh -d
-
-      - name: Upload sources
-        uses: actions/upload-artifact@v4
-        with:
-          name: sources
-          path: sources
+    uses: ./.github/workflows/get-targets.yml
 
   build_targets_on_linux_powerpc64le_cross:
     name: Build cross
@@ -47,11 +19,6 @@ jobs:
         targets: ${{ fromJSON(needs.init.outputs.TARGETS) }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: sources
-          path: sources
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -84,12 +51,16 @@ jobs:
                 tar \
                 file && \
               cd /build && \
+              export CROSS_DIST_NAME_SUFFIX="-linux-powerpc64le" && \
               bash scripts/build.sh \
                 -LDP \
+                -a \
                 -T "${{ matrix.targets }}"'
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.targets }}
-          path: dist
+          name: ${{ matrix.targets }}-linux-powerpc64le
+          path: |
+            dist
+            !dist/*.log
