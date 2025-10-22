@@ -22,7 +22,7 @@ LIBXML2_VER = 2.13.3
 CHINA = 
 
 # curl --progress-bar -Lo <file> <url>
-DL_CMD = curl --progress-bar -Lo
+DL_CMD = curl --retry 5 --retry-delay 3 --retry-max-time 300 --connect-timeout 30 --max-time 600 --progress-bar -Lo
 SHA1_CMD = sha1sum -c
 
 COWPATCH = $(CURDIR)/cowpatch.sh
