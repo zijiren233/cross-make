@@ -12,29 +12,5 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/release.yml
     needs: build
-    steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: BRAINSia/free-disk-space@v2
-        with:
-          tool-cache: true
-          mandb:   true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.ref_name }}" dist/*.* --clobber
