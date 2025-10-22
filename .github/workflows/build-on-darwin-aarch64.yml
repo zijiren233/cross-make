@@ -84,4 +84,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
+            gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "Release ${{ github.ref_name }}" || true
           gh release upload "${{ github.ref_name }}" dist/*.* --clobber --repo ${{ github.repository }}
