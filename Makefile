@@ -281,7 +281,6 @@ define find_and_prefix
 $(addprefix $(SOURCES)/,$(notdir $(wildcard hashes/\$1*.sha1)))
 endef
 
-ifeq ($(SOURCES_ONLY),)
 %: %.orig | $(SOURCES)/config.sub $(SOURCES)/config.guess
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
@@ -318,9 +317,7 @@ else
 extract_all: | $(filter-out mingw-w64-% musl-% freebsd-%,$(SRC_DIRS))
 endif
 
-else
 extract_all: | $(patsubst %.sha1,%, $(foreach item,$(SRC_DIRS),$(call find_and_prefix,$(item)))) $(SOURCES)/config.sub $(SOURCES)/config.guess
-endif
 # Add deps for all patched source dirs on their patchsets
 $(foreach dir,$(notdir $(basename $(basename $(basename $(wildcard hashes/*))))),$(eval $(dir): $(wildcard patches/$(dir) patches/$(dir)/*)))
 
