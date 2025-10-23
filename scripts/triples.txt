@@ -49,3 +49,15 @@ x86_64-linux-gnu
 i586-w64-mingw32
 i686-w64-mingw32
 x86_64-w64-mingw32
+x86_64-unknown-freebsd13
+aarch64-unknown-freebsd13
+powerpc-unknown-freebsd13
+powerpc64-unknown-freebsd13
+powerpc64le-unknown-freebsd13
+riscv64-unknown-freebsd13
+x86_64-unknown-freebsd14
+aarch64-unknown-freebsd14
+powerpc-unknown-freebsd14
+powerpc64-unknown-freebsd14
+powerpc64le-unknown-freebsd14
+riscv64-unknown-freebsd14
