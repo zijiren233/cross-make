@@ -139,7 +139,7 @@ function Init() {
         DEFAULT_GCC_VER="14.3.0"
         DEFAULT_MUSL_VER="1.2.5"
         DEFAULT_GLIBC_VER="2.28"
-        DEFAULT_BINUTILS_VER="2.45"
+        DEFAULT_BINUTILS_VER="2.45.1"
         DEFAULT_GMP_VER="6.3.0"
         DEFAULT_MPC_VER="1.3.1"
         DEFAULT_MPFR_VER="4.2.2"
