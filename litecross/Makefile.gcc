@@ -188,9 +188,7 @@ override FREEBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
-GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--enable-threads=posix \
-	--enable-tls
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array
 
 # use __stack_chk_fail_local
 GCC_CONFIG_FOR_TARGET += --disable-libssp
@@ -210,9 +208,7 @@ MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
-	--enable-fully-dynamic-string \
-	--enable-threads=posix \
-	--disable-tls
+	--enable-fully-dynamic-string
 
 ifneq ($(findstring x86_64,$(TARGET)),)
 # 64
@@ -231,8 +227,6 @@ override LINUX_SRCDIR =
 MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--enable-threads=posix \
-	--enable-tls \
 	--disable-shared
 
 PIE_CONFIG = --disable-default-pie
@@ -247,9 +241,7 @@ override MUSL_SRCDIR =
 override MINGW_SRCDIR =
 override FREEBSD_SRCDIR =
 
-GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--enable-threads=posix \
-	--enable-tls
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array
 
 endif
 
@@ -294,6 +286,8 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
 	--enable-libstdcxx-filesystem-ts=yes \
+	--enable-threads=posix \
+	--enable-tls \
 	$(PIE_CONFIG) \
 	$(SSP_CONFIG) \
 	--disable-decimal-float \
