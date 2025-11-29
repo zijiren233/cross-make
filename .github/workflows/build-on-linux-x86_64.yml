@@ -23,12 +23,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-linux-x86_64-${{ matrix.targets }}-${{ github.sha }}
+          restore-keys: |
+            ccache-linux-x86_64-${{ matrix.targets }}-
+
       - name: Build
         id: build
         run: |
           docker run --rm \
             --platform linux/amd64 \
             --volume "${PWD}:/build" \
+            --volume "${{ github.workspace }}/.ccache:/root/.ccache" \
             amd64/alpine:latest \
             /bin/sh -c '
               apk add --no-cache \
@@ -50,13 +59,16 @@ jobs:
                 grep \
                 bash \
                 tar \
-                file && \
+                file \
+                ccache && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-linux-x86_64" && \
+              export CCACHE_DIR=/root/.ccache && \
               bash scripts/build.sh \
                 -LDP \
                 -n \
                 -a \
+                -b \
                 -T "${{ matrix.targets }}"'
 
       - name: Upload dist

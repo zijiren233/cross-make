@@ -29,6 +29,14 @@ jobs:
           diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
           cp -r ./* /Volumes/cross
 
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: /Volumes/cross/.ccache
+          key: ccache-darwin-aarch64-${{ matrix.targets }}-${{ github.sha }}
+          restore-keys: |
+            ccache-darwin-aarch64-${{ matrix.targets }}-
+
       - name: Init Dependencies
         run: |
           brew install \
@@ -42,16 +50,19 @@ jobs:
             perl \
             libtool \
             bison \
-            texinfo
+            texinfo \
+            ccache
 
       - name: Build
         working-directory: /Volumes/cross
         run: |
           export CROSS_DIST_NAME_SUFFIX="-darwin-aarch64"
+          export CCACHE_DIR=/Volumes/cross/.ccache
           bash scripts/build.sh \
             -LDP \
             -c "gcc-14" -x "g++-14" \
             -a \
+            -b \
             -T "${{ matrix.targets }}"
 
       - name: Upload dist
