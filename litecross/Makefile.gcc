@@ -739,6 +739,17 @@ obj_gcc/.lc_built: | obj_gcc/gcc/.lc_built
 
 install-musl: | obj_sysroot/.lc_libs
 	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT) install
+	# Fix musl broken symlinks (absolute /lib/* -> relative)
+	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && \
+	find . -type l | while read link; do \
+		target=$$(readlink "$$link") || continue; \
+		case "$$target" in \
+			/lib/*) \
+				real_target=$${target#/lib/}; \
+				rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
+				;; \
+		esac; \
+	done
 	# Install libssp_nonshared.a for musl SSP support
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
 	cp -f $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
