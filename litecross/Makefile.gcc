@@ -355,6 +355,20 @@ FULL_MINGW_CRT_CONFIG = $(MINGW_CONFIG) $(MINGW_CRT_CONFIG) \
 FULL_MINGW_PTHREADS_CONFIG = $(MINGW_CONFIG) \
 	--prefix= --host=$(TARGET) --with-sysroot=$(SYSROOT)
 
+# Shell script to fix broken symlinks with absolute /lib/* paths
+# Usage: cd target_lib_dir && $(FIX_LIB_SYMLINKS)
+define FIX_LIB_SYMLINKS
+find . -type l | while read link; do \
+	target=$$(readlink "$$link") || continue; \
+	case "$$target" in \
+		/lib/*) \
+			real_target=$${target#/lib/}; \
+			rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
+			;; \
+	esac; \
+done
+endef
+
 # Shell script to fix FreeBSD broken symlinks (../../lib/foo -> foo)
 # Usage: cd target_lib_dir && $(FREEBSD_FIX_SYMLINKS)
 define FREEBSD_FIX_SYMLINKS
@@ -740,22 +754,16 @@ obj_gcc/.lc_built: | obj_gcc/gcc/.lc_built
 install-musl: | obj_sysroot/.lc_libs
 	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT) install
 	# Fix musl broken symlinks (absolute /lib/* -> relative)
-	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && \
-	find . -type l | while read link; do \
-		target=$$(readlink "$$link") || continue; \
-		case "$$target" in \
-			/lib/*) \
-				real_target=$${target#/lib/}; \
-				rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
-				;; \
-		esac; \
-	done
+	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FIX_LIB_SYMLINKS)
 	# Install libssp_nonshared.a for musl SSP support
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
 	cp -f $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 
 install-glibc: | obj_sysroot/.lc_libs
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT)
+	# Fix glibc broken symlinks (absolute /lib/* -> relative)
+	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FIX_LIB_SYMLINKS)
+	# Fix glibc ld scripts with absolute paths
 	find $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib -name "*.so" -type f -exec sh -c 'head -n1 "$$1" 2>/dev/null | grep -q "GNU ld script" && sed -i "s|/lib/||g" "$$1"' sh {} \; || true
 
 install-freebsd: | obj_sysroot/.lc_libs
