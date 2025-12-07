@@ -62,7 +62,8 @@ jobs:
                 bash \
                 tar \
                 file \
-                ccache && \
+                ccache \
+                yq && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-linux-powerpc64le" && \
               export CCACHE_DIR=/root/.ccache && \

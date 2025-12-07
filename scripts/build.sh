@@ -6,6 +6,29 @@ function ChToScriptFileDir() {
     cd "$(dirname "$0")"
 }
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+TARGETS_YAML="${SCRIPT_DIR}/targets.yaml"
+
+# Parse YAML defaults section to get a default value
+# Usage: GetYamlDefault KEY
+function GetYamlDefault() {
+    local key="$1"
+    yq -r ".defaults.${key} // \"\"" "$TARGETS_YAML"
+}
+
+# Get target-specific config from YAML
+# Usage: GetTargetConfig TARGET KEY
+function GetTargetConfig() {
+    local target="$1"
+    local key="$2"
+    yq -r ".targets[] | select(.TARGET == \"${target}\") | .${key} // \"\"" "$TARGETS_YAML"
+}
+
+# Get all targets from YAML
+function GetAllTargets() {
+    yq -r '.targets[].TARGET' "$TARGETS_YAML"
+}
+
 function Init() {
     cd ..
     DIST="dist"
@@ -134,21 +157,21 @@ function Init() {
         MAKE="make"
     fi
 
+    # Read default values from targets.yaml
     {
         DEFAULT_CONFIG_SUB_REV="a2287c3041a3"
-        DEFAULT_GCC_VER="14.3.0"
-        DEFAULT_MUSL_VER="1.2.5"
-        DEFAULT_GLIBC_VER="2.28"
-        DEFAULT_BINUTILS_VER="2.45.1"
-        DEFAULT_GMP_VER="6.3.0"
-        DEFAULT_MPC_VER="1.3.1"
-        DEFAULT_MPFR_VER="4.2.2"
-        DEFAULT_ISL_VER="0.27"
-        DEFAULT_LINUX_VER="6.12.33"
-        DEFAULT_MINGW_VER="v13.0.0"
-        DEFAULT_FREEBSD_VER="14.3"
-        DEFAULT_FREEBSD13_VER="13.5"
-        DEFAULT_FREEBSD14_VER="14.3"
+        DEFAULT_GCC_VER="$(GetYamlDefault GCC_VER)"
+        DEFAULT_MUSL_VER="$(GetYamlDefault MUSL_VER)"
+        DEFAULT_GLIBC_VER="$(GetYamlDefault GLIBC_VER)"
+        DEFAULT_BINUTILS_VER="$(GetYamlDefault BINUTILS_VER)"
+        DEFAULT_GMP_VER="$(GetYamlDefault GMP_VER)"
+        DEFAULT_MPC_VER="$(GetYamlDefault MPC_VER)"
+        DEFAULT_MPFR_VER="$(GetYamlDefault MPFR_VER)"
+        DEFAULT_ISL_VER="$(GetYamlDefault ISL_VER)"
+        DEFAULT_LINUX_VER="$(GetYamlDefault LINUX_VER)"
+        DEFAULT_MINGW_VER="$(GetYamlDefault MINGW_VER)"
+        DEFAULT_FREEBSD_VER="$(GetYamlDefault FREEBSD_VER)"
+
         if [ ! "$CONFIG_SUB_REV" ]; then
             CONFIG_SUB_REV="$DEFAULT_CONFIG_SUB_REV"
         fi
@@ -184,12 +207,6 @@ function Init() {
         fi
         if [ -z "${FREEBSD_VER+x}" ]; then
             FREEBSD_VER="$DEFAULT_FREEBSD_VER"
-        fi
-        if [ -z "${FREEBSD13_VER+x}" ]; then
-            FREEBSD13_VER="$DEFAULT_FREEBSD13_VER"
-        fi
-        if [ -z "${FREEBSD14_VER+x}" ]; then
-            FREEBSD14_VER="$DEFAULT_FREEBSD14_VER"
         fi
     }
 }
@@ -316,86 +333,37 @@ function Date() {
 }
 
 function WriteConfig() {
-    # Determine which libc to use based on TARGET
+    # Read target-specific configuration from targets.yaml
     local USE_MUSL=""
     local USE_GLIBC=""
     local USE_FREEBSD=""
+    local USE_MINGW=""
 
-    if [[ "$TARGET" == *"mingw"* ]]; then
-        # mingw target, no musl or glibc
-        USE_MUSL=""
-        USE_GLIBC=""
-        USE_FREEBSD=""
-    elif [[ "$TARGET" == *"freebsd"* ]]; then
-        # freebsd target
-        USE_MUSL=""
-        USE_GLIBC=""
-        # Parse FreeBSD version from target
-        # Examples: x86_64-unknown-freebsd13.0 -> 13.0
-        #           x86_64-unknown-freebsd13 -> use FREEBSD13_VER
-        #           x86_64-unknown-freebsd14 -> use FREEBSD14_VER
-        if [[ "$TARGET" =~ freebsd([0-9]+)\.([0-9]+) ]]; then
-            # Full version specified in target (e.g., freebsd13.0)
-            USE_FREEBSD="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
-        elif [[ "$TARGET" =~ freebsd([0-9]+)$ ]]; then
-            # Only major version specified (e.g., freebsd13)
-            local major_ver="${BASH_REMATCH[1]}"
-            local var_name="FREEBSD${major_ver}_VER"
-            # Use indirect variable expansion to get FREEBSD13_VER, FREEBSD14_VER, etc.
-            USE_FREEBSD="${!var_name}"
-            # Fallback to FREEBSD_VER if specific version not defined
-            if [ -z "$USE_FREEBSD" ]; then
-                USE_FREEBSD="${FREEBSD_VER}"
-            fi
-        else
-            # No version in target, use default FREEBSD_VER
-            USE_FREEBSD="${FREEBSD_VER}"
-        fi
-    elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
-        # glibc target
-        USE_MUSL=""
-        USE_GLIBC="${GLIBC_VER}"
-        USE_FREEBSD=""
+    # Try to get target-specific values from YAML
+    local YAML_MUSL_VER="$(GetTargetConfig "$TARGET" MUSL_VER)"
+    local YAML_GLIBC_VER="$(GetTargetConfig "$TARGET" GLIBC_VER)"
+    local YAML_FREEBSD_VER="$(GetTargetConfig "$TARGET" FREEBSD_VER)"
+    local YAML_MINGW_VER="$(GetTargetConfig "$TARGET" MINGW_VER)"
+
+    # Use YAML values if available, otherwise use defaults based on target type
+    if [ -n "$YAML_MUSL_VER" ]; then
+        USE_MUSL="$YAML_MUSL_VER"
+    elif [ -n "$YAML_GLIBC_VER" ]; then
+        USE_GLIBC="$YAML_GLIBC_VER"
+    elif [ -n "$YAML_FREEBSD_VER" ]; then
+        USE_FREEBSD="$YAML_FREEBSD_VER"
+    elif [ -n "$YAML_MINGW_VER" ]; then
+        USE_MINGW="$YAML_MINGW_VER"
     else
-        # musl target (default)
-        USE_MUSL="${MUSL_VER}"
-        USE_GLIBC=""
-        USE_FREEBSD=""
-    fi
-
-    if [[ "$TARGET" == "loongarch64-linux-gnu" ]]; then
-        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
-        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
-        local required_major=2
-        local required_minor=36
-
-        if [ "$current_major" -lt "$required_major" ] || \
-           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
-            USE_GLIBC="2.36"
-        fi
-    fi
-
-    if [[ "$TARGET" == powerpc*-linux-gnu ]]; then
-        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
-        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
-        local required_major=2
-        local required_minor=31
-
-        if [ "$current_major" -lt "$required_major" ] || \
-           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
-            USE_GLIBC="2.31"
-        fi
-    fi
-
-    if [[ "$TARGET" == riscv64*-linux-gnu ]]; then
-        local current_major=$(echo "$USE_GLIBC" | cut -d. -f1)
-        local current_minor=$(echo "$USE_GLIBC" | cut -d. -f2)
-        local required_major=2
-        local required_minor=35
-
-        if [ "$current_major" -lt "$required_major" ] || \
-           ([ "$current_major" -eq "$required_major" ] && [ "$current_minor" -lt "$required_minor" ]); then
-            USE_GLIBC="2.35"
+        # Fallback: determine libc type from target name
+        if [[ "$TARGET" == *"mingw"* ]]; then
+            USE_MINGW="${MINGW_VER}"
+        elif [[ "$TARGET" == *"freebsd"* ]]; then
+            USE_FREEBSD="${FREEBSD_VER}"
+        elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
+            USE_GLIBC="${GLIBC_VER}"
+        else
+            USE_MUSL="${MUSL_VER}"
         fi
     fi
 
@@ -484,7 +452,7 @@ int main()
 }
 
 function Build() {
-    TARGET="$1"
+    local TARGET="$1"
     DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${TARGET}"
     CROSS_DIST_NAME="${DIST_NAME}-cross${CROSS_DIST_NAME_SUFFIX}"
     NATIVE_DIST_NAME="${DIST_NAME}-native${NATIVE_DIST_NAME_SUFFIX}"
@@ -591,73 +559,12 @@ function Build() {
     fi
 }
 
-ALL_TARGETS='aarch64-linux-musl
-arm-linux-musleabi
-arm-linux-musleabihf
-armv5-linux-musleabi
-armv6-linux-musleabi
-armv6-linux-musleabihf
-armv7-linux-musleabi
-armv7-linux-musleabihf
-loongarch64-linux-musl
-mips-linux-musl
-mips-linux-muslsf
-mipsel-linux-musl
-mipsel-linux-muslsf
-mips64-linux-musl
-mips64-linux-muslsf
-mips64el-linux-musl
-mips64el-linux-muslsf
-powerpc64-linux-musl
-powerpc64le-linux-musl
-riscv64-linux-musl
-s390x-linux-musl
-i586-linux-musl
-i686-linux-musl
-x86_64-linux-musl
-aarch64-linux-gnu
-arm-linux-gnueabi
-arm-linux-gnueabihf
-armv5-linux-gnueabi
-armv6-linux-gnueabi
-armv6-linux-gnueabihf
-armv7-linux-gnueabi
-armv7-linux-gnueabihf
-loongarch64-linux-gnu
-mips-linux-gnu
-mips-linux-gnusf
-mipsel-linux-gnu
-mipsel-linux-gnusf
-mips64-linux-gnu
-mips64-linux-gnusf
-mips64el-linux-gnu
-mips64el-linux-gnusf
-powerpc64-linux-gnu
-powerpc64le-linux-gnu
-riscv64-linux-gnu
-s390x-linux-gnu
-i586-linux-gnu
-i686-linux-gnu
-x86_64-linux-gnu
-i586-w64-mingw32
-i686-w64-mingw32
-x86_64-w64-mingw32
-x86_64-unknown-freebsd13
-aarch64-unknown-freebsd13
-powerpc-unknown-freebsd13
-powerpc64-unknown-freebsd13
-powerpc64le-unknown-freebsd13
-riscv64-unknown-freebsd13
-x86_64-unknown-freebsd14
-aarch64-unknown-freebsd14
-powerpc-unknown-freebsd14
-powerpc64-unknown-freebsd14
-powerpc64le-unknown-freebsd14
-riscv64-unknown-freebsd14'
+# ALL_TARGETS is now read from targets.yaml via GetAllTargets function
 
 function BuildAll() {
-    if [ "$TARGETS_FILE" ]; then
+    if [ -n "$TARGETS_FILE" ]; then
         if [ -f "$TARGETS_FILE" ]; then
+            # Read from file (legacy txt format support)
             while read line; do
                 if [ -z "$line" ] || [ "${line:0:1}" == "#" ]; then
                     continue
@@ -666,10 +573,16 @@ function BuildAll() {
             done <"$TARGETS_FILE"
             return
         else
+            # TARGETS_FILE is a comma/space separated list of targets
             TARGETS="$TARGETS_FILE"
         fi
     else
-        TARGETS="$ALL_TARGETS"
+        # Use TARGET env var if set, otherwise get all targets from YAML
+        if [ -n "$TARGET" ]; then
+            TARGETS="$TARGET"
+        else
+            TARGETS="$(GetAllTargets)"
+        fi
     fi
 
     for line in $TARGETS; do

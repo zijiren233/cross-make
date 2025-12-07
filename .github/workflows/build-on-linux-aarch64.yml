@@ -52,14 +52,15 @@ jobs:
                 perl \
                 flex \
                 g++ \
-                texinfo  \
+                texinfo \
                 python3 \
                 gawk \
                 grep \
                 bash \
                 tar \
                 file \
-                ccache && \
+                ccache \
+                yq && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-linux-aarch64" && \
               export CCACHE_DIR=/root/.ccache && \

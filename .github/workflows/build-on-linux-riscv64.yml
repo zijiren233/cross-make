@@ -62,7 +62,8 @@ jobs:
                 bash \
                 tar \
                 file \
-                ccache && \
+                ccache \
+                yq && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-linux-riscv64" && \
               export CCACHE_DIR=/root/.ccache && \
