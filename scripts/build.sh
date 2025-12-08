@@ -316,9 +316,9 @@ function FixArgs() {
         exit $?
     fi
 
-    # only support O2 and Os
+    # only support O2 and Os Oz
     case "$OPTIMIZE_LEVEL" in
-    "s") ;;
+    "s" | "z") ;;
     *)
         OPTIMIZE_LEVEL="2"
         ;;

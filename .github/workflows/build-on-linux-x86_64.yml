@@ -65,6 +65,10 @@ jobs:
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-linux-x86_64" && \
               export CCACHE_DIR=/root/.ccache && \
+              export CCACHE_TEMPDIR=/tmp && \
+              export CCACHE_MAXSIZE=50M && \
+              export CCACHE_COMPRESS=true && \
+              export CCACHE_COMPRESSLEVEL=9 && \
               bash scripts/build.sh \
                 -LDP \
                 -n \

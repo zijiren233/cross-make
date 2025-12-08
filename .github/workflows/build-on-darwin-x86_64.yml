@@ -59,6 +59,10 @@ jobs:
         run: |
           export CROSS_DIST_NAME_SUFFIX="-darwin-x86_64"
           export CCACHE_DIR=/Volumes/cross/.ccache
+          export CCACHE_TEMPDIR=/tmp
+          export CCACHE_MAXSIZE=50M
+          export CCACHE_COMPRESS=true
+          export CCACHE_COMPRESSLEVEL=9
           bash scripts/build.sh \
             -LDP \
             -c "gcc-14" -x "g++-14" \
