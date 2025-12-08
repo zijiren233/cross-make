@@ -1,0 +1,226 @@
+# Cross-compiler targets configuration
+# Each target includes its full build configuration
+# This eliminates the need for target-specific hacks in build.sh
+
+# Default versions (used when not specified per-target)
+defaults:
+  GCC_VER: "14.3.0"
+  BINUTILS_VER: "2.45.1"
+  GMP_VER: "6.3.0"
+  MPC_VER: "1.3.1"
+  MPFR_VER: "4.2.2"
+  ISL_VER: "0.27"
+  LINUX_VER: "6.12.33"
+  MUSL_VER: "1.2.5"
+  GLIBC_VER: "2.28"
+  MINGW_VER: "v13.0.0"
+  FREEBSD_VER: "14.3"
+
+targets:
+  # ============================================================================
+  # Linux musl targets
+  # ============================================================================
+  - TARGET: aarch64-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: arm-linux-musleabi
+    MUSL_VER: "1.2.5"
+
+  - TARGET: arm-linux-musleabihf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: armv5-linux-musleabi
+    MUSL_VER: "1.2.5"
+
+  - TARGET: armv6-linux-musleabi
+    MUSL_VER: "1.2.5"
+
+  - TARGET: armv6-linux-musleabihf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: armv7-linux-musleabi
+    MUSL_VER: "1.2.5"
+
+  - TARGET: armv7-linux-musleabihf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: loongarch64-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mips-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mips-linux-muslsf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mipsel-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mipsel-linux-muslsf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mips64-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mips64-linux-muslsf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mips64el-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mips64el-linux-muslsf
+    MUSL_VER: "1.2.5"
+
+  - TARGET: powerpc64-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: powerpc64le-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: riscv64-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: s390x-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: i586-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: i686-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: x86_64-linux-musl
+    MUSL_VER: "1.2.5"
+
+  # ============================================================================
+  # Linux glibc (gnu) targets
+  # ============================================================================
+  - TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: arm-linux-gnueabi
+    GLIBC_VER: "2.28"
+
+  - TARGET: arm-linux-gnueabihf
+    GLIBC_VER: "2.28"
+
+  - TARGET: armv5-linux-gnueabi
+    GLIBC_VER: "2.28"
+
+  - TARGET: armv6-linux-gnueabi
+    GLIBC_VER: "2.28"
+
+  - TARGET: armv6-linux-gnueabihf
+    GLIBC_VER: "2.28"
+
+  - TARGET: armv7-linux-gnueabi
+    GLIBC_VER: "2.28"
+
+  - TARGET: armv7-linux-gnueabihf
+    GLIBC_VER: "2.28"
+
+  # loongarch64 requires glibc >= 2.36
+  - TARGET: loongarch64-linux-gnu
+    GLIBC_VER: "2.36"
+
+  - TARGET: mips-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: mips-linux-gnusf
+    GLIBC_VER: "2.28"
+
+  - TARGET: mipsel-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: mipsel-linux-gnusf
+    GLIBC_VER: "2.28"
+
+  - TARGET: mips64-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: mips64-linux-gnusf
+    GLIBC_VER: "2.28"
+
+  - TARGET: mips64el-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: mips64el-linux-gnusf
+    GLIBC_VER: "2.28"
+
+  # powerpc64 requires glibc >= 2.31
+  - TARGET: powerpc64-linux-gnu
+    GLIBC_VER: "2.31"
+
+  # powerpc64le requires glibc >= 2.31
+  - TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.31"
+
+  # riscv64 requires glibc >= 2.35
+  - TARGET: riscv64-linux-gnu
+    GLIBC_VER: "2.35"
+
+  - TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: i586-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: i686-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: x86_64-linux-gnu
+    GLIBC_VER: "2.28"
+
+  # ============================================================================
+  # Windows mingw targets
+  # ============================================================================
+  - TARGET: i586-w64-mingw32
+    MINGW_VER: "v13.0.0"
+
+  - TARGET: i686-w64-mingw32
+    MINGW_VER: "v13.0.0"
+
+  - TARGET: x86_64-w64-mingw32
+    MINGW_VER: "v13.0.0"
+
+  # ============================================================================
+  # FreeBSD 13 targets (FREEBSD_VER: 13.5)
+  # ============================================================================
+  - TARGET: x86_64-unknown-freebsd13
+    FREEBSD_VER: "13.5"
+
+  - TARGET: aarch64-unknown-freebsd13
+    FREEBSD_VER: "13.5"
+
+  - TARGET: powerpc-unknown-freebsd13
+    FREEBSD_VER: "13.5"
+
+  - TARGET: powerpc64-unknown-freebsd13
+    FREEBSD_VER: "13.5"
+
+  - TARGET: powerpc64le-unknown-freebsd13
+    FREEBSD_VER: "13.5"
+
+  - TARGET: riscv64-unknown-freebsd13
+    FREEBSD_VER: "13.5"
+
+  # ============================================================================
+  # FreeBSD 14 targets (FREEBSD_VER: 14.3)
+  # ============================================================================
+  - TARGET: x86_64-unknown-freebsd14
+    FREEBSD_VER: "14.3"
+
+  - TARGET: aarch64-unknown-freebsd14
+    FREEBSD_VER: "14.3"
+
+  - TARGET: powerpc-unknown-freebsd14
+    FREEBSD_VER: "14.3"
+
+  - TARGET: powerpc64-unknown-freebsd14
+    FREEBSD_VER: "14.3"
+
+  - TARGET: powerpc64le-unknown-freebsd14
+    FREEBSD_VER: "14.3"
+
+  - TARGET: riscv64-unknown-freebsd14
+    FREEBSD_VER: "14.3"
