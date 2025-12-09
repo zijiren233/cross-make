@@ -23,9 +23,9 @@ function GetTargetConfig() {
     local key="$2"
     # First try to find by ID, then by TARGET (use first match only)
     local result
-    result=$(yq -r "first(.targets[] | select(.ID == \"${id_or_target}\")) | .${key} // \"\"" "$TARGETS_YAML")
+    result=$(yq -r "[.targets[] | select(.ID == \"${id_or_target}\")] | .[0] | .${key} // \"\"" "$TARGETS_YAML")
     if [ -z "$result" ]; then
-        result=$(yq -r "first(.targets[] | select(.TARGET == \"${id_or_target}\")) | .${key} // \"\"" "$TARGETS_YAML")
+        result=$(yq -r "[.targets[] | select(.TARGET == \"${id_or_target}\")] | .[0] | .${key} // \"\"" "$TARGETS_YAML")
     fi
     echo "$result"
 }
