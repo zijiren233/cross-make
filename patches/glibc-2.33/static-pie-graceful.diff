@@ -1,0 +1,80 @@
+Ref: https://github.com/bminor/glibc/commit/23645707f12f2dd9d80b51effb2d9618a7b65565.patch
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -1881,12 +1881,19 @@ if test "$static_pie" = yes; then
+-  # Check target support for static PIE
+-  AC_COMPILE_IFELSE([AC_LANG_SOURCE([[#ifndef SUPPORT_STATIC_PIE
++  AC_MSG_CHECKING(if we can build static PIE programs)
++  libc_cv_static_pie_supported=no
++  if test "$libc_cv_no_dynamic_linker" = yes; then
++    # Check target support for static PIE
++    AC_COMPILE_IFELSE([AC_LANG_SOURCE([[#ifndef SUPPORT_STATIC_PIE
+ # error static PIE is not supported
+-#endif]])], , AC_MSG_ERROR([the architecture does not support static PIE]))
+-  # The linker must support --no-dynamic-linker.
+-  if test "$libc_cv_no_dynamic_linker" != yes; then
+-    AC_MSG_ERROR([linker support for --no-dynamic-linker needed])
++#endif]])], [libc_cv_static_pie_supported=yes], [libc_cv_static_pie_supported=no])
+   fi
+-  # Default to PIE.
+-  libc_cv_pie_default=yes
+-  AC_DEFINE(ENABLE_STATIC_PIE)
++  AC_MSG_RESULT($libc_cv_static_pie_supported)
++  if test "$libc_cv_static_pie_supported" = yes; then
++    # Default to PIE.
++    libc_cv_pie_default=yes
++    AC_DEFINE(ENABLE_STATIC_PIE)
++    static_pie=yes
++  else
++    # Architecture does not support static PIE, disable it gracefully
++    static_pie=no
++  fi
+ fi
+
+diff --git a/configure b/configure
+--- a/configure
++++ b/configure
+@@ -6945,22 +6945,31 @@ if test "$static_pie" = yes; then
+-  # Check target support for static PIE
+-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if we can build static PIE programs" >&5
++$as_echo_n "checking if we can build static PIE programs... " >&6; }
++  libc_cv_static_pie_supported=no
++  if test "$libc_cv_no_dynamic_linker" = yes; then
++    # Check target support for static PIE
++    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ #ifndef SUPPORT_STATIC_PIE
+ # error static PIE is not supported
+ #endif
+ _ACEOF
+ if ac_fn_c_try_compile "$LINENO"; then :
+-
++  libc_cv_static_pie_supported=yes
+ else
+-  as_fn_error $? "the architecture does not support static PIE" "$LINENO" 5
++  libc_cv_static_pie_supported=no
+ fi
+ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+-  # The linker must support --no-dynamic-linker.
+-  if test "$libc_cv_no_dynamic_linker" != yes; then
+-    as_fn_error $? "linker support for --no-dynamic-linker needed" "$LINENO" 5
+   fi
+-  # Default to PIE.
+-  libc_cv_pie_default=yes
+-  $as_echo "#define ENABLE_STATIC_PIE 1" >>confdefs.h
+-
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $libc_cv_static_pie_supported" >&5
++$as_echo "$libc_cv_static_pie_supported" >&6; }
++  if test "$libc_cv_static_pie_supported" = yes; then
++    # Default to PIE.
++    libc_cv_pie_default=yes
++    $as_echo "#define ENABLE_STATIC_PIE 1" >>confdefs.h
++
++    static_pie=yes
++  else
++    # Architecture does not support static PIE, disable it gracefully
++    static_pie=no
++  fi
+ fi

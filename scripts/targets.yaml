@@ -147,11 +147,13 @@ targets:
   - TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.28"
 
+  # powerpc64 requires glibc >= 2.31
+  # https://github.com/bminor/glibc/commit/18363b4f010da9ba459b13310b113ac0647c2fcc.patch
   - TARGET: powerpc64-linux-gnu
-    GLIBC_VER: "2.28"
+    GLIBC_VER: "2.31"
 
   - TARGET: powerpc64le-linux-gnu
-    GLIBC_VER: "2.28"
+    GLIBC_VER: "2.31"
 
   # riscv64 static pie requires glibc >= 2.35
   - TARGET: riscv64-linux-gnu
