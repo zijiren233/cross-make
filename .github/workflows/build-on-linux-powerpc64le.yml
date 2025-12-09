@@ -68,9 +68,9 @@ jobs:
               export CROSS_DIST_NAME_SUFFIX="-linux-powerpc64le" && \
               export CCACHE_DIR=/root/.ccache && \
               export CCACHE_TEMPDIR=/tmp && \
-              export CCACHE_MAXSIZE=50M && \
+              export CCACHE_MAXSIZE=20M && \
               export CCACHE_COMPRESS=true && \
-              export CCACHE_COMPRESSLEVEL=9 && \
+              export CCACHE_COMPRESSLEVEL=5 && \
               bash scripts/build.sh \
                 -LDP \
                 -a \

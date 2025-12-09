@@ -24,5 +24,6 @@ jobs:
       - name: Get all targets
         id: get_all_targets
         run: |
-          TARGETS=$(yq -o=json -I=0 '[.targets[].TARGET]' scripts/targets.yaml)
+          # Use ID if present, otherwise fall back to TARGET
+          TARGETS=$(yq -o=json -I=0 '[.targets[] | .ID // .TARGET]' scripts/targets.yaml)
           echo "TARGETS=$TARGETS" >> $GITHUB_OUTPUT

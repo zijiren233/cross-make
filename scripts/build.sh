@@ -16,17 +16,38 @@ function GetYamlDefault() {
     yq -r ".defaults.${key} // \"\"" "$TARGETS_YAML"
 }
 
-# Get target-specific config from YAML
-# Usage: GetTargetConfig TARGET KEY
+# Get target-specific config from YAML by ID or TARGET
+# Usage: GetTargetConfig ID_OR_TARGET KEY
 function GetTargetConfig() {
-    local target="$1"
+    local id_or_target="$1"
     local key="$2"
-    yq -r ".targets[] | select(.TARGET == \"${target}\") | .${key} // \"\"" "$TARGETS_YAML"
+    # First try to find by ID, then by TARGET
+    local result
+    result=$(yq -r ".targets[] | select(.ID == \"${id_or_target}\") | .${key} // \"\"" "$TARGETS_YAML")
+    if [ -z "$result" ]; then
+        result=$(yq -r ".targets[] | select(.TARGET == \"${id_or_target}\") | .${key} // \"\"" "$TARGETS_YAML")
+    fi
+    echo "$result"
 }
 
-# Get all targets from YAML
+# Get TARGET from ID (returns the input if it's already a TARGET or if ID not found)
+# Usage: GetTargetFromId ID_OR_TARGET
+function GetTargetFromId() {
+    local id_or_target="$1"
+    local target
+    # First try to find TARGET by ID
+    target=$(yq -r ".targets[] | select(.ID == \"${id_or_target}\") | .TARGET // \"\"" "$TARGETS_YAML")
+    if [ -n "$target" ]; then
+        echo "$target"
+    else
+        # Assume it's already a TARGET
+        echo "$id_or_target"
+    fi
+}
+
+# Get all targets from YAML (returns ID if present, otherwise TARGET)
 function GetAllTargets() {
-    yq -r '.targets[].TARGET' "$TARGETS_YAML"
+    yq -r '.targets[] | .ID // .TARGET' "$TARGETS_YAML"
 }
 
 function Init() {
@@ -339,11 +360,11 @@ function WriteConfig() {
     local USE_FREEBSD=""
     local USE_MINGW=""
 
-    # Try to get target-specific values from YAML
-    local YAML_MUSL_VER="$(GetTargetConfig "$TARGET" MUSL_VER)"
-    local YAML_GLIBC_VER="$(GetTargetConfig "$TARGET" GLIBC_VER)"
-    local YAML_FREEBSD_VER="$(GetTargetConfig "$TARGET" FREEBSD_VER)"
-    local YAML_MINGW_VER="$(GetTargetConfig "$TARGET" MINGW_VER)"
+    # Try to get target-specific values from YAML using BUILD_ID
+    local YAML_MUSL_VER="$(GetTargetConfig "$BUILD_ID" MUSL_VER)"
+    local YAML_GLIBC_VER="$(GetTargetConfig "$BUILD_ID" GLIBC_VER)"
+    local YAML_FREEBSD_VER="$(GetTargetConfig "$BUILD_ID" FREEBSD_VER)"
+    local YAML_MINGW_VER="$(GetTargetConfig "$BUILD_ID" MINGW_VER)"
 
     # Use YAML values if available, otherwise use defaults based on target type
     if [ -n "$YAML_MUSL_VER" ]; then
@@ -452,15 +473,19 @@ int main()
 }
 
 function Build() {
-    local TARGET="$1"
-    DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${TARGET}"
+    BUILD_ID="$1"
+    # Resolve actual TARGET from BUILD_ID (BUILD_ID can be an ID or a TARGET)
+    local TARGET="$(GetTargetFromId "$BUILD_ID")"
+
+    # Use BUILD_ID for artifact naming to ensure uniqueness
+    DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${BUILD_ID}"
     CROSS_DIST_NAME="${DIST_NAME}-cross${CROSS_DIST_NAME_SUFFIX}"
     NATIVE_DIST_NAME="${DIST_NAME}-native${NATIVE_DIST_NAME_SUFFIX}"
     CROSS_LOG_FILE="${CROSS_DIST_NAME}.log"
     NATIVE_LOG_FILE="${NATIVE_DIST_NAME}.log"
 
     if [ ! "$ONLY_NATIVE_BUILD" ]; then
-        echo "build cross ${DIST_NAME_PREFIX}${TARGET} to ${CROSS_DIST_NAME}"
+        echo "build cross ${DIST_NAME_PREFIX}${BUILD_ID} (TARGET=${TARGET}) to ${CROSS_DIST_NAME}"
         {
             OUTPUT="${CROSS_DIST_NAME}"
             NATIVE=""
