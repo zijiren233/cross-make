@@ -3,16 +3,28 @@ name: get-targets
 on:
   workflow_call:
     outputs:
-      TARGETS:
-        description: "Array of all targets from scripts/targets.yaml"
-        value: ${{ jobs.get_targets.outputs.TARGETS }}
+      TARGETS_1:
+        description: "Array of targets chunk 1 (indices 0-99)"
+        value: ${{ jobs.get_targets.outputs.TARGETS_1 }}
+      TARGETS_2:
+        description: "Array of targets chunk 2 (indices 100-199)"
+        value: ${{ jobs.get_targets.outputs.TARGETS_2 }}
+      TARGETS_3:
+        description: "Array of targets chunk 3 (indices 200-299)"
+        value: ${{ jobs.get_targets.outputs.TARGETS_3 }}
+      TARGETS_4:
+        description: "Array of targets chunk 4 (indices 300+)"
+        value: ${{ jobs.get_targets.outputs.TARGETS_4 }}
 
 jobs:
   get_targets:
     name: Get All Targets
     runs-on: ubuntu-latest
     outputs:
-      TARGETS: ${{ steps.get_all_targets.outputs.TARGETS }}
+      TARGETS_1: ${{ steps.get_all_targets.outputs.TARGETS_1 }}
+      TARGETS_2: ${{ steps.get_all_targets.outputs.TARGETS_2 }}
+      TARGETS_3: ${{ steps.get_all_targets.outputs.TARGETS_3 }}
+      TARGETS_4: ${{ steps.get_all_targets.outputs.TARGETS_4 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,5 +37,23 @@ jobs:
         id: get_all_targets
         run: |
           # Use ID if present, otherwise fall back to TARGET
-          TARGETS=$(yq -o=json -I=0 '[.targets[] | .ID // .TARGET]' scripts/targets.yaml)
-          echo "TARGETS=$TARGETS" >> $GITHUB_OUTPUT
+          ALL_TARGETS=$(yq -o=json -I=0 '[.targets[] | .ID // .TARGET]' scripts/targets.yaml)
+
+          # Split into chunks of 100 to stay under GitHub's 256 job limit per matrix
+          TARGETS_1=$(echo "$ALL_TARGETS" | jq -c '.[0:100]')
+          TARGETS_2=$(echo "$ALL_TARGETS" | jq -c '.[100:200]')
+          TARGETS_3=$(echo "$ALL_TARGETS" | jq -c '.[200:300]')
+          TARGETS_4=$(echo "$ALL_TARGETS" | jq -c '.[300:400]')
+
+          # Output each chunk (empty array if no items)
+          echo "TARGETS_1=${TARGETS_1:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_2=${TARGETS_2:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_3=${TARGETS_3:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_4=${TARGETS_4:-[]}" >> $GITHUB_OUTPUT
+
+          # Debug output
+          echo "Total targets: $(echo "$ALL_TARGETS" | jq 'length')"
+          echo "Chunk 1: $(echo "$TARGETS_1" | jq 'length') targets"
+          echo "Chunk 2: $(echo "$TARGETS_2" | jq 'length') targets"
+          echo "Chunk 3: $(echo "$TARGETS_3" | jq 'length') targets"
+          echo "Chunk 4: $(echo "$TARGETS_4" | jq 'length') targets"

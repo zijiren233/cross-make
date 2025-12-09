@@ -56,11 +56,11 @@ echo "## Linux glibc Targets"
 echo ""
 echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | glibc | Linux Headers |"
 echo "|--------|-----|----------|-----|-----|------|-----|-------|---------------|"
-yq -r ".targets[] | select(.TARGET | test(\"linux-gnu\")) | [.TARGET, .GLIBC_VER] | @tsv" "$TARGETS_FILE" | \
-while IFS=$'\t' read -r target glibc_ver; do
+yq -r ".targets[] | select(.TARGET | test(\"linux-gnu\")) | [(.ID // .TARGET), .GLIBC_VER] | @tsv" "$TARGETS_FILE" | \
+while IFS=$'\t' read -r id glibc_ver; do
     glibc_ver="${glibc_ver:-$DEFAULT_GLIBC_VER}"
     [ "$glibc_ver" = "null" ] && glibc_ver="$DEFAULT_GLIBC_VER"
-    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $glibc_ver | $LINUX_VER |"
+    echo "| \`$id\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $glibc_ver | $LINUX_VER |"
 done
 echo ""
 

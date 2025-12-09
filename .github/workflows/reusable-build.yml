@@ -1,0 +1,170 @@
+name: Reusable Build
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: "JSON array of targets to build"
+        required: true
+        type: string
+      platform:
+        description: "Platform identifier (e.g., linux-aarch64, darwin-x86_64)"
+        required: true
+        type: string
+      runs-on:
+        description: "Runner to use"
+        required: true
+        type: string
+      docker-platform:
+        description: "Docker platform (e.g., linux/arm64, linux/amd64)"
+        required: false
+        type: string
+        default: ""
+      docker-image:
+        description: "Docker image to use"
+        required: false
+        type: string
+        default: ""
+      use-qemu:
+        description: "Whether to set up QEMU"
+        required: false
+        type: boolean
+        default: false
+      use-docker:
+        description: "Whether to use Docker for build"
+        required: false
+        type: boolean
+        default: true
+      extra-build-flags:
+        description: "Extra flags for build.sh"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build:
+    name: Build
+    if: ${{ inputs.targets != '[]' }}
+    runs-on: ${{ inputs.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        targets: ${{ fromJSON(inputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # For macOS: Create case-sensitive volume
+      - name: Create Case-sensitive volume
+        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        run: |
+          diskutil list
+          # disk3 for aarch64, disk1 for x86_64
+          DISK=${{ contains(inputs.platform, 'aarch64') && 'disk3' || 'disk1' }}
+          diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
+          cp -r ./* /Volumes/cross
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/.ccache' || format('{0}/.ccache', github.workspace) }}
+          key: ccache-${{ inputs.platform }}-${{ matrix.targets }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ inputs.platform }}-${{ matrix.targets }}-
+
+      # For macOS: Install dependencies via brew
+      - name: Init Dependencies (macOS)
+        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        run: |
+          brew install \
+            make \
+            gnu-sed \
+            gawk \
+            gpatch \
+            coreutils \
+            findutils \
+            gcc@14 \
+            perl \
+            libtool \
+            bison \
+            texinfo \
+            ccache \
+            yq
+
+      # For Linux with QEMU
+      - name: Set up QEMU
+        if: ${{ inputs.use-qemu }}
+        uses: docker/setup-qemu-action@v3
+
+      # Build with Docker (Linux)
+      - name: Build (Docker)
+        if: ${{ inputs.use-docker }}
+        run: |
+          docker run --rm \
+            --platform ${{ inputs.docker-platform }} \
+            --volume "${PWD}:/build" \
+            --volume "${{ github.workspace }}/.ccache:/root/.ccache" \
+            ${{ inputs.docker-image }} \
+            /bin/sh -c '
+              apk add --no-cache \
+                coreutils \
+                curl \
+                bzip2 \
+                xz \
+                make \
+                bison \
+                rsync \
+                patch \
+                perl \
+                flex \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep \
+                bash \
+                tar \
+                file \
+                ccache \
+                zip \
+                yq && \
+              cd /build && \
+              export CROSS_DIST_NAME_SUFFIX="-${{ inputs.platform }}" && \
+              export CCACHE_DIR=/root/.ccache && \
+              export CCACHE_TEMPDIR=/tmp && \
+              export CCACHE_MAXSIZE=20M && \
+              export CCACHE_COMPRESS=true && \
+              export CCACHE_COMPRESSLEVEL=5 && \
+              bash scripts/build.sh \
+                -LDP \
+                -a \
+                -b \
+                ${{ inputs.extra-build-flags }} \
+                -T "${{ matrix.targets }}"'
+
+      # Build without Docker (macOS)
+      - name: Build (Native)
+        if: ${{ !inputs.use-docker }}
+        working-directory: /Volumes/cross
+        run: |
+          export CROSS_DIST_NAME_SUFFIX="-${{ inputs.platform }}"
+          export CCACHE_DIR=/Volumes/cross/.ccache
+          export CCACHE_TEMPDIR=/tmp
+          export CCACHE_MAXSIZE=20M
+          export CCACHE_COMPRESS=true
+          export CCACHE_COMPRESSLEVEL=5
+          bash scripts/build.sh \
+            -LDP \
+            -c "gcc-14" \
+            -x "g++-14" \
+            -a \
+            -b \
+            ${{ inputs.extra-build-flags }} \
+            -T "${{ matrix.targets }}"
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.targets }}-${{ inputs.platform }}
+          path: |
+            ${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/dist' || 'dist' }}
+            !${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/dist/*.log' || 'dist/*.log' }}

@@ -1,0 +1,53 @@
+name: Reusable Release
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: "JSON array of targets to release"
+        required: true
+        type: string
+      platform:
+        description: "Platform identifier (e.g., linux-aarch64, darwin-x86_64)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Release
+    if: ${{ startsWith(github.ref, 'refs/tags/') && inputs.targets != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        targets: ${{ fromJSON(inputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.targets }}-${{ inputs.platform }}
+          path: dist
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          NOTES=$(bash scripts/generate-release-notes.sh "${{ github.ref_name }}")
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
+        run: |
+          gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
+            gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "$RELEASE_NOTES" || true
+          gh release upload "${{ github.ref_name }}" dist/*.* --clobber --repo ${{ github.repository }}
