@@ -70,6 +70,7 @@ jobs:
           xcrun simctl delete all || true
           sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* || true
           sudo defaults -currentHost write /Library/Preferences/com.apple.powerlogd SMCMonitorCadence 0 || true
+          sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.PerfPowerServices.plist || true
           sudo killall PerfPowerServices || true
           brew install \
             make \
