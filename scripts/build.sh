@@ -331,6 +331,8 @@ function FixArgs() {
         fi
     fi
 
+    echo "job nums: $CPU_NUM"
+
     if [ "$SOURCES_ONLY" ]; then
         WriteConfig
         $MAKE -j${CPU_NUM} SOURCES_ONLY="true" extract_all
