@@ -63,15 +63,6 @@ jobs:
           diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
           cp -r ./* /Volumes/cross
 
-      - name: Cache ccache
-        if: ${{ startsWith(inputs.platform, 'darwin') }}
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.ccache
-          key: ccache-${{ inputs.platform }}-${{ matrix.targets }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ inputs.platform }}-${{ matrix.targets }}-
-
       # For macOS: Install dependencies via brew
       - name: Init Dependencies (macOS)
         if: ${{ startsWith(inputs.platform, 'darwin') }}
@@ -90,7 +81,6 @@ jobs:
             libtool \
             bison \
             texinfo \
-            ccache \
             yq
 
       # For Linux with QEMU
@@ -142,11 +132,6 @@ jobs:
         working-directory: /Volumes/cross
         run: |
           export CROSS_DIST_NAME_SUFFIX="-${{ inputs.platform }}"
-          export CCACHE_DIR=/tmp/.ccache
-          export CCACHE_TEMPDIR=/tmp
-          export CCACHE_MAXSIZE=20M
-          export CCACHE_COMPRESS=true
-          export CCACHE_COMPRESSLEVEL=0
           bash scripts/build.sh \
             -LDP \
             -c "gcc-14" \
