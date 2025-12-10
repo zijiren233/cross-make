@@ -2,7 +2,19 @@ name: build-on-linux-x86_64
 
 on:
   workflow_dispatch:
+    inputs:
+      disable-native-build:
+        description: 'Disable native build (-n flag)'
+        required: false
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      disable-native-build:
+        description: 'Disable native build (-n flag)'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
@@ -22,7 +34,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: "-n"
+      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
 
   build_2:
     needs: init
@@ -34,7 +46,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: "-n"
+      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
 
   build_3:
     needs: init
@@ -46,7 +58,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: "-n"
+      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
 
   build_4:
     needs: init
@@ -58,7 +70,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: "-n"
+      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
 
   # Release jobs - split into 4 chunks to match build jobs
   release_1:
