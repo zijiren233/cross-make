@@ -144,7 +144,7 @@ jobs:
           export CCACHE_TEMPDIR=/tmp
           export CCACHE_MAXSIZE=20M
           export CCACHE_COMPRESS=true
-          export CCACHE_COMPRESSLEVEL=5
+          export CCACHE_COMPRESSLEVEL=0
           bash scripts/build.sh \
             -LDP \
             -c "gcc-14" \
