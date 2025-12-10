@@ -67,7 +67,7 @@ jobs:
         if: ${{ startsWith(inputs.platform, 'darwin') }}
         uses: actions/cache@v4
         with:
-          path: /Volumes/cross/.ccache
+          path: /tmp/.ccache
           key: ccache-${{ inputs.platform }}-${{ matrix.targets }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ inputs.platform }}-${{ matrix.targets }}-
@@ -76,6 +76,8 @@ jobs:
       - name: Init Dependencies (macOS)
         if: ${{ startsWith(inputs.platform, 'darwin') }}
         run: |
+          xcrun simctl delete all
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
           brew install \
             make \
             gnu-sed \
@@ -140,7 +142,7 @@ jobs:
         working-directory: /Volumes/cross
         run: |
           export CROSS_DIST_NAME_SUFFIX="-${{ inputs.platform }}"
-          export CCACHE_DIR=/Volumes/cross/.ccache
+          export CCACHE_DIR=/tmp/.ccache
           export CCACHE_TEMPDIR=/tmp
           export CCACHE_MAXSIZE=20M
           export CCACHE_COMPRESS=true
