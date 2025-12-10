@@ -64,9 +64,10 @@ jobs:
           cp -r ./* /Volumes/cross
 
       - name: Cache ccache
+        if: ${{ startsWith(inputs.platform, 'darwin') }}
         uses: actions/cache@v4
         with:
-          path: ${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/.ccache' || format('{0}/.ccache', github.workspace) }}
+          path: /Volumes/cross/.ccache
           key: ccache-${{ inputs.platform }}-${{ matrix.targets }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ inputs.platform }}-${{ matrix.targets }}-
@@ -102,7 +103,6 @@ jobs:
           docker run --rm \
             --platform ${{ inputs.docker-platform }} \
             --volume "${PWD}:/build" \
-            --volume "${{ github.workspace }}/.ccache:/root/.ccache" \
             ${{ inputs.docker-image }} \
             /bin/sh -c '
               apk add --no-cache \
@@ -124,20 +124,13 @@ jobs:
                 bash \
                 tar \
                 file \
-                ccache \
                 zip \
                 yq && \
               cd /build && \
               export CROSS_DIST_NAME_SUFFIX="-${{ inputs.platform }}" && \
-              export CCACHE_DIR=/root/.ccache && \
-              export CCACHE_TEMPDIR=/tmp && \
-              export CCACHE_MAXSIZE=20M && \
-              export CCACHE_COMPRESS=true && \
-              export CCACHE_COMPRESSLEVEL=5 && \
               bash scripts/build.sh \
                 -LDP \
                 -a \
-                -b \
                 ${{ inputs.extra-build-flags }} \
                 -T "${{ matrix.targets }}"'
 
