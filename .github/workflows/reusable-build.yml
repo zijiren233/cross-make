@@ -67,8 +67,10 @@ jobs:
       - name: Init Dependencies (macOS)
         if: ${{ startsWith(inputs.platform, 'darwin') }}
         run: |
-          xcrun simctl delete all
-          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/*
+          xcrun simctl delete all || true
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* || true
+          sudo defaults -currentHost write /Library/Preferences/com.apple.powerlogd SMCMonitorCadence 0 || true
+          sudo killall PerfPowerServices || true
           brew install \
             make \
             gnu-sed \
@@ -137,7 +139,6 @@ jobs:
             -c "gcc-14" \
             -x "g++-14" \
             -a \
-            -b \
             ${{ inputs.extra-build-flags }} \
             -T "${{ matrix.targets }}"
 
