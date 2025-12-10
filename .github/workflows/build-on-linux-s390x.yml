@@ -59,32 +59,3 @@ jobs:
       docker-image: s390x/alpine:latest
       use-qemu: true
       use-docker: true
-
-  # Release jobs - split into 4 chunks to match build jobs
-  release_1:
-    needs: [init, build_1]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_1 }}
-      platform: linux-s390x
-
-  release_2:
-    needs: [init, build_2]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_2 }}
-      platform: linux-s390x
-
-  release_3:
-    needs: [init, build_3]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_3 }}
-      platform: linux-s390x
-
-  release_4:
-    needs: [init, build_4]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_4 }}
-      platform: linux-s390x

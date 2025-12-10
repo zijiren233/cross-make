@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       disable-native-build:
-        description: 'Disable native build (-n flag)'
+        description: "Disable native build (-n flag)"
         required: false
         type: boolean
         default: false
   workflow_call:
     inputs:
       disable-native-build:
-        description: 'Disable native build (-n flag)'
+        description: "Disable native build (-n flag)"
         required: false
         type: boolean
         default: false
@@ -71,32 +71,3 @@ jobs:
       docker-image: amd64/alpine:latest
       use-docker: true
       extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
-
-  # Release jobs - split into 4 chunks to match build jobs
-  release_1:
-    needs: [init, build_1]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_1 }}
-      platform: linux-x86_64
-
-  release_2:
-    needs: [init, build_2]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_2 }}
-      platform: linux-x86_64
-
-  release_3:
-    needs: [init, build_3]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_3 }}
-      platform: linux-x86_64
-
-  release_4:
-    needs: [init, build_4]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_4 }}
-      platform: linux-x86_64

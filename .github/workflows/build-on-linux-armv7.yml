@@ -55,32 +55,3 @@ jobs:
       docker-platform: linux/arm/v7
       docker-image: arm32v7/alpine:latest
       use-docker: true
-
-  # Release jobs - split into 4 chunks to match build jobs
-  release_1:
-    needs: [init, build_1]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_1 }}
-      platform: linux-armv7
-
-  release_2:
-    needs: [init, build_2]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_2 }}
-      platform: linux-armv7
-
-  release_3:
-    needs: [init, build_3]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_3 }}
-      platform: linux-armv7
-
-  release_4:
-    needs: [init, build_4]
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      targets: ${{ needs.init.outputs.TARGETS_4 }}
-      platform: linux-armv7
