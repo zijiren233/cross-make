@@ -34,7 +34,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_2:
     needs: init
@@ -46,7 +46,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_3:
     needs: init
@@ -58,7 +58,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_4:
     needs: init
@@ -70,7 +70,7 @@ jobs:
       docker-platform: linux/amd64
       docker-image: amd64/alpine:latest
       use-docker: true
-      extra-build-flags: ${{ inputs.disable-native-build && '' || '-n' }}
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   # Release jobs - split into 4 chunks to match build jobs
   release_1:
