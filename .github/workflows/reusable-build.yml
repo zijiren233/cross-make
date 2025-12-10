@@ -127,7 +127,8 @@ jobs:
                 -LDP \
                 -a \
                 ${{ inputs.extra-build-flags }} \
-                -T "${{ matrix.targets }}"'
+                -T "${{ matrix.targets }}" && \
+              rm -rf dist/*.log'
 
       # Build without Docker (macOS)
       - name: Build (Native)
@@ -142,6 +143,7 @@ jobs:
             -a \
             ${{ inputs.extra-build-flags }} \
             -T "${{ matrix.targets }}"
+          rm -rf dist/*.log
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
@@ -149,7 +151,6 @@ jobs:
           name: ${{ matrix.targets }}-${{ inputs.platform }}
           path: |
             ${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/dist' || 'dist' }}
-            !${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/dist/*.log' || 'dist/*.log' }}
 
       - name: Install yq (Linux)
         if: ${{ startsWith(github.ref, 'refs/tags/') && !startsWith(inputs.platform, 'darwin') }}
