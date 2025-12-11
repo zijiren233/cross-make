@@ -193,8 +193,9 @@ jobs:
           RELEASE_TAG="${{ github.ref_name }}-${{ inputs.platform }}"
 
           # Create release if it doesn't exist
+          # Use --target to point to current commit, preventing auto-creation of new git tag
           gh release view "$RELEASE_TAG" --repo ${{ github.repository }} || \
-            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" || true
+            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
 
       - name: Upload to release
         env:
