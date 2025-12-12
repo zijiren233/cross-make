@@ -194,6 +194,8 @@ jobs:
 
           # Create release if it doesn't exist
           # Use --target to point to current commit, preventing auto-creation of new git tag
+          gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
+            gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
           gh release view "$RELEASE_TAG" --repo ${{ github.repository }} || \
             gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
 
@@ -207,6 +209,10 @@ jobs:
           for file in dist/*; do
             if [ -f "$file" ]; then
               echo "Uploading: $file"
-              gh release upload "$RELEASE_TAG" "$file" --clobber --repo ${{ github.repository }}
+              if [[ "${{ github.ref_name }}" == *"native"* ]]; then
+                gh release upload "${{ github.ref_name }}" "$file" --clobber --repo ${{ github.repository }}
+              else
+                gh release upload "$RELEASE_TAG" "$file" --clobber --repo ${{ github.repository }}
+              fi
             fi
           done
