@@ -5,117 +5,49 @@ on:
   workflow_call:
   push:
     tags:
-      - "v*"
+      # Only match version tags like v1.0.0, exclude release tags with suffix like v1.0.0-musl-linux-x86_64
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-alpha[0-9]+"
 
 jobs:
   init:
     uses: ./.github/workflows/get-targets.yml
 
-  build_targets_on_macos_x86_64:
-    name: Build
-    runs-on: macos-15-intel
-    needs:
-      - init
-    strategy:
-      fail-fast: false
-      matrix:
-        targets: ${{ fromJSON(needs.init.outputs.TARGETS) }}
-    steps:
-      - uses: actions/checkout@v4
+  # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
+  build_1:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_1 }}
+      platform: darwin-x86_64
+      runs-on: macos-15-intel
+      use-docker: false
 
-      - name: Create Case-sensitive volume
-        run: |
-          diskutil list
-          diskutil apfs addVolume disk1 "Case-sensitive APFS" cross
-          cp -r ./* /Volumes/cross
+  build_2:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_2 }}
+      platform: darwin-x86_64
+      runs-on: macos-15-intel
+      use-docker: false
 
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: /Volumes/cross/.ccache
-          key: ccache-darwin-x86_64-${{ matrix.targets }}-${{ github.sha }}
-          restore-keys: |
-            ccache-darwin-x86_64-${{ matrix.targets }}-
+  build_3:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_3 }}
+      platform: darwin-x86_64
+      runs-on: macos-15-intel
+      use-docker: false
 
-      - name: Init Dependencies
-        run: |
-          brew install \
-            make \
-            gnu-sed \
-            gawk \
-            gpatch \
-            coreutils \
-            findutils \
-            gcc@14 \
-            perl \
-            libtool \
-            bison \
-            texinfo \
-            ccache \
-            yq
-
-      - name: Build
-        working-directory: /Volumes/cross
-        run: |
-          export CROSS_DIST_NAME_SUFFIX="-darwin-x86_64"
-          export CCACHE_DIR=/Volumes/cross/.ccache
-          export CCACHE_TEMPDIR=/tmp
-          export CCACHE_MAXSIZE=50M
-          export CCACHE_COMPRESS=true
-          export CCACHE_COMPRESSLEVEL=9
-          bash scripts/build.sh \
-            -LDP \
-            -c "gcc-14" -x "g++-14" \
-            -a \
-            -b \
-            -T "${{ matrix.targets }}"
-
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.targets }}-darwin-x86_64
-          path: |
-            /Volumes/cross/dist
-            !/Volumes/cross/dist/*.log
-
-  release:
-    name: Release
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    needs:
-      - init
-      - build_targets_on_macos_x86_64
-    strategy:
-      fail-fast: false
-      matrix:
-        targets: ${{ fromJSON(needs.init.outputs.TARGETS) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.targets }}-darwin-x86_64
-          path: dist
-
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          NOTES=$(bash scripts/generate-release-notes.sh "${{ github.ref_name }}")
-          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
-        run: |
-          gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
-            gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "$RELEASE_NOTES" || true
-          gh release upload "${{ github.ref_name }}" dist/*.* --clobber --repo ${{ github.repository }}
+  build_4:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_4 }}
+      platform: darwin-x86_64
+      runs-on: macos-15-intel
+      use-docker: false

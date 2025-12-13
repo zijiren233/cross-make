@@ -2,126 +2,76 @@ name: build-on-linux-x86_64
 
 on:
   workflow_dispatch:
+    inputs:
+      disable-native-build:
+        description: "Disable native build (-n flag)"
+        required: false
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      disable-native-build:
+        description: "Disable native build (-n flag)"
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
-      - "v*"
+      # Only match version tags like v1.0.0, exclude release tags with suffix like v1.0.0-musl-linux-x86_64
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-alpha[0-9]+"
 
 jobs:
   init:
     uses: ./.github/workflows/get-targets.yml
 
-  build_targets_on_linux_x86_64:
-    name: Build
-    runs-on: ubuntu-latest
-    needs:
-      - init
-    strategy:
-      fail-fast: false
-      matrix:
-        targets: ${{ fromJSON(needs.init.outputs.TARGETS) }}
-    steps:
-      - uses: actions/checkout@v4
+  # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
+  build_1:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_1 }}
+      platform: linux-x86_64
+      runs-on: ubuntu-latest
+      docker-platform: linux/amd64
+      docker-image: amd64/alpine:latest
+      use-docker: true
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.ccache
-          key: ccache-linux-x86_64-${{ matrix.targets }}-${{ github.sha }}
-          restore-keys: |
-            ccache-linux-x86_64-${{ matrix.targets }}-
+  build_2:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_2 }}
+      platform: linux-x86_64
+      runs-on: ubuntu-latest
+      docker-platform: linux/amd64
+      docker-image: amd64/alpine:latest
+      use-docker: true
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
-      - name: Build
-        id: build
-        run: |
-          docker run --rm \
-            --platform linux/amd64 \
-            --volume "${PWD}:/build" \
-            --volume "${{ github.workspace }}/.ccache:/root/.ccache" \
-            amd64/alpine:latest \
-            /bin/sh -c '
-              apk add --no-cache \
-                coreutils \
-                curl \
-                bzip2 \
-                xz \
-                make \
-                bison \
-                rsync \
-                patch \
-                perl \
-                zip \
-                flex \
-                g++ \
-                texinfo \
-                python3 \
-                gawk \
-                grep \
-                bash \
-                tar \
-                file \
-                ccache \
-                yq && \
-              cd /build && \
-              export CROSS_DIST_NAME_SUFFIX="-linux-x86_64" && \
-              export CCACHE_DIR=/root/.ccache && \
-              export CCACHE_TEMPDIR=/tmp && \
-              export CCACHE_MAXSIZE=50M && \
-              export CCACHE_COMPRESS=true && \
-              export CCACHE_COMPRESSLEVEL=9 && \
-              bash scripts/build.sh \
-                -LDP \
-                -n \
-                -a \
-                -b \
-                -T "${{ matrix.targets }}"'
+  build_3:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_3 }}
+      platform: linux-x86_64
+      runs-on: ubuntu-latest
+      docker-platform: linux/amd64
+      docker-image: amd64/alpine:latest
+      use-docker: true
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.targets }}-linux-x86_64
-          path: |
-            dist
-            !dist/*.log
-
-  release:
-    name: Release
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    needs:
-      - init
-      - build_targets_on_linux_x86_64
-    strategy:
-      fail-fast: false
-      matrix:
-        targets: ${{ fromJSON(needs.init.outputs.TARGETS) }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.targets }}-linux-x86_64
-          path: dist
-
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          NOTES=$(bash scripts/generate-release-notes.sh "${{ github.ref_name }}")
-          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
-        run: |
-          gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
-            gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "$RELEASE_NOTES" || true
-          gh release upload "${{ github.ref_name }}" dist/*.* --clobber --repo ${{ github.repository }}
+  build_4:
+    needs: init
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      targets: ${{ needs.init.outputs.TARGETS_4 }}
+      platform: linux-x86_64
+      runs-on: ubuntu-latest
+      docker-platform: linux/amd64
+      docker-image: amd64/alpine:latest
+      use-docker: true
+      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}

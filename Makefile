@@ -7,13 +7,13 @@ CONFIG_GUESS_REV = a2287c3041a3
 LLVM_VER = 18.1.4
 GCC_VER = 14.3.0
 MUSL_VER = 1.2.5
-GLIBC_VER = 2.28
+GLIBC_VER = 2.42
 BINUTILS_VER = 2.45.1
 GMP_VER = 6.3.0
 MPC_VER = 1.3.1
 MPFR_VER = 4.2.2
 ISL_VER = 0.27
-LINUX_VER = 6.12.33
+LINUX_VER = 6.12.59
 MINGW_VER = v13.0.0
 FREEBSD_VER = 14.3
 ZLIB_VER = 1.3.1
@@ -22,7 +22,7 @@ LIBXML2_VER = 2.13.3
 CHINA = 
 
 # curl --progress-bar -Lo <file> <url>
-DL_CMD = curl --retry 5 --retry-delay 3 --retry-max-time 300 --connect-timeout 30 --max-time 600 --progress-bar -Lo
+DL_CMD = curl --retry 30 --retry-delay 3 --retry-max-time 600 --connect-timeout 10 --max-time 600 --progress-bar -Lo
 SHA1_CMD = sha1sum -c
 
 COWPATCH = $(CURDIR)/cowpatch.sh
@@ -49,8 +49,6 @@ GCC_SNAP ?= https://mirrors.tuna.tsinghua.edu.cn/sourceware/gcc/snapshots
 LINUX_SITE ?= https://mirrors.ustc.edu.cn/kernel.org/linux/kernel
 
 LIBXML2_SITE ?= https://mirrors.ustc.edu.cn/gnome/sources/libxml2
-
-GLIBC_SITE ?= https://mirrors.ustc.edu.cn/gnu/glibc
 else
 # GNU_SITE ?= https://ftp.gnu.org/gnu
 GNU_SITE ?= https://ftpmirror.gnu.org/gnu
@@ -62,8 +60,6 @@ GCC_SNAP ?= https://sourceware.org/pub/gcc/snapshots
 LINUX_SITE ?= https://cdn.kernel.org/pub/linux/kernel
 
 LIBXML2_SITE ?= https://download.gnome.org/sources/libxml2
-
-GLIBC_SITE ?= $(GNU_SITE)/glibc
 endif
 
 MUSL_SITE ?= https://musl.libc.org/releases
@@ -74,6 +70,7 @@ BINUTILS_SITE ?= $(GNU_SITE)/binutils
 GMP_SITE ?= $(GNU_SITE)/gmp
 MPC_SITE ?= $(GNU_SITE)/mpc
 MPFR_SITE ?= $(GNU_SITE)/mpfr
+GLIBC_SITE ?= $(GNU_SITE)/glibc
 ISL_SITE ?= $(SOURCEFORGE_MIRROT)/project/libisl
 MINGW_SITE ?= $(SOURCEFORGE_MIRROT)/project/mingw-w64/mingw-w64/mingw-w64-release
 LLVM_SITE ?= $(GITHUB)/llvm/llvm-project/releases/download

@@ -621,6 +621,7 @@ ifeq ($(HOST),)
 	done
 	if [ -f $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT) ]; then \
 		ln -sf $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT) $(XBINUTILS_DIR)/ld$(EXE_EXT); \
+		ln -sf ld-new$(EXE_EXT) $(CURDIR)/obj_binutils/ld/ld-new.bfd$(EXE_EXT); \
 	fi
 	if [ -f $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT) ]; then \
 		ln -sf $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT) $(XBINUTILS_DIR)/as$(EXE_EXT); \

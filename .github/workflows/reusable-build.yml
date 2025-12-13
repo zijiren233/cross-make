@@ -1,0 +1,218 @@
+name: Reusable Build
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: "JSON array of targets to build"
+        required: true
+        type: string
+      platform:
+        description: "Platform identifier (e.g., linux-aarch64, darwin-x86_64)"
+        required: true
+        type: string
+      runs-on:
+        description: "Runner to use"
+        required: true
+        type: string
+      docker-platform:
+        description: "Docker platform (e.g., linux/arm64, linux/amd64)"
+        required: false
+        type: string
+        default: ""
+      docker-image:
+        description: "Docker image to use"
+        required: false
+        type: string
+        default: ""
+      use-qemu:
+        description: "Whether to set up QEMU"
+        required: false
+        type: boolean
+        default: false
+      use-docker:
+        description: "Whether to use Docker for build"
+        required: false
+        type: boolean
+        default: true
+      extra-build-flags:
+        description: "Extra flags for build.sh"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build:
+    name: Build
+    if: ${{ inputs.targets != '[]' }}
+    runs-on: ${{ inputs.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        targets: ${{ fromJSON(inputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # For macOS: Create case-sensitive volume
+      - name: Create Case-sensitive volume
+        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        run: |
+          diskutil list
+          # disk3 for aarch64, disk1 for x86_64
+          DISK=${{ contains(inputs.platform, 'aarch64') && 'disk3' || 'disk1' }}
+          diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
+          cp -r ./* /Volumes/cross
+
+      # For macOS: Install dependencies via brew
+      - name: Init Dependencies (macOS)
+        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        run: |
+          xcrun simctl delete all || true
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* || true
+          sudo defaults -currentHost write /Library/Preferences/com.apple.powerlogd SMCMonitorCadence 0 || true
+          sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.PerfPowerServices.plist || true
+          sudo killall PerfPowerServices || true
+          brew install \
+            make \
+            gnu-sed \
+            gawk \
+            gpatch \
+            coreutils \
+            findutils \
+            gcc@14 \
+            perl \
+            libtool \
+            bison \
+            texinfo \
+            yq
+
+      # For Linux with QEMU
+      - name: Set up QEMU
+        if: ${{ inputs.use-qemu }}
+        uses: docker/setup-qemu-action@v3
+
+      # Build with Docker (Linux)
+      - name: Build (Docker)
+        if: ${{ inputs.use-docker }}
+        run: |
+          docker run --rm \
+            --platform ${{ inputs.docker-platform }} \
+            --volume "${PWD}:/build" \
+            ${{ inputs.docker-image }} \
+            /bin/sh -c '
+              apk add --no-cache \
+                coreutils \
+                curl \
+                bzip2 \
+                xz \
+                make \
+                bison \
+                rsync \
+                patch \
+                perl \
+                flex \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep \
+                bash \
+                tar \
+                file \
+                zip \
+                yq && \
+              cd /build && \
+              bash scripts/build.sh \
+                -LDP \
+                -a \
+                ${{ inputs.extra-build-flags }} \
+                -T "${{ matrix.targets }}" && \
+              rm -rf dist/*.log'
+
+      # Build without Docker (macOS)
+      - name: Build (Native)
+        if: ${{ !inputs.use-docker }}
+        working-directory: /Volumes/cross
+        run: |
+          bash scripts/build.sh \
+            -LDP \
+            -c "gcc-14" \
+            -x "g++-14" \
+            -a \
+            ${{ inputs.extra-build-flags }} \
+            -T "${{ matrix.targets }}"
+          rm -rf dist/*.log
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.targets }}-${{ inputs.platform }}
+          if-no-files-found: error
+          path: |
+            ${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/dist' || 'dist' }}
+
+  # Separate release job that downloads artifacts and uploads to release
+  # This allows retrying release without rebuilding
+  release:
+    name: Release
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/') && inputs.targets != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        targets: ${{ fromJSON(inputs.targets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.targets }}-${{ inputs.platform }}
+          path: dist
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          NOTES=$(bash scripts/generate-release-notes.sh "${{ github.ref_name }}")
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create or update release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
+        run: |
+          RELEASE_TAG="${{ github.ref_name }}-${{ inputs.platform }}"
+
+          # Create release if it doesn't exist
+          # Use --target to point to current commit, preventing auto-creation of new git tag
+          gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
+            gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
+          gh release view "$RELEASE_TAG" --repo ${{ github.repository }} || \
+            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
+
+      - name: Upload to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="${{ github.ref_name }}-${{ inputs.platform }}"
+
+          # Upload all files in dist directory
+          for file in dist/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading: $file"
+              if [[ "${{ github.ref_name }}" == *"native"* ]]; then
+                gh release upload "${{ github.ref_name }}" "$file" --clobber --repo ${{ github.repository }}
+              else
+                gh release upload "$RELEASE_TAG" "$file" --clobber --repo ${{ github.repository }}
+              fi
+            fi
+          done
