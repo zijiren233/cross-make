@@ -96,7 +96,7 @@ else
 STAT = -static --static
 endif
 
-COMMON_FLAGS = -O2 -g0 -pipe -Wno-error -w
+COMMON_FLAGS = -O2 -g0 -Wno-error -w
 COMMON_LD_FLAGS = -s
 EXE_LD_FLAGS = $(COMMON_LD_FLAGS) $(STAT)
 
