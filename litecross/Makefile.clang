@@ -1,6 +1,6 @@
 
 OUTPUT = $(CURDIR)/output-clang
-
+HOSTCC = gcc
 LLVM_SRCDIR = LLVM_SRCDIR_not_set
 MUSL_SRCDIR = MUSL_SRCDIR_not_set
 
@@ -314,7 +314,7 @@ obj_sysroot/%/.lc_crt_workaround:
 
 obj_kernel_headers/%/.lc_built: | src_kernel_headers
 	mkdir -p $(CURDIR)/obj_kernel_headers/$*/staged
-	cd src_kernel_headers && $(MAKE) ARCH=$(call fn_linux_arch,$*) O=$(CURDIR)/obj_kernel_headers/$* INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/$*/staged HOSTCC="$(CC) $(STAT)" headers_install
+	cd src_kernel_headers && $(MAKE) ARCH=$(call fn_linux_arch,$*) O=$(CURDIR)/obj_kernel_headers/$* INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/$*/staged HOSTCC="$(HOSTCC)" headers_install
 	find obj_kernel_headers/$*/staged/include '(' -name .install -o -name ..install.cmd ')' -exec rm {} +
 	touch $@
 
