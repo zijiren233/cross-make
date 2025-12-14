@@ -92,10 +92,24 @@ $(sort $(foreach t,$(1),$(call llvm_target,$(t))))
 endef
 
 ifeq ($(shell uname -s),Darwin)
-STAT = 
+STAT =
 else
 STAT = -static --static
 endif
+
+# Shell script to fix broken symlinks with absolute /lib/* paths
+# Usage: cd target_lib_dir && $(FIX_LIB_SYMLINKS)
+define FIX_LIB_SYMLINKS
+find . -type l | while read link; do \
+	target=$$(readlink "$$link") || continue; \
+	case "$$target" in \
+		/lib/*) \
+			real_target=$${target#/lib/}; \
+			rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
+			;; \
+	esac; \
+done
+endef
 
 COMMON_FLAGS = -O2 -g0 -Wno-error -w
 COMMON_LD_FLAGS = -s
@@ -349,6 +363,7 @@ install-llvm: | obj_llvm/.lc_built_3
 
 install-musl_%: | obj_musl/%/.lc_built
 	cd obj_musl/$* && $(MAKE) $(MUSL_VARS) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
+	cd $(DESTDIR)$(OUTPUT)/$*/lib && $(FIX_LIB_SYMLINKS)
 
 install-zlib_%: | obj_zlib/%/.lc_built
 	cd obj_zlib/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
