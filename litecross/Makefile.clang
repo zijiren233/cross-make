@@ -175,6 +175,8 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_C_FLAGS='$(TARGET_CONFIG_$(t)) -L$(CURDIR)/obj_musl/$(t)/lib -B$(CURDIR)/obj_musl/$(t)/lib -Qunused-arguments') \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_ASM_FLAGS='$(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_COMPILER_RT_BUILD_CTX_PROFILE=OFF) \
+	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_COMPILER_RT_BUILD_GWP_ASAN=OFF) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_COMPILER_RT_BUILD_LIBFUZZER=OFF) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_COMPILER_RT_BUILD_MEMPROF=OFF) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_COMPILER_RT_BUILD_PROFILE=OFF) \
@@ -244,7 +246,7 @@ obj_musl/%/.lc_configured: | obj_musl/%/ src_musl obj_llvm/.lc_built_1
 		--prefix= \
 		--target=$* \
 		--disable-wrapper \
-		LIBCC=../../obj_llvm/lib/clang/$(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(call fn_major_version,$(LLVM_VER)),$(LLVM_VER))/lib/$(call normalise_target,$*)/libclang_rt.builtins.a \
+		LIBCC=../../obj_llvm/lib/clang/$(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(LLVM_VER),$(call fn_major_version,$(LLVM_VER)))/lib/$(call normalise_target,$*)/libclang_rt.builtins.a \
 		CC="$(CCACHE) ../../obj_llvm/bin/clang --target=$* $(TARGET_CONFIG_$*)" \
 		$(MUSL_CONFIG) $(MUSL_CONFIG_$*)
 	touch $@
@@ -285,7 +287,7 @@ obj_zstd/.lc_built: export CC := $(CCACHE) $(CC)
 obj_zstd/.lc_built: | obj_zstd/ src_zstd
 	cd src_zstd && $(MAKE) lib
 	cp src_zstd/lib/libzstd.a obj_zstd/
-	cp src_zstd/lib/zstd.h obj_zstd/
+	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h obj_zstd/
 	touch $@
 
 obj_libxml2/.lc_configured: export CC := $(CCACHE) $(CC)
