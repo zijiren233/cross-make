@@ -7,11 +7,13 @@ MUSL_SRCDIR = MUSL_SRCDIR_not_set
 
 TARGETS = \
 	aarch64-linux-musl \
+	arm-linux-musleabihf \
 	armv6-linux-musleabi \
 	armv6-linux-musleabihf \
 	armv7-linux-musleabi \
 	armv7-linux-musleabihf \
 	loongarch64-linux-musl \
+	s390x-linux-musl \
 	mips-linux-musl \
 	mips-linux-muslsf \
 	mipsel-linux-musl \
