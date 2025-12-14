@@ -301,7 +301,9 @@ endef
 	rm -rf $@
 	mv $@.tmp $@
 
-ifneq ($(findstring mingw,$(TARGET)),)
+ifeq ($(COMPILER),clang)
+extract_all: | $(filter-out mingw-w64-% glibc-% freebsd-%,$(SRC_DIRS))
+else ifneq ($(findstring mingw,$(TARGET)),)
 extract_all: | $(filter-out linux-% musl-% glibc-% freebsd-%,$(SRC_DIRS))
 else ifneq ($(findstring freebsd,$(TARGET)),)
 extract_all: | $(filter-out mingw-w64-% musl-% glibc-%,$(SRC_DIRS))

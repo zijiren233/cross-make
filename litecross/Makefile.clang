@@ -1,6 +1,7 @@
 
 OUTPUT = $(CURDIR)/output-clang
 HOSTCC = gcc
+CCACHE =
 LLVM_SRCDIR = LLVM_SRCDIR_not_set
 MUSL_SRCDIR = MUSL_SRCDIR_not_set
 
@@ -11,9 +12,6 @@ TARGETS = \
 	armv7-linux-musleabi \
 	armv7-linux-musleabihf \
 	loongarch64-linux-musl \
-	powerpc64-linux-musl \
-	powerpc64le-linux-musl \
-	riscv64-linux-musl \
 	mips-linux-musl \
 	mips-linux-muslsf \
 	mipsel-linux-musl \
@@ -22,6 +20,9 @@ TARGETS = \
 	mips64-linux-muslsf \
 	mips64el-linux-musl \
 	mips64el-linux-muslsf \
+	powerpc64-linux-musl \
+	powerpc64le-linux-musl \
+	riscv64-linux-musl \
 	i586-linux-musl \
 	i686-linux-musl \
 	x86_64-linux-musl \
@@ -107,6 +108,7 @@ export CXXFLAGS = $(COMMON_FLAGS)
 # DLLVM_ENABLE_RUNTIMES='compiler-rt;libc;libcxx;libcxxabi;libunwind;openmp'
 FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-Wno-dev \
+	$(if $(filter ccache,$(CCACHE)),-DLLVM_CCACHE_BUILD=ON) \
 	-DCLANG_PLUGIN_SUPPORT=ON \
 	-DLIBCLANG_BUILD_STATIC=ON \
 	-DCLANG_DEFAULT_PIE_ON_LINUX=ON \
@@ -128,7 +130,7 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-DLLVM_INCLUDE_TESTS=OFF \
 	-DLLVM_BUILD_DOCS=OFF \
 	-DLLVM_BUILD_EXAMPLES=OFF \
-	-DLLVM_BUILD_TESTS=ON \
+	-DLLVM_BUILD_TESTS=OFF \
 	-DCMAKE_C_FLAGS="$(COMMON_FLAGS)" \
 	-DCMAKE_CXX_FLAGS="$(COMMON_FLAGS)" \
 	-DCMAKE_EXE_LINKER_FLAGS="$(EXE_LD_FLAGS)" \
@@ -234,7 +236,7 @@ obj_musl/%/.lc_configured: | obj_musl/%/ src_musl obj_llvm/.lc_built_1
 		--target=$* \
 		--disable-wrapper \
 		LIBCC=../../obj_llvm/lib/clang/$(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(LLVM_VER),$(call fn_major_version,$(LLVM_VER)))/lib/$(call normalise_target,$*)/libclang_rt.builtins.a \
-		CC="../../obj_llvm/bin/clang --target=$* $(TARGET_CONFIG_$*)" \
+		CC="$(CCACHE) ../../obj_llvm/bin/clang --target=$* $(TARGET_CONFIG_$*)" \
 		$(MUSL_CONFIG) $(MUSL_CONFIG_$*)
 	touch $@
 
@@ -242,7 +244,7 @@ obj_sysroot/%/.lc_headers: | obj_sysroot/ obj_musl/%/.lc_configured
 	cd obj_musl/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install-headers
 	touch $@
 
-obj_llvm/.lc_built_2: | $(foreach t,$(TARGETS),obj_sysroot/$(t)/.lc_headers)
+obj_llvm/.lc_built_2: | $(foreach t,$(TARGETS),obj_sysroot/$(t)/.lc_headers obj_sysroot/$(t)/.lc_linux_headers)
 	cd obj_llvm && ninja builtins
 	touch $@
 
@@ -251,12 +253,12 @@ obj_musl/%/.lc_built: | obj_musl/%/.lc_configured obj_llvm/.lc_built_2
 				  RANLIB=../../obj_llvm/bin/llvm-ranlib
 	touch $@
 
-obj_zlib/.lc_configured: export CC := $(CC)
+obj_zlib/.lc_configured: export CC := $(CCACHE) $(CC)
 obj_zlib/.lc_configured: | obj_zlib/ src_zlib
 	cd obj_zlib && ../src_zlib/configure --prefix= --static
 	touch $@
 
-obj_zlib/%/.lc_configured: export CC = $(DESTDIR)$(OUTPUT)/bin/$*-clang
+obj_zlib/%/.lc_configured: export CC = $(CCACHE) $(DESTDIR)$(OUTPUT)/bin/$*-clang
 obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm
 	cd obj_zlib/$* && ../../src_zlib/configure --prefix= --static
 	touch $@
@@ -270,14 +272,14 @@ obj_zlib/.lc_built: | obj_zlib/.lc_configured
 	cd obj_zlib && $(MAKE) DESTDIR=$(CURDIR)/obj_zlib install
 	touch $@
 
-obj_zstd/.lc_built: export CC := $(CC)
+obj_zstd/.lc_built: export CC := $(CCACHE) $(CC)
 obj_zstd/.lc_built: | obj_zstd/ src_zstd
 	cd src_zstd && $(MAKE) lib
 	cp src_zstd/lib/libzstd.a obj_zstd/
 	cp src_zstd/lib/zstd.h obj_zstd/
 	touch $@
 
-obj_libxml2/.lc_configured: export CC := $(CC)
+obj_libxml2/.lc_configured: export CC := $(CCACHE) $(CC)
 obj_libxml2/.lc_configured: | obj_libxml2/ src_libxml2 obj_zlib/.lc_built
 	cd obj_libxml2 && ../src_libxml2/configure \
 		--prefix= \
