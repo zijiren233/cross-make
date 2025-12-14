@@ -113,7 +113,16 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-DLIBCLANG_BUILD_STATIC=ON \
 	-DCLANG_DEFAULT_PIE_ON_LINUX=ON \
 	-DLLVM_ENABLE_RTTI=ON \
-	-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+	-DCMAKE_BUILD_WITH_INSTALL_RPATH=OFF \
+	-DCMAKE_SKIP_INSTALL_RPATH=ON \
+	-DLLVM_APPEND_VC_REV=OFF \
+	-DLLVM_ENABLE_ASSERTIONS=OFF \
+	-DLLVM_ENABLE_PIC=ON \
+	-DLLVM_ENABLE_FFI=OFF \
+	-DLLVM_ENABLE_LIBEDIT=OFF \
+	-DLLVM_ENABLE_CURL=OFF \
+	-DLLVM_ENABLE_TERMINFO=OFF \
+	-DLLVM_ENABLE_LIBPFM=OFF \
 	-DLLVM_ENABLE_WARNINGS=OFF \
 	-DLLVM_ENABLE_ZLIB=FORCE_ON \
 	-DZLIB_LIBRARY=$(CURDIR)/obj_zlib/lib/libz.a \
@@ -235,7 +244,7 @@ obj_musl/%/.lc_configured: | obj_musl/%/ src_musl obj_llvm/.lc_built_1
 		--prefix= \
 		--target=$* \
 		--disable-wrapper \
-		LIBCC=../../obj_llvm/lib/clang/$(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(LLVM_VER),$(call fn_major_version,$(LLVM_VER)))/lib/$(call normalise_target,$*)/libclang_rt.builtins.a \
+		LIBCC=../../obj_llvm/lib/clang/$(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(call fn_major_version,$(LLVM_VER)),$(LLVM_VER))/lib/$(call normalise_target,$*)/libclang_rt.builtins.a \
 		CC="$(CCACHE) ../../obj_llvm/bin/clang --target=$* $(TARGET_CONFIG_$*)" \
 		$(MUSL_CONFIG) $(MUSL_CONFIG_$*)
 	touch $@
@@ -319,7 +328,7 @@ obj_sysroot/%/.lc_crt_workaround:
 
 obj_kernel_headers/%/.lc_built: | src_kernel_headers
 	mkdir -p $(CURDIR)/obj_kernel_headers/$*/staged
-	cd src_kernel_headers && $(MAKE) ARCH=$(call fn_linux_arch,$*) O=$(CURDIR)/obj_kernel_headers/$* INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/$*/staged HOSTCC="$(HOSTCC)" headers_install
+	cd src_kernel_headers && $(MAKE) ARCH=$(call fn_linux_arch,$*) O=$(CURDIR)/obj_kernel_headers/$* INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/$*/staged HOSTCC="$(CCACHE) $(HOSTCC)" headers_install
 	find obj_kernel_headers/$*/staged/include '(' -name .install -o -name ..install.cmd ')' -exec rm {} +
 	touch $@
 

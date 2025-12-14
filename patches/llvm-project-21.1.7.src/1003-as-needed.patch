@@ -1,0 +1,18 @@
+diff --git a/clang/lib/Driver/ToolChains/Gnu.cpp b/clang/lib/Driver/ToolChains/Gnu.cpp
+index f203cae1d..9e181a79a 100644
+--- a/clang/lib/Driver/ToolChains/Gnu.cpp
++++ b/clang/lib/Driver/ToolChains/Gnu.cpp
+@@ -560,6 +560,13 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
+   bool NeedsSanitizerDeps = addSanitizerRuntimes(ToolChain, Args, CmdArgs);
+   bool NeedsXRayDeps = addXRayRuntime(ToolChain, Args, CmdArgs);
+   addLinkerCompressDebugSectionsOption(ToolChain, Args, CmdArgs);
++
++  // Use --as-needed by default for all explicit linker inputs on Linux
++  // We don't reset it afterwards because explicit argument does not
++  // get reset either (and that is permitted, so it should be fine)
++  if (Triple.isOSLinux())
++    CmdArgs.push_back("--as-needed");
++
+   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs, JA);
+ 
+   addHIPRuntimeLibArgs(ToolChain, Args, CmdArgs);
