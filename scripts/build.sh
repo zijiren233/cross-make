@@ -192,6 +192,7 @@ function Init() {
         DEFAULT_LINUX_VER="$(GetYamlDefault LINUX_VER)"
         DEFAULT_MINGW_VER="$(GetYamlDefault MINGW_VER)"
         DEFAULT_FREEBSD_VER="$(GetYamlDefault FREEBSD_VER)"
+        DEFAULT_NETBSD_VER="$(GetYamlDefault NETBSD_VER)"
 
         if [ ! "$CONFIG_SUB_REV" ]; then
             CONFIG_SUB_REV="$DEFAULT_CONFIG_SUB_REV"
@@ -228,6 +229,9 @@ function Init() {
         fi
         if [ -z "${FREEBSD_VER+x}" ]; then
             FREEBSD_VER="$DEFAULT_FREEBSD_VER"
+        fi
+        if [ -z "${NETBSD_VER+x}" ]; then
+            NETBSD_VER="$DEFAULT_NETBSD_VER"
         fi
     }
 }
@@ -360,12 +364,14 @@ function WriteConfig() {
     local USE_MUSL=""
     local USE_GLIBC=""
     local USE_FREEBSD=""
+    local USE_NETBSD=""
     local USE_MINGW=""
 
     # Try to get target-specific values from YAML using BUILD_ID
     local YAML_MUSL_VER="$(GetTargetConfig "$BUILD_ID" MUSL_VER)"
     local YAML_GLIBC_VER="$(GetTargetConfig "$BUILD_ID" GLIBC_VER)"
     local YAML_FREEBSD_VER="$(GetTargetConfig "$BUILD_ID" FREEBSD_VER)"
+    local YAML_NETBSD_VER="$(GetTargetConfig "$BUILD_ID" NETBSD_VER)"
     local YAML_MINGW_VER="$(GetTargetConfig "$BUILD_ID" MINGW_VER)"
 
     # Use YAML values if available, otherwise use defaults based on target type
@@ -375,6 +381,8 @@ function WriteConfig() {
         USE_GLIBC="$YAML_GLIBC_VER"
     elif [ -n "$YAML_FREEBSD_VER" ]; then
         USE_FREEBSD="$YAML_FREEBSD_VER"
+    elif [ -n "$YAML_NETBSD_VER" ]; then
+        USE_NETBSD="$YAML_NETBSD_VER"
     elif [ -n "$YAML_MINGW_VER" ]; then
         USE_MINGW="$YAML_MINGW_VER"
     else
@@ -383,6 +391,8 @@ function WriteConfig() {
             USE_MINGW="${MINGW_VER}"
         elif [[ "$TARGET" == *"freebsd"* ]]; then
             USE_FREEBSD="${FREEBSD_VER}"
+        elif [[ "$TARGET" == *"netbsd"* ]]; then
+            USE_NETBSD="${NETBSD_VER}"
         elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
             USE_GLIBC="${GLIBC_VER}"
         else
@@ -399,6 +409,7 @@ GCC_VER = ${GCC_VER}
 MUSL_VER = ${USE_MUSL}
 GLIBC_VER = ${USE_GLIBC}
 FREEBSD_VER = ${USE_FREEBSD}
+NETBSD_VER = ${USE_NETBSD}
 BINUTILS_VER = ${BINUTILS_VER}
 
 GMP_VER = ${GMP_VER}

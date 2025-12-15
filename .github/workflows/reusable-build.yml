@@ -197,7 +197,7 @@ jobs:
           gh release view "${{ github.ref_name }}" --repo ${{ github.repository }} || \
             gh release create "${{ github.ref_name }}" --repo ${{ github.repository }} --title "${{ github.ref_name }}" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
           gh release view "$RELEASE_TAG" --repo ${{ github.repository }} || \
-            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
+            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" --target ${{ github.sha }} --latest=false || true
 
       - name: Upload to release
         env:

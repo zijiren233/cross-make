@@ -223,6 +223,7 @@ override MUSL_SRCDIR =
 override MINGW_SRCDIR =
 override GLIBC_SRCDIR =
 override LINUX_SRCDIR =
+override NETBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
@@ -235,11 +236,27 @@ ifneq ($(filter powerpc-%,$(TARGET)),)
 SSP_CONFIG = --disable-default-ssp
 endif
 
+else ifneq ($(findstring netbsd,$(TARGET)),)
+# build netbsd
+override MUSL_SRCDIR =
+override MINGW_SRCDIR =
+override GLIBC_SRCDIR =
+override LINUX_SRCDIR =
+override FREEBSD_SRCDIR =
+
+MAKE += MAKEINFO=false
+
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
+	--disable-shared
+
+PIE_CONFIG = --disable-default-pie
+
 else
 # build glibc
 override MUSL_SRCDIR =
 override MINGW_SRCDIR =
 override FREEBSD_SRCDIR =
+override NETBSD_SRCDIR =
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array
 
@@ -389,6 +406,27 @@ if [ -f libc.so.7 ]; then \
 fi
 endef
 
+# Shell script to fix NetBSD broken symlinks
+# Usage: cd target_lib_dir && $(NETBSD_FIX_SYMLINKS)
+# NetBSD uses both absolute (/lib/*, /usr/lib/*) and relative (../../lib/*) symlinks
+define NETBSD_FIX_SYMLINKS
+find . -type l | while read link; do \
+	target=$$(readlink "$$link") || continue; \
+	case "$$target" in \
+		/lib/*|/usr/lib/*|../../lib/*) \
+			real_target=$$(basename "$$target"); \
+			rm -f "$$link" && ln -sf "$$real_target" "$$link"; \
+			;; \
+	esac; \
+done; \
+if [ -f libgcc_s.so.1 ]; then \
+	rm -f libgcc_s.so && ln -sf libgcc_s.so.1 libgcc_s.so; \
+fi; \
+if [ -f libc.so.12 ]; then \
+	rm -f libc.so && ln -sf libc.so.12 libc.so; \
+fi
+endef
+
 ifeq ($(HOST),)
 # build cross
 obj_gcc/%: export CC:=$(CCACHE) $(CC) $(STAT)
@@ -506,6 +544,10 @@ else ifneq ($(FREEBSD_SRCDIR),)
 all: freebsd gcc binutils
 install: install-freebsd install-gcc install-binutils
 	(cd $(DESTDIR)$(OUTPUT) && unlink usr || ln -sf . usr)
+else ifneq ($(NETBSD_SRCDIR),)
+all: netbsd gcc binutils
+install: install-netbsd install-gcc install-binutils
+	(cd $(DESTDIR)$(OUTPUT) && unlink usr || ln -sf . usr)
 else ifneq ($(GLIBC_SRCDIR),)
 all: glibc gcc binutils
 install: install-glibc install-gcc install-binutils
@@ -522,6 +564,8 @@ glibc: obj_glibc/.lc_built
 
 freebsd: obj_freebsd/.lc_built
 
+netbsd: obj_netbsd/.lc_built
+
 mingw: obj_mingw_headers/.lc_built obj_mingw_crt/.lc_built obj_mingw_pthreads/.lc_built
 
 toolchain: gcc binutils
@@ -532,7 +576,7 @@ gcc: obj_gcc/.lc_built
 
 binutils: obj_binutils/.lc_built
 
-.PHONY: all musl glibc freebsd mingw toolchain install-musl install-glibc install-freebsd install-mingw install-toolchain clean
+.PHONY: all musl glibc freebsd netbsd mingw toolchain install-musl install-glibc install-freebsd install-netbsd install-mingw install-toolchain clean
 
 src_binutils: | $(BINUTILS_SRCDIR)
 	ln -sf $(BINUTILS_SRCDIR) $@
@@ -548,6 +592,9 @@ src_glibc: | $(GLIBC_SRCDIR)
 
 src_freebsd: | $(FREEBSD_SRCDIR)
 	ln -sf $(FREEBSD_SRCDIR) $@
+
+src_netbsd: | $(NETBSD_SRCDIR)
+	ln -sf $(NETBSD_SRCDIR) $@
 
 src_mingw: | $(MINGW_SRCDIR)
 	ln -sf $(MINGW_SRCDIR) $@
@@ -671,6 +718,13 @@ obj_sysroot/.lc_headers: | obj_freebsd/.lc_built obj_sysroot
 	mkdir -p $(CURDIR)/obj_sysroot/include
 	rsync -a $(FREEBSD_SRCDIR)/usr/include/ $(CURDIR)/obj_sysroot/include/
 	touch $@
+else ifneq ($(NETBSD_SRCDIR),)
+# netbsd - use prebuilt libc from base.tar.xz + comp.tar.xz
+obj_sysroot/.lc_headers: | obj_netbsd/.lc_built obj_sysroot
+	# Copy headers from prebuilt NetBSD base
+	mkdir -p $(CURDIR)/obj_sysroot/include
+	rsync -a $(NETBSD_SRCDIR)/usr/include/ $(CURDIR)/obj_sysroot/include/
+	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
 obj_sysroot/.lc_headers: | obj_glibc/.lc_configured obj_sysroot
@@ -707,6 +761,10 @@ obj_freebsd/.lc_built: | obj_freebsd src_freebsd
 	# FreeBSD uses prebuilt libc, no build needed
 	touch $@
 
+obj_netbsd/.lc_built: | obj_netbsd src_netbsd
+	# NetBSD uses prebuilt libc, already extracted
+	touch $@
+
 ifneq ($(MINGW_SRCDIR),)
 # mingw
 obj_sysroot/.lc_libs: | obj_sysroot/.lc_libs_pthreads obj_sysroot/.lc_libs_crt
@@ -720,6 +778,18 @@ obj_sysroot/.lc_libs: | obj_freebsd/.lc_built
 	rsync -a $(FREEBSD_SRCDIR)/usr/lib/ $(CURDIR)/obj_sysroot/lib/
 	# Fix broken symlinks (FreeBSD base.txz uses absolute paths like ../../lib/)
 	cd $(CURDIR)/obj_sysroot/lib && $(FREEBSD_FIX_SYMLINKS)
+	touch $@
+else ifneq ($(NETBSD_SRCDIR),)
+# netbsd - copy prebuilt libraries
+obj_sysroot/.lc_libs: | obj_netbsd/.lc_built
+	# Copy all libraries from prebuilt NetBSD base
+	# Note: Copy /usr/lib first (has broken symlinks to ../../lib/), then /lib (has actual files)
+	# so actual files overwrite the broken symlinks
+	mkdir -p $(CURDIR)/obj_sysroot/lib
+	rsync -a $(NETBSD_SRCDIR)/usr/lib/ $(CURDIR)/obj_sysroot/lib/
+	rsync -a $(NETBSD_SRCDIR)/lib/ $(CURDIR)/obj_sysroot/lib/ || true
+	# Fix any remaining broken symlinks
+	cd $(CURDIR)/obj_sysroot/lib && $(NETBSD_FIX_SYMLINKS)
 	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
@@ -775,6 +845,15 @@ install-freebsd: | obj_sysroot/.lc_libs
 	rsync -a $(CURDIR)/obj_sysroot/lib/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 	# Fix broken symlinks (already fixed in obj_sysroot, but rsync may preserve them)
 	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FREEBSD_FIX_SYMLINKS)
+
+install-netbsd: | obj_sysroot/.lc_libs
+	# Install prebuilt NetBSD libraries and headers
+	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/include
+	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
+	rsync -a $(CURDIR)/obj_sysroot/include/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/include/
+	rsync -a $(CURDIR)/obj_sysroot/lib/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
+	# Fix broken symlinks
+	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(NETBSD_FIX_SYMLINKS)
 
 install-binutils: | obj_binutils/.lc_built
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
