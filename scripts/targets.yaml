@@ -15,6 +15,8 @@ defaults:
   GLIBC_VER: "2.42"
   MINGW_VER: "v13.0.0"
   FREEBSD_VER: "14.3"
+  NETBSD_VER: "10.1"
+  OPENBSD_VER: "7.8"
 
 targets:
   # ============================================================================
@@ -1340,3 +1342,42 @@ targets:
 
   - TARGET: riscv64-unknown-freebsd14
     FREEBSD_VER: "14.3"
+
+  # ============================================================================
+  # NetBSD 10 targets (NETBSD_VER: 10.1)
+  # ============================================================================
+  - TARGET: x86_64-unknown-netbsd10
+    NETBSD_VER: "10.1"
+
+  - TARGET: aarch64-unknown-netbsd10
+    NETBSD_VER: "10.1"
+
+  - TARGET: i386-unknown-netbsd10
+    NETBSD_VER: "10.1"
+
+  - TARGET: sparc64-unknown-netbsd10
+    NETBSD_VER: "10.1"
+
+  # ============================================================================
+  # OpenBSD 7.8 targets (OPENBSD_VER: 7.8)
+  # ============================================================================
+  - TARGET: x86_64-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
+
+  - TARGET: aarch64-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
+
+  - TARGET: armv7-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
+
+  - TARGET: i386-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
+
+  - TARGET: riscv64-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
+
+  - TARGET: powerpc64-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
+
+  - TARGET: sparc64-unknown-openbsd7.8
+    OPENBSD_VER: "7.8"
