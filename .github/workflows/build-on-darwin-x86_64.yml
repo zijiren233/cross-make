@@ -18,36 +18,28 @@ jobs:
   # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
   build_1:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_1 }}
       platform: darwin-x86_64
-      runs-on: macos-15-intel
-      use-docker: false
 
   build_2:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_2 }}
       platform: darwin-x86_64
-      runs-on: macos-15-intel
-      use-docker: false
 
   build_3:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_3 }}
       platform: darwin-x86_64
-      runs-on: macos-15-intel
-      use-docker: false
 
   build_4:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_4 }}
       platform: darwin-x86_64
-      runs-on: macos-15-intel
-      use-docker: false

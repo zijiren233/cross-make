@@ -15,6 +15,7 @@ defaults:
   GLIBC_VER: "2.42"
   MINGW_VER: "v13.0.0"
   FREEBSD_VER: "14.3"
+  NETBSD_VER: "10.1"
 
 targets:
   # ============================================================================
@@ -1340,3 +1341,43 @@ targets:
 
   - TARGET: riscv64-unknown-freebsd14
     FREEBSD_VER: "14.3"
+
+  # ============================================================================
+  # FreeBSD 15 targets (FREEBSD_VER: 15.0)
+  # Note: FreeBSD 15 dropped support for i386 and 32-bit powerpc
+  # ============================================================================
+  - TARGET: x86_64-unknown-freebsd15
+    FREEBSD_VER: "15.0"
+
+  - TARGET: aarch64-unknown-freebsd15
+    FREEBSD_VER: "15.0"
+
+  - TARGET: powerpc64-unknown-freebsd15
+    FREEBSD_VER: "15.0"
+
+  - TARGET: powerpc64le-unknown-freebsd15
+    FREEBSD_VER: "15.0"
+
+  - TARGET: riscv64-unknown-freebsd15
+    FREEBSD_VER: "15.0"
+
+  # ============================================================================
+  # NetBSD 10 targets (NETBSD_VER: 10.1)
+  # ============================================================================
+  - TARGET: x86_64-unknown-netbsd
+    NETBSD_VER: "10.1"
+
+  - TARGET: i586-unknown-netbsdelf
+    NETBSD_VER: "10.1"
+
+  - TARGET: i686-unknown-netbsdelf
+    NETBSD_VER: "10.1"
+
+  - TARGET: sparc64-unknown-netbsd
+    NETBSD_VER: "10.1"
+
+  - TARGET: mipsel-unknown-netbsd
+    NETBSD_VER: "10.1"
+
+  - TARGET: powerpc-unknown-netbsd
+    NETBSD_VER: "10.1"

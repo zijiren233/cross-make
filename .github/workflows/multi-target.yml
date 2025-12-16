@@ -1,0 +1,56 @@
+name: Multi Target Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "JSON array of targets (e.g. [\"aarch64-linux-musl\", \"x86_64-linux-musl\"])"
+        required: true
+        type: string
+      platform:
+        description: "Platform"
+        required: true
+        type: choice
+        options:
+          - linux-x86_64
+          - linux-aarch64
+          - linux-armv7
+          - linux-riscv64
+          - linux-powerpc64le
+          - linux-s390x
+          - darwin-aarch64
+          - darwin-x86_64
+      extra-build-flags:
+        description: "Extra flags for build.sh"
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      targets:
+        description: "JSON array of targets to build"
+        required: true
+        type: string
+      platform:
+        description: "Platform identifier (e.g., linux-aarch64, darwin-x86_64)"
+        required: true
+        type: string
+      extra-build-flags:
+        description: "Extra flags for build.sh"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build-and-release:
+    name: ${{ matrix.targets }}
+    if: ${{ inputs.targets != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        targets: ${{ fromJSON(inputs.targets) }}
+    uses: ./.github/workflows/single-target.yml
+    with:
+      target: ${{ matrix.targets }}
+      platform: ${{ inputs.platform }}
+      extra-build-flags: ${{ inputs.extra-build-flags }}

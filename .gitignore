@@ -16,5 +16,12 @@
 /mingw-*/
 /glibc-*/
 /freebsd-*/
+/netbsd-*/
+/openbsd-*/
+/llvm-project-*/
+/zlib-*/
+/zstd-*/
+/libxml2-*/
 /dist
 **/*.local*
+output-*
