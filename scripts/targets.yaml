@@ -1355,6 +1355,30 @@ targets:
     FREEBSD_VER: "14.3"
 
   # ============================================================================
+  # FreeBSD 15 targets (FREEBSD_VER: 15.0)
+  # Note: FreeBSD 15 dropped support for i386 and 32-bit powerpc
+  # ============================================================================
+  - ID: x86_64-unknown-freebsd15
+    TARGET: x86_64-unknown-freebsd
+    FREEBSD_VER: "15.0"
+
+  - ID: aarch64-unknown-freebsd15
+    TARGET: aarch64-unknown-freebsd
+    FREEBSD_VER: "15.0"
+
+  - ID: powerpc64-unknown-freebsd15
+    TARGET: powerpc64-unknown-freebsd
+    FREEBSD_VER: "15.0"
+
+  - ID: powerpc64le-unknown-freebsd15
+    TARGET: powerpc64le-unknown-freebsd
+    FREEBSD_VER: "15.0"
+
+  - ID: riscv64-unknown-freebsd15
+    TARGET: riscv64-unknown-freebsd
+    FREEBSD_VER: "15.0"
+
+  # ============================================================================
   # NetBSD 10 targets (NETBSD_VER: 10.1)
   # ============================================================================
   - TARGET: x86_64-unknown-netbsd
