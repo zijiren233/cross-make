@@ -18,48 +18,28 @@ jobs:
   # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
   build_1:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_1 }}
       platform: linux-riscv64
-      runs-on: ubuntu-latest
-      docker-platform: linux/riscv64
-      docker-image: riscv64/alpine:edge
-      use-qemu: true
-      use-docker: true
 
   build_2:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_2 }}
       platform: linux-riscv64
-      runs-on: ubuntu-latest
-      docker-platform: linux/riscv64
-      docker-image: riscv64/alpine:edge
-      use-qemu: true
-      use-docker: true
 
   build_3:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_3 }}
       platform: linux-riscv64
-      runs-on: ubuntu-latest
-      docker-platform: linux/riscv64
-      docker-image: riscv64/alpine:edge
-      use-qemu: true
-      use-docker: true
 
   build_4:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_4 }}
       platform: linux-riscv64
-      runs-on: ubuntu-latest
-      docker-platform: linux/riscv64
-      docker-image: riscv64/alpine:edge
-      use-qemu: true
-      use-docker: true

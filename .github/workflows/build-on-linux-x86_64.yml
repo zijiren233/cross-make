@@ -30,48 +30,32 @@ jobs:
   # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
   build_1:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_1 }}
       platform: linux-x86_64
-      runs-on: ubuntu-latest
-      docker-platform: linux/amd64
-      docker-image: amd64/alpine:latest
-      use-docker: true
       extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_2:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_2 }}
       platform: linux-x86_64
-      runs-on: ubuntu-latest
-      docker-platform: linux/amd64
-      docker-image: amd64/alpine:latest
-      use-docker: true
       extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_3:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_3 }}
       platform: linux-x86_64
-      runs-on: ubuntu-latest
-      docker-platform: linux/amd64
-      docker-image: amd64/alpine:latest
-      use-docker: true
       extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_4:
     needs: init
-    uses: ./.github/workflows/reusable-build.yml
+    uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_4 }}
       platform: linux-x86_64
-      runs-on: ubuntu-latest
-      docker-platform: linux/amd64
-      docker-image: amd64/alpine:latest
-      use-docker: true
       extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}

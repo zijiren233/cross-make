@@ -1303,79 +1303,62 @@ targets:
   # ============================================================================
   # FreeBSD 13 targets (FREEBSD_VER: 13.5)
   # ============================================================================
-  - ID: x86_64-unknown-freebsd13
-    TARGET: x86_64-unknown-freebsd
+  - TARGET: x86_64-unknown-freebsd13
     FREEBSD_VER: "13.5"
 
-  - ID: aarch64-unknown-freebsd13
-    TARGET: aarch64-unknown-freebsd
+  - TARGET: aarch64-unknown-freebsd13
     FREEBSD_VER: "13.5"
 
-  - ID: powerpc-unknown-freebsd13
-    TARGET: powerpc-unknown-freebsd
+  - TARGET: powerpc-unknown-freebsd13
     FREEBSD_VER: "13.5"
 
-  - ID: powerpc64-unknown-freebsd13
-    TARGET: powerpc64-unknown-freebsd
+  - TARGET: powerpc64-unknown-freebsd13
     FREEBSD_VER: "13.5"
 
-  - ID: powerpc64le-unknown-freebsd13
-    TARGET: powerpc64le-unknown-freebsd
+  - TARGET: powerpc64le-unknown-freebsd13
     FREEBSD_VER: "13.5"
 
-  - ID: riscv64-unknown-freebsd13
-    TARGET: riscv64-unknown-freebsd
+  - TARGET: riscv64-unknown-freebsd13
     FREEBSD_VER: "13.5"
 
   # ============================================================================
   # FreeBSD 14 targets (FREEBSD_VER: 14.3)
   # ============================================================================
-  - ID: x86_64-unknown-freebsd14
-    TARGET: x86_64-unknown-freebsd
+  - TARGET: x86_64-unknown-freebsd14
     FREEBSD_VER: "14.3"
 
-  - ID: aarch64-unknown-freebsd14
-    TARGET: aarch64-unknown-freebsd
+  - TARGET: aarch64-unknown-freebsd14
     FREEBSD_VER: "14.3"
 
-  - ID: powerpc-unknown-freebsd14
-    TARGET: powerpc-unknown-freebsd
+  - TARGET: powerpc-unknown-freebsd14
     FREEBSD_VER: "14.3"
 
-  - ID: powerpc64-unknown-freebsd14
-    TARGET: powerpc64-unknown-freebsd
+  - TARGET: powerpc64-unknown-freebsd14
     FREEBSD_VER: "14.3"
 
-  - ID: powerpc64le-unknown-freebsd14
-    TARGET: powerpc64le-unknown-freebsd
+  - TARGET: powerpc64le-unknown-freebsd14
     FREEBSD_VER: "14.3"
 
-  - ID: riscv64-unknown-freebsd14
-    TARGET: riscv64-unknown-freebsd
+  - TARGET: riscv64-unknown-freebsd14
     FREEBSD_VER: "14.3"
 
   # ============================================================================
   # FreeBSD 15 targets (FREEBSD_VER: 15.0)
   # Note: FreeBSD 15 dropped support for i386 and 32-bit powerpc
   # ============================================================================
-  - ID: x86_64-unknown-freebsd15
-    TARGET: x86_64-unknown-freebsd
+  - TARGET: x86_64-unknown-freebsd15
     FREEBSD_VER: "15.0"
 
-  - ID: aarch64-unknown-freebsd15
-    TARGET: aarch64-unknown-freebsd
+  - TARGET: aarch64-unknown-freebsd15
     FREEBSD_VER: "15.0"
 
-  - ID: powerpc64-unknown-freebsd15
-    TARGET: powerpc64-unknown-freebsd
+  - TARGET: powerpc64-unknown-freebsd15
     FREEBSD_VER: "15.0"
 
-  - ID: powerpc64le-unknown-freebsd15
-    TARGET: powerpc64le-unknown-freebsd
+  - TARGET: powerpc64le-unknown-freebsd15
     FREEBSD_VER: "15.0"
 
-  - ID: riscv64-unknown-freebsd15
-    TARGET: riscv64-unknown-freebsd
+  - TARGET: riscv64-unknown-freebsd15
     FREEBSD_VER: "15.0"
 
   # ============================================================================
@@ -1384,10 +1367,10 @@ targets:
   - TARGET: x86_64-unknown-netbsd
     NETBSD_VER: "10.1"
 
-  - TARGET: aarch64-unknown-netbsd
+  - TARGET: i586-unknown-netbsdelf
     NETBSD_VER: "10.1"
 
-  - TARGET: i386-unknown-netbsdelf
+  - TARGET: i686-unknown-netbsdelf
     NETBSD_VER: "10.1"
 
   - TARGET: sparc64-unknown-netbsd
