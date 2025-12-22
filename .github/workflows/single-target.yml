@@ -137,7 +137,7 @@ jobs:
             gpatch \
             coreutils \
             findutils \
-            gcc@14 \
+            gcc@15 \
             perl \
             libtool \
             bison \
@@ -194,8 +194,8 @@ jobs:
         run: |
           bash scripts/build.sh \
             -LDP \
-            -c "gcc-14" \
-            -x "g++-14" \
+            -c "gcc-15" \
+            -x "g++-15" \
             -a \
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
