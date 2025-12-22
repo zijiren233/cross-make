@@ -43,8 +43,6 @@ LINUX_HEADERS_SITE = https://ftp.barfooze.de/pub/sabotage/tarballs
 ifneq ($(CHINA),)
 GNU_SITE ?= https://mirrors.ustc.edu.cn/gnu
 
-SOURCEFORGE_MIRROT ?= https://jaist.dl.sourceforge.net
-
 GCC_SNAP ?= https://mirrors.tuna.tsinghua.edu.cn/sourceware/gcc/snapshots
 
 LINUX_SITE ?= https://mirrors.ustc.edu.cn/kernel.org/linux/kernel
@@ -53,8 +51,6 @@ LIBXML2_SITE ?= https://mirrors.ustc.edu.cn/gnome/sources/libxml2
 else
 # GNU_SITE ?= https://ftp.gnu.org/gnu
 GNU_SITE ?= https://ftpmirror.gnu.org/gnu
-
-SOURCEFORGE_MIRROT ?= https://downloads.sourceforge.net
 
 GCC_SNAP ?= https://sourceware.org/pub/gcc/snapshots
 
@@ -73,8 +69,9 @@ GMP_SITE ?= $(GNU_SITE)/gmp
 MPC_SITE ?= $(GNU_SITE)/mpc
 MPFR_SITE ?= $(GNU_SITE)/mpfr
 GLIBC_SITE ?= $(GNU_SITE)/glibc
-ISL_SITE ?= $(SOURCEFORGE_MIRROT)/project/libisl
-MINGW_SITE ?= $(SOURCEFORGE_MIRROT)/project/mingw-w64/mingw-w64/mingw-w64-release
+SOURCEFORGE_MIRROR ?= https://downloads.sourceforge.net
+ISL_SITE ?= $(SOURCEFORGE_MIRROR)/project/libisl
+MINGW_SITE ?= $(SOURCEFORGE_MIRROR)/project/mingw-w64/mingw-w64/mingw-w64-release
 LLVM_SITE ?= $(GITHUB)/llvm/llvm-project/releases/download
 ZLIB_SITE ?= https://zlib.net
 ZSTD_SITE ?= $(GITHUB)/facebook/zstd/releases/download
