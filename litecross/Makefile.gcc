@@ -185,6 +185,7 @@ ifneq ($(findstring musl,$(TARGET)),)
 override MINGW_SRCDIR =
 override GLIBC_SRCDIR =
 override FREEBSD_SRCDIR =
+override NETBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
@@ -203,6 +204,7 @@ override MUSL_SRCDIR =
 override GLIBC_SRCDIR =
 override LINUX_SRCDIR =
 override FREEBSD_SRCDIR =
+override NETBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 

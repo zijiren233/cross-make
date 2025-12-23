@@ -373,6 +373,7 @@ function WriteConfig() {
     local USE_FREEBSD=""
     local USE_NETBSD=""
     local USE_MINGW=""
+    local USE_LINUX=""
 
     # Try to get target-specific values from YAML using BUILD_ID
     local YAML_MUSL_VER="$(GetTargetConfig "$BUILD_ID" MUSL_VER)"
@@ -384,8 +385,10 @@ function WriteConfig() {
     # Use YAML values if available, otherwise use defaults based on target type
     if [ -n "$YAML_MUSL_VER" ]; then
         USE_MUSL="$YAML_MUSL_VER"
+        USE_LINUX="${LINUX_VER}"
     elif [ -n "$YAML_GLIBC_VER" ]; then
         USE_GLIBC="$YAML_GLIBC_VER"
+        USE_LINUX="${LINUX_VER}"
     elif [ -n "$YAML_FREEBSD_VER" ]; then
         USE_FREEBSD="$YAML_FREEBSD_VER"
     elif [ -n "$YAML_NETBSD_VER" ]; then
@@ -402,8 +405,10 @@ function WriteConfig() {
             USE_NETBSD="${NETBSD_VER}"
         elif [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
             USE_GLIBC="${GLIBC_VER}"
+            USE_LINUX="${LINUX_VER}"
         else
             USE_MUSL="${MUSL_VER}"
+            USE_LINUX="${LINUX_VER}"
         fi
     fi
 
@@ -418,6 +423,7 @@ MUSL_VER = ${USE_MUSL}
 GLIBC_VER = ${USE_GLIBC}
 FREEBSD_VER = ${USE_FREEBSD}
 NETBSD_VER = ${USE_NETBSD}
+MINGW_VER = ${USE_MINGW}
 BINUTILS_VER = ${BINUTILS_VER}
 
 GMP_VER = ${GMP_VER}
@@ -425,9 +431,7 @@ MPC_VER = ${MPC_VER}
 MPFR_VER = ${MPFR_VER}
 ISL_VER = ${ISL_VER}
 ZSTD_VER = ${ZSTD_VER}
-
-LINUX_VER = ${LINUX_VER}
-MINGW_VER = ${MINGW_VER}
+LINUX_VER = ${USE_LINUX}
 
 # only work in cross build
 # native build will find ${TARGET}-gcc ${TARGET}-g++ in env to build
