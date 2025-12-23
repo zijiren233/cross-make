@@ -243,6 +243,7 @@ function Help() {
     echo "-h: help"
     echo "-a: enable archive"
     echo "-T: targets file path or targets string"
+    echo "-S: sources directory path"
     echo "-C: use china mirror"
     echo "-c: set CC"
     echo "-x: set CXX"
@@ -260,7 +261,7 @@ function Help() {
 }
 
 function ParseArgs() {
-    while getopts "haT:Cc:x:nLlO:j:NdDPb" arg; do
+    while getopts "haT:S:Cc:x:nLlO:j:NdDPb" arg; do
         case $arg in
         h)
             Help
@@ -271,6 +272,9 @@ function ParseArgs() {
             ;;
         T)
             TARGETS_FILE="$OPTARG"
+            ;;
+        S)
+            SOURCES_DIR="$OPTARG"
             ;;
         C)
             USE_CHINA_MIRROR="true"
@@ -408,6 +412,7 @@ CONFIG_SUB_REV = ${CONFIG_SUB_REV}
 TARGET = ${TARGET}
 NATIVE = ${NATIVE}
 OUTPUT = ${OUTPUT}
+$(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
 GCC_VER = ${GCC_VER}
 MUSL_VER = ${USE_MUSL}
 GLIBC_VER = ${USE_GLIBC}

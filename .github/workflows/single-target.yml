@@ -116,9 +116,14 @@ jobs:
         if: ${{ startsWith(inputs.platform, 'darwin') }}
         run: |
           diskutil list
-          # disk3 for aarch64, disk1 for x86_64
-          DISK=${{ contains(inputs.platform, 'aarch64') && 'disk3' || 'disk1' }}
-          diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
+          if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
+            RAMDISK=$(hdiutil attach -nomount ram://12582912)
+            newfs_hfs -s -v cross "$RAMDISK"
+            mkdir -p /Volumes/cross
+            mount -t hfs "$RAMDISK" /Volumes/cross
+          else
+            diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
+          fi
           cp -r ./* /Volumes/cross
 
       # For macOS: Install dependencies via brew
@@ -205,6 +210,7 @@ jobs:
             -c "gcc-15" \
             -x "g++-15" \
             -a \
+            -S "${{ github.workspace }}/sources" \
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
           rm -rf dist/*.log
