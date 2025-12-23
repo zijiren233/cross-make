@@ -262,7 +262,7 @@ jobs:
           for file in dist/*; do
             if [ -f "$file" ]; then
               echo "Uploading: $file"
-              if [[ "${{ env.RELEASE_TAG_BASE }}" == *"native"* ]]; then
+              if [[ "$file" == *"native"* ]]; then
                 gh release upload "${{ env.RELEASE_TAG_BASE }}" "$file" --clobber --repo ${{ github.repository }}
               else
                 gh release upload "$RELEASE_TAG" "$file" --clobber --repo ${{ github.repository }}
