@@ -258,7 +258,7 @@ obj_llvm/.lc_built_1: | obj_llvm/.lc_configured
 
 # llvm 16+ has only the major version number in the LIBCC path
 obj_musl/%/.lc_configured: | obj_musl/%/ src_musl obj_llvm/.lc_built_1
-	cd obj_musl/$* && ../../src_musl/configure \
+	cd obj_musl/$* && sh ../../src_musl/configure \
 		--prefix= \
 		--target=$* \
 		--disable-wrapper \
@@ -282,12 +282,12 @@ obj_musl/%/.lc_built: | obj_musl/%/.lc_configured obj_llvm/.lc_built_2
 
 obj_zlib/.lc_configured: export CC := $(CCACHE) $(CC)
 obj_zlib/.lc_configured: | obj_zlib/ src_zlib
-	cd obj_zlib && ../src_zlib/configure --prefix= --static
+	cd obj_zlib && sh ../src_zlib/configure --prefix= --static
 	touch $@
 
 obj_zlib/%/.lc_configured: export CC = $(CCACHE) $(DESTDIR)$(OUTPUT)/bin/$*-clang
 obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm
-	cd obj_zlib/$* && ../../src_zlib/configure --prefix= --static
+	cd obj_zlib/$* && sh ../../src_zlib/configure --prefix= --static
 	touch $@
 
 obj_zlib/%/.lc_built: | obj_zlib/%/.lc_configured
@@ -308,9 +308,9 @@ obj_zstd/.lc_built: | obj_zstd/ src_zstd
 
 obj_libxml2/.lc_configured: export CC := $(CCACHE) $(CC)
 obj_libxml2/.lc_configured: | obj_libxml2/ src_libxml2 obj_zlib/.lc_built
-	cd obj_libxml2 && ../src_libxml2/configure \
+	cd obj_libxml2 && sh ../src_libxml2/configure \
 		--prefix= \
-		--host=`../src_libxml2/config.guess` \
+		--host=`sh ../src_libxml2/config.guess` \
 		--disable-shared \
 		--enable-static \
 		--disable-dependency-tracking \

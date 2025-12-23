@@ -274,8 +274,8 @@ MAKE += INFO_DEPS= infodir=
 MAKE += ac_cv_prog_lex_root=lex.yy
 
 ifeq ($(BUILD),)
-GUESS = $(shell cd $(GCC_SRCDIR) && ./config.guess)
-TARGET_CANON = $(shell cd $(GCC_SRCDIR) && ./config.sub $(TARGET))
+GUESS = $(shell cd $(GCC_SRCDIR) && sh ./config.guess)
+TARGET_CANON = $(shell cd $(GCC_SRCDIR) && sh ./config.sub $(TARGET))
 BUILD = $(GUESS)$(if $(subst $(TARGET_CANON),,$(GUESS)),,xx)
 endif
 
@@ -695,7 +695,7 @@ obj_sysroot/lib64: | obj_sysroot
 	ln -sf lib $@
 
 obj_binutils/.lc_configured: | obj_binutils src_binutils
-	cd obj_binutils && ../src_binutils/configure $(FULL_BINUTILS_CONFIG) || (cat config.log && exit 1)
+	cd obj_binutils && sh ../src_binutils/configure $(FULL_BINUTILS_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 obj_binutils/.lc_built: | obj_binutils/.lc_configured
@@ -718,7 +718,7 @@ endif
 	touch $@
 
 obj_gcc/.lc_configured: | obj_gcc src_gcc
-	cd obj_gcc && ../src_gcc/configure $(FULL_GCC_CONFIG) || (cat config.log && exit 1)
+	cd obj_gcc && sh ../src_gcc/configure $(FULL_GCC_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 ifneq ($(MINGW_SRCDIR),)
@@ -731,7 +731,7 @@ obj_gcc/gcc/.lc_built: | obj_gcc/.lc_configured
 	touch $@
 
 obj_musl/.lc_configured: | obj_musl src_musl
-	cd obj_musl && ../src_musl/configure $(FULL_MUSL_CONFIG) || (cat config.log && exit 1)
+	cd obj_musl && sh ../src_musl/configure $(FULL_MUSL_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 ifneq ($(LINUX_SRCDIR),)
@@ -739,7 +739,7 @@ ifneq ($(LINUX_SRCDIR),)
 obj_glibc/.lc_configured: | obj_kernel_headers/.lc_headers_installed
 endif
 obj_glibc/.lc_configured: | obj_glibc src_glibc
-	cd obj_glibc && ../src_glibc/configure $(FULL_GLIBC_CONFIG) || (cat config.log && exit 1)
+	cd obj_glibc && sh ../src_glibc/configure $(FULL_GLIBC_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 obj_mingw/.lc_configured: | obj_mingw src_mingw obj_mingw_headers/.lc_configured obj_mingw_crt/.lc_configured
@@ -903,7 +903,7 @@ install-gcc: | obj_gcc/.lc_built
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
 
 obj_mingw_headers/.lc_configured: | obj_mingw_headers src_mingw
-	cd obj_mingw_headers && ../src_mingw/mingw-w64-headers/configure $(FULL_MINGW_HEADERS_CONFIG) || (cat config.log && exit 1)
+	cd obj_mingw_headers && sh ../src_mingw/mingw-w64-headers/configure $(FULL_MINGW_HEADERS_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 obj_mingw_headers/.lc_built: | obj_mingw_headers/.lc_configured
@@ -911,7 +911,7 @@ obj_mingw_headers/.lc_built: | obj_mingw_headers/.lc_configured
 	touch $@
 
 obj_mingw_crt/.lc_configured: | obj_sysroot/.lc_headers obj_binutils/.lc_built obj_gcc/gcc/.lc_built obj_mingw_crt src_mingw
-	cd obj_mingw_crt && ../src_mingw/mingw-w64-crt/configure $(FULL_MINGW_CRT_CONFIG) || (cat config.log && exit 1)
+	cd obj_mingw_crt && sh ../src_mingw/mingw-w64-crt/configure $(FULL_MINGW_CRT_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 obj_mingw_crt/.lc_built: | obj_mingw_crt/.lc_configured
@@ -919,7 +919,7 @@ obj_mingw_crt/.lc_built: | obj_mingw_crt/.lc_configured
 	touch $@
 
 obj_mingw_pthreads/.lc_configured: | obj_mingw_crt/.lc_built obj_mingw_pthreads src_mingw
-	cd obj_mingw_pthreads && ../src_mingw/mingw-w64-libraries/winpthreads/configure $(FULL_MINGW_PTHREADS_CONFIG) || (cat config.log && exit 1)
+	cd obj_mingw_pthreads && sh ../src_mingw/mingw-w64-libraries/winpthreads/configure $(FULL_MINGW_PTHREADS_CONFIG) || (cat config.log && exit 1)
 	touch $@
 
 obj_mingw_pthreads/.lc_built: | obj_mingw_pthreads/.lc_configured
