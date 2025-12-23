@@ -1,15 +1,6 @@
 diff -ur a/gcc/configure b/gcc/configure
 --- a/gcc/configure	2024-01-17 15:57:30.728574956 -0500
 +++ b/gcc/configure	2024-01-17 16:02:06.328420064 -0500
-@@ -10720,7 +10720,7 @@
- $as_echo "$gcc_cv_header_zstd_h" >&6; }
- if test $gcc_cv_header_zstd_h = yes; then
- 
--$as_echo "#define HAVE_ZSTD_H 1" >>confdefs.h
-+:;
- 
- elif test "x$with_zstd" != x; then
-     as_fn_error $? "Unable to find zstd.h.  See config.log for details." "$LINENO" 5
 @@ -31222,8 +31222,8 @@
  $as_echo "$gcc_cv_sys_sdt_h" >&6; }
  if test x$gcc_cv_sys_sdt_h = xyes; then :

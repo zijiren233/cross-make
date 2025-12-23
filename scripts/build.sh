@@ -61,7 +61,6 @@ function Init() {
         MAKE="gmake"
         TMP_BIN_DIR="$(mktemp -d)"
         PATH="$TMP_BIN_DIR:$PATH"
-        trap "rm -rf \"$TMP_BIN_DIR\"" EXIT
 
         # Create symlink for gmake/gnumake to ensure glibc configure finds the right version
         if [ -x "$(command -v gmake)" ]; then
@@ -189,6 +188,7 @@ function Init() {
         DEFAULT_MPC_VER="$(GetYamlDefault MPC_VER)"
         DEFAULT_MPFR_VER="$(GetYamlDefault MPFR_VER)"
         DEFAULT_ISL_VER="$(GetYamlDefault ISL_VER)"
+        DEFAULT_ZSTD_VER="$(GetYamlDefault ZSTD_VER)"
         DEFAULT_LINUX_VER="$(GetYamlDefault LINUX_VER)"
         DEFAULT_MINGW_VER="$(GetYamlDefault MINGW_VER)"
         DEFAULT_FREEBSD_VER="$(GetYamlDefault FREEBSD_VER)"
@@ -220,6 +220,9 @@ function Init() {
         fi
         if [ -z "${ISL_VER+x}" ]; then
             ISL_VER="$DEFAULT_ISL_VER"
+        fi
+        if [ -z "${ZSTD_VER+x}" ]; then
+            ZSTD_VER="$DEFAULT_ZSTD_VER"
         fi
         if [ -z "${LINUX_VER+x}" ]; then
             LINUX_VER="$DEFAULT_LINUX_VER"
@@ -416,6 +419,7 @@ GMP_VER = ${GMP_VER}
 MPC_VER = ${MPC_VER}
 MPFR_VER = ${MPFR_VER}
 ISL_VER = ${ISL_VER}
+ZSTD_VER = ${ZSTD_VER}
 
 LINUX_VER = ${LINUX_VER}
 MINGW_VER = ${MINGW_VER}

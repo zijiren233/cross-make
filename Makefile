@@ -78,10 +78,9 @@ ZSTD_SITE ?= $(GITHUB)/facebook/zstd/releases/download
 
 ifeq ($(COMPILER),gcc)
 
-override LLVM_VER = 
-override ZLIB_VER = 
-override ZSTD_VER = 
-override LIBXML2_VER = 
+override LLVM_VER =
+override ZLIB_VER =
+override LIBXML2_VER =
 
 else
 
@@ -433,6 +432,7 @@ $(BUILD_DIR)/config.mak: | $(BUILD_DIR)
 	$(if $(LLVM_VER),"LLVM_SRCDIR = $(REL_TOP)/llvm-project-$(LLVM_VER).src") \
 	$(if $(LLVM_VER),"LLVM_VER = $(LLVM_VER)") \
 	$(if $(ZLIB_VER),"ZLIB_SRCDIR = $(REL_TOP)/zlib-$(ZLIB_VER)") \
+	$(if $(ZSTD_VER),"ZSTD_VER = $(ZSTD_VER)") \
 	$(if $(ZSTD_VER),"ZSTD_SRCDIR = $(REL_TOP)/zstd-$(ZSTD_VER)") \
 	$(if $(LIBXML2_VER),"LIBXML2_SRCDIR = $(REL_TOP)/libxml2-$(LIBXML2_VER)") \
 	"-include $(REL_TOP)/config.mak"
