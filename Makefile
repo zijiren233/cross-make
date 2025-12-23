@@ -177,10 +177,7 @@ check:
 	@echo "check sha1sum"
 	@which sha1sum
 
-# Rules for downloading and verifying sources. Treat an external SOURCES path as
-# immutable and do not try to download anything into it.
-
-ifeq ($(SOURCES),sources)
+# Rules for downloading and verifying sources.
 
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/gmp*)): SITE = $(GMP_SITE)/$(notdir $@)
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mpc*)): SITE = $(MPC_SITE)/$(notdir $@)
@@ -315,8 +312,6 @@ $(SOURCES)/%: hashes/%.sha1 | $(SOURCES)
 	cd $@.tmp && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).sha1
 	mv $@.tmp/$(notdir $@) $@
 	rm -rf $@.tmp
-
-endif
 
 # Rules for extracting and patching sources, or checking them out from git.
 
