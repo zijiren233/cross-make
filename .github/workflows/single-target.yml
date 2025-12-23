@@ -192,7 +192,7 @@ jobs:
                 yq && \
               cd /build && \
               bash scripts/build.sh \
-                -LDP \
+                -LDPI \
                 -a \
                 ${{ inputs.extra-build-flags }} \
                 -T "${{ inputs.target }}" && \
@@ -204,7 +204,7 @@ jobs:
         working-directory: /Volumes/cross
         run: |
           bash scripts/build.sh \
-            -LDP \
+            -LDPI \
             -c "gcc-15" \
             -x "g++-15" \
             -a \

@@ -244,6 +244,7 @@ function Help() {
     echo "-a: enable archive"
     echo "-T: targets file path or targets string"
     echo "-S: sources directory path"
+    echo "-I: use symlink mode for source extraction (faster, less disk usage)"
     echo "-C: use china mirror"
     echo "-c: set CC"
     echo "-x: set CXX"
@@ -261,7 +262,7 @@ function Help() {
 }
 
 function ParseArgs() {
-    while getopts "haT:S:Cc:x:nLlO:j:NdDPb" arg; do
+    while getopts "haT:S:ICc:x:nLlO:j:NdDPb" arg; do
         case $arg in
         h)
             Help
@@ -275,6 +276,9 @@ function ParseArgs() {
             ;;
         S)
             SOURCES_DIR="$OPTARG"
+            ;;
+        I)
+            COWPATCH_SYMLINK="true"
             ;;
         C)
             USE_CHINA_MIRROR="true"
@@ -441,6 +445,8 @@ CHINA = ${USE_CHINA_MIRROR}
 COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
 
 CCACHE = ${CCACHE}
+
+$(if [ -n "$COWPATCH_SYMLINK" ]; then echo "COWPATCH_EXTRACT = -I"; fi)
 
 EOF
     for arg in "$@"; do

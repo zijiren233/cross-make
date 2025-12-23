@@ -27,6 +27,8 @@ DL_CMD = curl --retry 30 --retry-delay 3 --retry-max-time 600 --connect-timeout 
 SHA1_CMD = sha1sum -c
 
 COWPATCH = $(CURDIR)/cowpatch.sh
+# Use -I for symlink mode (faster, less disk usage) or -C for copy mode (default)
+COWPATCH_EXTRACT = -C
 
 -include config.mak
 
@@ -357,7 +359,7 @@ endef
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir $@.tmp
-	( cd $@.tmp && $(COWPATCH) -C ../$< )
+	( cd $@.tmp && $(COWPATCH) $(COWPATCH_EXTRACT) ../$< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
 		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
 			cat $(filter-out %-musl.diff %-gnu.diff %-freebsd.diff %-netbsd.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
