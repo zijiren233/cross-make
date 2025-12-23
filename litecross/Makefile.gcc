@@ -251,6 +251,11 @@ GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 
 PIE_CONFIG = --disable-default-pie
 
+# i386/i586/i686 uses __stack_chk_fail_local which causes issues with -static-libgcc
+ifneq ($(filter i486% i586% i686%,$(TARGET)),)
+SSP_CONFIG = --disable-default-ssp
+endif
+
 else
 # build glibc
 override MUSL_SRCDIR =
