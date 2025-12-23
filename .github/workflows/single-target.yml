@@ -117,11 +117,9 @@ jobs:
         run: |
           diskutil list
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
-            RAMDISK=$(hdiutil attach -nomount ram://12582912)
-            newfs_hfs -s -v cross "$RAMDISK"
-            mkdir -p /Volumes/cross
-            mount -t hfs "$RAMDISK" /Volumes/cross
+            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://12582912)
           else
+            # aarch64 使用物理磁盘
             diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
           fi
           cp -r ./* /Volumes/cross
