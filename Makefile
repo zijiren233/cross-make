@@ -163,6 +163,9 @@ clean:
 	-exec chmod -R u+rwX {} \; \
 	-exec rm -rf {} \; )
 
+cleanorig:
+	( cd $(CURDIR) && find . -maxdepth 1 -name "*.orig" -type d -exec rm -rf {} \; )
+
 srcclean:
 	( cd $(CURDIR) && ( chmod -R u+rwX netbsd-* 2>/dev/null || true ) && rm -rf sources gcc-* binutils-* musl-* glibc-* gmp-* mpc-* mpfr-* isl-* build build-* linux-* mingw-w64-* freebsd-* netbsd-* llvm-project-* zlib-* zstd-* libxml2-* )
 

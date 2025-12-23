@@ -519,7 +519,10 @@ function Build() {
             NATIVE=""
             WriteConfig "export PATH=$PATH"
         }
-        $MAKE -j${CPU_NUM} clean
+        $MAKE clean
+        if [ -n "$COWPATCH_SYMLINK" ]; then
+            $MAKE cleanorig
+        fi
         rm -rf "${CROSS_DIST_NAME}" "${CROSS_LOG_FILE}"
         while IFS= read -r line; do
             CURRENT_DATE=$(Date)
@@ -568,7 +571,10 @@ function Build() {
             NATIVE="true"
             WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
         }
-        $MAKE -j${CPU_NUM} clean
+        $MAKE clean
+        if [ -n "$COWPATCH_SYMLINK" ]; then
+            $MAKE cleanorig
+        fi
         rm -rf "${NATIVE_DIST_NAME}" "${NATIVE_LOG_FILE}"
         while IFS= read -r line; do
             CURRENT_DATE=$(Date)
