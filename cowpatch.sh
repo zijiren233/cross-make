@@ -36,8 +36,16 @@ cow() {
         mv "$1$2.tmp.$$" "$1$2"
         (cd "$1$2" && ln -s ../".$2.orig"/* .)
     else
-        cp "$1" "$1.tmp.$$"
-        mv "$1.tmp.$$" "$1"
+        # Check if symlink target exists (-e follows symlinks)
+        if test -e "$1"; then
+            # Use cat to fully dereference symlink chain and copy actual content
+            cat "$1" >"$1.tmp.$$"
+            rm -f "$1"
+            mv "$1.tmp.$$" "$1"
+        else
+            # Broken symlink - just remove it (patch will create new file)
+            rm -f "$1"
+        fi
     fi
 }
 
@@ -61,16 +69,20 @@ cowpatch() {
 
     while IFS= read -r l; do
         case "$l" in
-        +++*)
+        ---* | +++*)
             IFS=" 	" read -r junk pfile junk <<EOF
 $l
 EOF
-            i=0
-            while test "$i" -lt "$plev"; do
-                pfile=${pfile#*/}
-                i=$((i + 1))
-            done
-            cowp "$pfile"
+            # Skip /dev/null (file deletion/creation)
+            case "$pfile" in /dev/null | */dev/null) ;; *)
+                i=0
+                while test "$i" -lt "$plev"; do
+                    pfile=${pfile#*/}
+                    i=$((i + 1))
+                done
+                cowp "$pfile"
+                ;;
+            esac
             echo "$l"
             ;;
         @@*)
