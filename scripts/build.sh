@@ -244,6 +244,7 @@ function Help() {
     echo "-a: enable archive"
     echo "-T: targets file path or targets string"
     echo "-S: sources directory path"
+    echo "-o: output dist directory path"
     echo "-I: use symlink mode for source extraction (faster, less disk usage)"
     echo "-C: use china mirror"
     echo "-c: set CC"
@@ -254,15 +255,13 @@ function Help() {
     echo "-l: disable log to file"
     echo "-O: set optimize level"
     echo "-j: set job number"
-    echo "-i: simpler build"
-    echo "-d: download sources only"
     echo "-D: disable log print date prefix"
     echo "-P: disable log print target prefix"
     echo "-b: enable ccache"
 }
 
 function ParseArgs() {
-    while getopts "haT:S:ICc:x:nLlO:j:NdDPb" arg; do
+    while getopts "haT:S:o:ICc:x:nLlO:j:NDPb" arg; do
         case $arg in
         h)
             Help
@@ -276,6 +275,9 @@ function ParseArgs() {
             ;;
         S)
             SOURCES_DIR="$OPTARG"
+            ;;
+        o)
+            DIST_DIR="$OPTARG"
             ;;
         I)
             COWPATCH_SYMLINK="true"
@@ -313,9 +315,6 @@ function ParseArgs() {
                 exit 1
             fi
             ;;
-        d)
-            SOURCES_ONLY="true"
-            ;;
         D)
             DISABLE_LOG_PRINT_DATE_PREFIX="true"
             ;;
@@ -336,6 +335,9 @@ function ParseArgs() {
 }
 
 function FixArgs() {
+    if [ -n "$DIST_DIR" ]; then
+        DIST="$DIST_DIR"
+    fi
     mkdir -p "${DIST}"
     DIST="$(cd "$DIST" && pwd)"
 
@@ -347,12 +349,6 @@ function FixArgs() {
     fi
 
     echo "job nums: $CPU_NUM"
-
-    if [ "$SOURCES_ONLY" ]; then
-        WriteConfig
-        $MAKE -j${CPU_NUM} SOURCES_ONLY="true" extract_all
-        exit $?
-    fi
 
     # only support O2 and Os Oz
     case "$OPTIMIZE_LEVEL" in

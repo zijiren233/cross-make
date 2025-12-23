@@ -160,13 +160,15 @@ jobs:
         if: ${{ needs.setup.outputs.use-qemu == 'true' }}
         uses: docker/setup-qemu-action@v3
 
-      # Build on Linux (Docker)
+      # Build on Linux (Docker with tmpfs)
       - name: Build (Linux)
         if: ${{ startsWith(inputs.platform, 'linux') }}
         run: |
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
-            --volume "${PWD}:/build" \
+            --tmpfs /work:exec,size=6G \
+            --volume "${PWD}:/src:ro" \
+            --volume "${PWD}/dist:/dist" \
             ${{ needs.setup.outputs.docker-image }} \
             /bin/sh -c '
               apk add --no-cache \
@@ -190,13 +192,15 @@ jobs:
                 file \
                 zip \
                 yq && \
-              cd /build && \
+              cp -r /src/* /work/ && \
+              cd /work && \
               bash scripts/build.sh \
-                -LDPI \
+                -LDPIl \
                 -a \
+                -S /sources \
                 ${{ inputs.extra-build-flags }} \
                 -T "${{ inputs.target }}" && \
-              rm -rf dist/*.log'
+              cp -r /work/dist/* /dist/'
 
       # Build on macOS
       - name: Build (macOS)
@@ -204,14 +208,13 @@ jobs:
         working-directory: /Volumes/cross
         run: |
           bash scripts/build.sh \
-            -LDPI \
+            -LDPIl \
             -c "gcc-15" \
             -x "g++-15" \
             -a \
             -S "${{ github.workspace }}/sources" \
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
-          rm -rf dist/*.log
 
       - name: Upload dist
         uses: actions/upload-artifact@v4
