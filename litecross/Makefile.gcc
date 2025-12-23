@@ -284,7 +284,7 @@ COMMON_CONFIG := --disable-werror \
 	--disable-multilib \
 	--disable-bootstrap \
 	--disable-nls \
-	--with-zstd=no \
+	$(if $(ZSTD_SRCDIR),--with-zstd) \
 	--enable-lto \
 	--enable-libgomp \
 	--enable-deterministic-archives \
@@ -626,6 +626,40 @@ ifneq ($(ISL_SRCDIR),)
 src_gcc: src_isl
 src_isl: | $(ISL_SRCDIR)
 	ln -sf "$(ISL_SRCDIR)" $@
+endif
+
+ifneq ($(ZSTD_SRCDIR),)
+src_zstd: | $(ZSTD_SRCDIR)
+	ln -sf "$(ZSTD_SRCDIR)" $@
+
+ifeq ($(HOST),)
+# Cross build: zstd for host-running gcc/binutils
+ZSTD_CC = $(CCACHE) $(CC)
+ZSTD_AR = $(AR)
+else
+# Native build: zstd for target-running gcc/binutils
+ZSTD_CC = $(CCACHE) $(TARGET)-gcc$(EXE_EXT)
+ZSTD_AR = $(TARGET)-ar$(EXE_EXT)
+endif
+
+obj_zstd/.lc_built: | obj_zstd src_zstd
+	cd src_zstd/lib && $(MAKE) clean || true
+	cd src_zstd/lib && $(MAKE) CC="$(ZSTD_CC)" AR="$(ZSTD_AR)" libzstd.a
+	mkdir -p obj_zstd/include obj_zstd/lib
+	cp src_zstd/lib/libzstd.a obj_zstd/lib/
+	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h obj_zstd/include/
+	touch $@
+
+# Export zstd paths via environment variables instead of --with-zstd=PATH
+# For binutils: uses ZSTD_CFLAGS/ZSTD_LIBS (pkg-config style)
+# For gcc: uses CXXFLAGS/LDFLAGS
+obj_binutils/%: export ZSTD_CFLAGS := -I$(CURDIR)/obj_zstd/include
+obj_binutils/%: export ZSTD_LIBS := -L$(CURDIR)/obj_zstd/lib -lzstd
+obj_gcc/%: export CXXFLAGS += -I$(CURDIR)/obj_zstd/include
+obj_gcc/%: export LDFLAGS += -L$(CURDIR)/obj_zstd/lib
+
+obj_binutils/.lc_configured: | obj_zstd/.lc_built
+obj_gcc/.lc_configured: | obj_zstd/.lc_built
 endif
 
 src_gcc: src_gcc_base
