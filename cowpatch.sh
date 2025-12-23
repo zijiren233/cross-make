@@ -130,4 +130,61 @@ while getopts ":p:i:RNEI:C:S:" opt; do
 done
 test "$gotcmd" -eq 0 || exit 0
 
-cowpatch "$@" | patch "$@"
+# Two-pass approach: first COW all files, then run patch
+# This ensures all files are converted before patch accesses them
+tmpfile="/tmp/cowpatch.$$.tmp"
+cat >"$tmpfile"
+
+# First pass: COW all files mentioned in patch
+# Handle multiple formats:
+#   - Standard: --- a/path and +++ b/path
+#   - Git: diff --git a/path b/path
+#   - Git rename: rename from path / rename to path
+plev=0
+OPTIND=1
+while getopts ":p:i:RNE" opt; do
+    test "$opt" = p && plev="$OPTARG"
+done
+
+while IFS= read -r l; do
+    case "$l" in
+    "diff --git "*)
+        # Extract both paths from: diff --git a/path1 b/path2
+        rest="${l#diff --git }"
+        # Split on " b/" to get the two paths
+        pfile1="${rest%% b/*}"
+        pfile2="${rest#* b/}"
+        # Remove leading "a/" from first path
+        pfile1="${pfile1#a/}"
+        # COW both paths (they might be different in renames)
+        test -n "$pfile1" && cowp "$pfile1"
+        test -n "$pfile2" && test "$pfile2" != "$pfile1" && cowp "$pfile2"
+        ;;
+    "rename from "*)
+        pfile="${l#rename from }"
+        cowp "$pfile"
+        ;;
+    "rename to "*)
+        pfile="${l#rename to }"
+        cowp "$pfile"
+        ;;
+    ---* | +++*)
+        IFS=" 	" read -r junk pfile junk <<EOF
+$l
+EOF
+        case "$pfile" in /dev/null | */dev/null) continue ;; esac
+        i=0
+        while test "$i" -lt "$plev"; do
+            pfile=${pfile#*/}
+            i=$((i + 1))
+        done
+        cowp "$pfile"
+        ;;
+    esac
+done <"$tmpfile"
+
+# Second pass: run patch with the saved input
+patch "$@" <"$tmpfile"
+ret=$?
+rm -f "$tmpfile"
+exit $ret
