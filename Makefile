@@ -272,8 +272,8 @@ $$(SOURCES)/netbsd-%-$(1)-comp.tar.xz: hashes/netbsd-%-$(1)-comp.tar.xz.sha1 | $
 netbsd-%-$(1): $$(SOURCES)/netbsd-%-$(1)-base.tar.xz $$(SOURCES)/netbsd-%-$(1)-comp.tar.xz
 	( chmod -R u+rwX $$@.tmp $$@ 2>/dev/null || true ) && rm -rf $$@.tmp $$@
 	mkdir -p $$@.tmp
-	cd $$@.tmp && tar -Jxf $$(CURDIR)/$$(SOURCES)/netbsd-$$*-$(1)-base.tar.xz
-	cd $$@.tmp && tar -Jxf $$(CURDIR)/$$(SOURCES)/netbsd-$$*-$(1)-comp.tar.xz
+	cd $$@.tmp && tar -Jxf $$(SOURCES)/netbsd-$$*-$(1)-base.tar.xz
+	cd $$@.tmp && tar -Jxf $$(SOURCES)/netbsd-$$*-$(1)-comp.tar.xz
 	mv $$@.tmp $$@
 endef
 
@@ -300,8 +300,8 @@ $$(SOURCES)/netbsd-%-$(1)-comp.tgz: hashes/netbsd-%-$(1)-comp.tgz.sha1 | $$(SOUR
 netbsd-%-$(1): $$(SOURCES)/netbsd-%-$(1)-base.tgz $$(SOURCES)/netbsd-%-$(1)-comp.tgz
 	( chmod -R u+rwX $$@.tmp $$@ 2>/dev/null || true ) && rm -rf $$@.tmp $$@
 	mkdir -p $$@.tmp
-	cd $$@.tmp && tar -xzf $$(CURDIR)/$$(SOURCES)/netbsd-$$*-$(1)-base.tgz
-	cd $$@.tmp && tar -xzf $$(CURDIR)/$$(SOURCES)/netbsd-$$*-$(1)-comp.tgz
+	cd $$@.tmp && tar -xzf $$(SOURCES)/netbsd-$$*-$(1)-base.tgz
+	cd $$@.tmp && tar -xzf $$(SOURCES)/netbsd-$$*-$(1)-comp.tgz
 	mv $$@.tmp $$@
 endef
 
