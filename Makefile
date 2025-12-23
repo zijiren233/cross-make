@@ -32,6 +32,9 @@ COWPATCH_EXTRACT = -C
 
 -include config.mak
 
+# Convert SOURCES to absolute path
+override SOURCES := $(abspath $(SOURCES))
+
 HOST ?= $(if $(NATIVE),$(TARGET))
 BUILD_DIR ?= build-$(COMPILER)/$(if $(HOST),$(HOST),local)/$(TARGET)
 OUTPUT ?= $(CURDIR)/output-$(COMPILER)$(if $(HOST),-$(HOST))
@@ -373,10 +376,10 @@ endef
 			cat $(filter-out %-mingw.diff %-musl.diff %-freebsd.diff %-netbsd.diff %-nongnu.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
 		fi \
 	fi
-	( cd $@.tmp && find -L . -name config.sub -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
-	( cd $@.tmp && find -L . -name configfsf.sub -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
-	( cd $@.tmp && find -L . -name config.guess -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.guess {} \; -exec chmod +x {} \; )
-	( cd $@.tmp && find -L . -name configfsf.guess -type f -exec cp -f $(CURDIR)/$(SOURCES)/config.guess {} \; -exec chmod +x {} \; )
+	( cd $@.tmp && find -L . -name config.sub -type f -exec cp -f $(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
+	( cd $@.tmp && find -L . -name configfsf.sub -type f -exec cp -f $(SOURCES)/config.sub {} \; -exec chmod +x {} \; )
+	( cd $@.tmp && find -L . -name config.guess -type f -exec cp -f $(SOURCES)/config.guess {} \; -exec chmod +x {} \; )
+	( cd $@.tmp && find -L . -name configfsf.guess -type f -exec cp -f $(SOURCES)/config.guess {} \; -exec chmod +x {} \; )
 	rm -rf $@
 	mv $@.tmp $@
 
