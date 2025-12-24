@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       targets:
-        description: "JSON array of targets (e.g. [\"aarch64-linux-musl\", \"x86_64-linux-musl\"])"
+        description: 'JSON array of targets (e.g. ["aarch64-linux-musl", "x86_64-linux-musl"])'
         required: true
         type: string
       platform:
@@ -73,14 +73,33 @@ jobs:
       group: ${{ needs.cache-key.outputs.key }}
       cancel-in-progress: false
     steps:
+      - name: Check if artifact exists
+        id: check-artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT_NAME="${{ needs.cache-key.outputs.key }}"
+          ARTIFACT_COUNT=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq "[.artifacts[] | select(.name == \"${ARTIFACT_NAME}\" and .expired == false)] | length")
+          if [ "$ARTIFACT_COUNT" -gt 0 ]; then
+            echo "Artifact '${ARTIFACT_NAME}' already exists, skipping preparation"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Artifact '${ARTIFACT_NAME}' not found, will prepare sources"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.check-artifact.outputs.exists != 'true'
 
       - name: Install yq
+        if: steps.check-artifact.outputs.exists != 'true'
         run: |
           sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
           sudo chmod +x /usr/local/bin/yq
 
       - name: Restore sources cache
+        if: steps.check-artifact.outputs.exists != 'true'
         id: cache
         uses: actions/cache/restore@v5
         with:
@@ -88,17 +107,18 @@ jobs:
           key: ${{ needs.cache-key.outputs.key }}
 
       - name: Download sources
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.check-artifact.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
         run: ./scripts/sources.sh download -S sources
 
       - name: Save sources cache
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: steps.check-artifact.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: sources
           key: ${{ needs.cache-key.outputs.key }}
 
       - name: Upload sources artifact
+        if: steps.check-artifact.outputs.exists != 'true'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ needs.cache-key.outputs.key }}
