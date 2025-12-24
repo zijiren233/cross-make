@@ -453,7 +453,7 @@ CHINA = ${USE_CHINA_MIRROR}
 COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
 $(if [ -n "$LINKER" ] && [ -z "$NATIVE" ]; then
         echo "# Use custom linker for cross build only"
-        echo "COMMON_FLAGS += -fuse-ld=${LINKER}"
+        echo "LDFLAGS += -fuse-ld=${LINKER}"
     fi)
 
 CCACHE = ${CCACHE}
