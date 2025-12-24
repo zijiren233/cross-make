@@ -376,6 +376,9 @@ define find_and_prefix
 $(addprefix $(SOURCES)/,$(notdir $(wildcard hashes/\$1*.sha1)))
 endef
 
+# Force symlink mode for linux kernel (saves ~1.3GB memory)
+linux-%: COWPATCH_EXTRACT = -I
+
 %: %.orig | $(SOURCES)/config.sub $(SOURCES)/config.guess
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp

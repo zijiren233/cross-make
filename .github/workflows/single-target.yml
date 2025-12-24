@@ -216,7 +216,7 @@ jobs:
         run: |
           diskutil list
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
-            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://16777216)
+            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://10485760)
           else
             # aarch64 使用物理磁盘
             diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
@@ -234,7 +234,7 @@ jobs:
         run: |
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
-            --tmpfs /work:exec,size=8G \
+            --tmpfs /work:exec,size=5G \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \
