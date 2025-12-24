@@ -235,7 +235,7 @@ jobs:
             --platform ${{ needs.setup.outputs.docker-platform }} \
             --tmpfs /work:exec,size=8G \
             --volume "${PWD}:/src:ro" \
-            --volume "${PWD}/sources:/sources:ro" \
+            --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \
             --volume "${PWD}/orig:/orig" \
             ${{ needs.setup.outputs.docker-image }} \
