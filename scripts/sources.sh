@@ -77,13 +77,14 @@ GetAllSources() {
     done <<<"$defaults"
 
     # Common sources for all targets (gcc toolchain)
+    # Extensions must match hash files in hashes/ directory
     local sources=()
     sources+=("gcc-${def_gcc}.tar.xz")
     sources+=("binutils-${def_binutils}.tar.xz")
-    sources+=("gmp-${def_gmp}.tar.xz")
+    sources+=("gmp-${def_gmp}.tar.bz2")
     sources+=("mpc-${def_mpc}.tar.gz")
-    sources+=("mpfr-${def_mpfr}.tar.xz")
-    sources+=("isl-${def_isl}.tar.xz")
+    sources+=("mpfr-${def_mpfr}.tar.bz2")
+    sources+=("isl-${def_isl}.tar.bz2")
     sources+=("zstd-${def_zstd}.tar.gz")
     sources+=("config.sub")
     sources+=("config.guess")
@@ -163,7 +164,7 @@ GetAllSources() {
         [ -n "$ver" ] && sources+=("musl-${ver}.tar.gz")
     done
     for ver in $(echo "$glibc_vers" | tr ' ' '\n' | sort -u); do
-        [ -n "$ver" ] && sources+=("glibc-${ver}.tar.xz")
+        [ -n "$ver" ] && sources+=("glibc-${ver}.tar.gz")
     done
     for ver in $(echo "$mingw_vers" | tr ' ' '\n' | sort -u); do
         [ -n "$ver" ] && sources+=("mingw-w64-${ver}.tar.bz2")
