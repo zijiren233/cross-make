@@ -124,6 +124,7 @@ jobs:
           name: ${{ needs.cache-key.outputs.key }}
           path: sources
           overwrite: true
+          compression-level: 0
 
   build-and-release:
     name: ${{ matrix.targets }}
