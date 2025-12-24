@@ -195,7 +195,7 @@ jobs:
               cp -r /src/* /work/ && \
               cd /work && \
               bash scripts/build.sh \
-                -LDPIl \
+                -LDPl \
                 -a \
                 -S /sources \
                 ${{ inputs.extra-build-flags }} \
@@ -208,7 +208,7 @@ jobs:
         working-directory: /Volumes/cross
         run: |
           bash scripts/build.sh \
-            -LDPIl \
+            -LDPl \
             -c "gcc-15" \
             -x "g++-15" \
             -a \

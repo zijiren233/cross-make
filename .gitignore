@@ -22,6 +22,7 @@
 /zlib-*/
 /zstd-*/
 /libxml2-*/
+/*.orig
 /dist
 **/*.local*
 output-*

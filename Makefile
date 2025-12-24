@@ -29,11 +29,15 @@ SHA1_CMD = sha1sum -c
 COWPATCH = $(CURDIR)/cowpatch.sh
 # Use -I for symlink mode (faster, less disk usage) or -C for copy mode (default)
 COWPATCH_EXTRACT = -C
+# Directory for storing .orig source directories (defaults to current directory)
+# Set this to a different location (e.g., disk) when working directory is on tmpfs
+ORIG_DIR = $(CURDIR)
 
 -include config.mak
 
-# Convert SOURCES to absolute path
+# Convert SOURCES and ORIG_DIR to absolute path
 override SOURCES := $(abspath $(SOURCES))
+override ORIG_DIR := $(abspath $(ORIG_DIR))
 
 HOST ?= $(if $(NATIVE),$(TARGET))
 BUILD_DIR ?= build-$(COMPILER)/$(if $(HOST),$(HOST),local)/$(TARGET)
@@ -164,7 +168,10 @@ clean:
 	-exec rm -rf {} \; )
 
 cleanorig:
-	( cd $(CURDIR) && find . -maxdepth 1 -name "*.orig" -type d -exec rm -rf {} \; )
+	( cd $(CURDIR) && find . -maxdepth 1 -name "*.orig" \( -type d -o -type l \) -exec rm -rf {} \; )
+	if [ "$(ORIG_DIR)" != "$(CURDIR)" ] && [ -d "$(ORIG_DIR)" ]; then \
+		( cd $(ORIG_DIR) && find . -maxdepth 1 -name "*.orig" -type d -exec rm -rf {} \; ); \
+	fi
 
 srcclean:
 	( cd $(CURDIR) && ( chmod -R u+rwX netbsd-* 2>/dev/null || true ) && rm -rf sources gcc-* binutils-* musl-* glibc-* gmp-* mpc-* mpfr-* isl-* build build-* linux-* mingw-w64-* freebsd-* netbsd-* llvm-project-* zlib-* zstd-* libxml2-* )
@@ -332,30 +339,30 @@ musl-git-%:
 
 %.orig: $(SOURCES)/%.tar.gz
 	case "$@" in */*) exit 1 ;; esac
-	rm -rf $@.tmp
-	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -zxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
-	rm -rf $@
-	mv $@.tmp/$(patsubst %.orig,%,$@) $@
-	rm -rf $@.tmp
+	rm -rf $@ $(ORIG_DIR)/$@.tmp $(ORIG_DIR)/$@
+	mkdir -p $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@)
+	( tar -zxf - --strip-components 1 -C $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	mv $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) $(ORIG_DIR)/$@
+	rm -rf $(ORIG_DIR)/$@.tmp
+	if [ "$(ORIG_DIR)" != "$(CURDIR)" ]; then ln -sf $(ORIG_DIR)/$@ $@; fi
 
 %.orig: $(SOURCES)/%.tar.bz2
 	case "$@" in */*) exit 1 ;; esac
-	rm -rf $@.tmp
-	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
-	rm -rf $@
-	mv $@.tmp/$(patsubst %.orig,%,$@) $@
-	rm -rf $@.tmp
+	rm -rf $@ $(ORIG_DIR)/$@.tmp $(ORIG_DIR)/$@
+	mkdir -p $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@)
+	( tar -jxf - --strip-components 1 -C $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	mv $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) $(ORIG_DIR)/$@
+	rm -rf $(ORIG_DIR)/$@.tmp
+	if [ "$(ORIG_DIR)" != "$(CURDIR)" ]; then ln -sf $(ORIG_DIR)/$@ $@; fi
 
 %.orig: $(SOURCES)/%.tar.xz
 	case "$@" in */*) exit 1 ;; esac
-	rm -rf $@.tmp
-	mkdir -p $@.tmp/$(patsubst %.orig,%,$@)
-	( tar -Jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$@) ) < $<
-	rm -rf $@
-	mv $@.tmp/$(patsubst %.orig,%,$@) $@
-	rm -rf $@.tmp
+	rm -rf $@ $(ORIG_DIR)/$@.tmp $(ORIG_DIR)/$@
+	mkdir -p $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@)
+	( tar -Jxf - --strip-components 1 -C $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) ) < $<
+	mv $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) $(ORIG_DIR)/$@
+	rm -rf $(ORIG_DIR)/$@.tmp
+	if [ "$(ORIG_DIR)" != "$(CURDIR)" ]; then ln -sf $(ORIG_DIR)/$@ $@; fi
 
 define find_and_prefix
 $(addprefix $(SOURCES)/,$(notdir $(wildcard hashes/\$1*.sha1)))

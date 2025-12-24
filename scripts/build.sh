@@ -245,7 +245,8 @@ function Help() {
     echo "-T: targets file path or targets string"
     echo "-S: sources directory path"
     echo "-o: output dist directory path"
-    echo "-I: use symlink mode for source extraction (faster, less disk usage)"
+    echo "-I: use symlink mode for source extraction (faster, less disk usage, WARNING: may cause issues with glibc builds)"
+    echo "-R: directory for storing .orig source files (useful when working dir is on tmpfs)"
     echo "-C: use china mirror"
     echo "-c: set CC"
     echo "-x: set CXX"
@@ -261,7 +262,7 @@ function Help() {
 }
 
 function ParseArgs() {
-    while getopts "haT:S:o:ICc:x:nLlO:j:NDPb" arg; do
+    while getopts "haT:S:o:IR:Cc:x:nLlO:j:NDPb" arg; do
         case $arg in
         h)
             Help
@@ -281,6 +282,9 @@ function ParseArgs() {
             ;;
         I)
             COWPATCH_SYMLINK="true"
+            ;;
+        R)
+            ORIG_DIR="$OPTARG"
             ;;
         C)
             USE_CHINA_MIRROR="true"
@@ -447,6 +451,7 @@ COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
 CCACHE = ${CCACHE}
 
 $(if [ -n "$COWPATCH_SYMLINK" ]; then echo "COWPATCH_EXTRACT = -I"; fi)
+$(if [ -n "$ORIG_DIR" ]; then echo "ORIG_DIR = ${ORIG_DIR}"; fi)
 
 EOF
     for arg in "$@"; do
@@ -504,6 +509,16 @@ function Build() {
     BUILD_ID="$1"
     # Resolve actual TARGET from BUILD_ID (BUILD_ID can be an ID or a TARGET)
     local TARGET="$(GetTargetFromId "$BUILD_ID")"
+
+    # Warn about -I mode with glibc targets
+    if [ -n "$COWPATCH_SYMLINK" ]; then
+        local YAML_GLIBC_VER="$(GetTargetConfig "$BUILD_ID" GLIBC_VER)"
+        if [ -n "$YAML_GLIBC_VER" ] || [[ "$TARGET" == *"gnu"* ]] || [[ "$TARGET" == *"glibc"* ]]; then
+            echo "WARNING: -I (symlink) mode may cause build issues with glibc targets due to"
+            echo "         timestamp handling in glibc's tunable generation. Consider using -C (copy) mode instead."
+            sleep 2
+        fi
+    fi
 
     # Use BUILD_ID for artifact naming to ensure uniqueness
     DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${BUILD_ID}"
