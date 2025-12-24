@@ -139,6 +139,14 @@ SRC_DIRS = $(if $(GCC_VER),gcc-$(GCC_VER)) \
 
 all:
 
+# Download all sources target - can be run without TARGET
+# Usage: make download-sources SOURCES=/path/to/sources
+# Or use scripts/sources.sh for a more automated approach
+download-sources: | $(SOURCES)
+	@echo "Use 'scripts/sources.sh download' to download all sources"
+	@echo "Or 'scripts/sources.sh list' to list all sources"
+	@echo "Or 'scripts/sources.sh cache-key' to get the cache key"
+
 clean:
 	( cd $(CURDIR) && \
 	find . -maxdepth 1 \( \

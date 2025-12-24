@@ -42,8 +42,72 @@ on:
         default: ""
 
 jobs:
+  # Get sources cache key first
+  cache-key:
+    name: Get Cache Key
+    runs-on: ubuntu-24.04
+    outputs:
+      key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate cache key
+        id: cache-key
+        run: |
+          KEY=$(./scripts/sources.sh cache-key)
+          echo "key=sources-${KEY}" >> $GITHUB_OUTPUT
+          echo "Sources cache key: sources-${KEY}"
+
+  # Download sources once, shared by all targets
+  sources:
+    name: Prepare Sources
+    needs: cache-key
+    runs-on: ubuntu-24.04
+    # Prevent concurrent downloads for same cache key
+    concurrency:
+      group: ${{ needs.cache-key.outputs.key }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Restore sources cache
+        id: cache
+        uses: actions/cache/restore@v5
+        with:
+          path: sources
+          key: ${{ needs.cache-key.outputs.key }}
+
+      - name: Download sources
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./scripts/sources.sh download -S sources
+
+      - name: Save sources cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: sources
+          key: ${{ needs.cache-key.outputs.key }}
+
+      - name: Upload sources artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+          path: sources
+          overwrite: true
+
   build-and-release:
     name: ${{ matrix.targets }}
+    needs: [cache-key, sources]
     if: ${{ inputs.targets != '[]' }}
     strategy:
       fail-fast: false
@@ -54,3 +118,5 @@ jobs:
       target: ${{ matrix.targets }}
       platform: ${{ inputs.platform }}
       extra-build-flags: ${{ inputs.extra-build-flags }}
+      sources-cache-key: ${{ needs.cache-key.outputs.key }}
+      sources-artifact: ${{ needs.cache-key.outputs.key }}
