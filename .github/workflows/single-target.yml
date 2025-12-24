@@ -261,19 +261,21 @@ jobs:
                 tar \
                 file \
                 zip \
-                yq && \
+                yq \
+                mold && \
               rsync -a --exclude=sources /src/ /work/ && \
               cd /work && \
               bash scripts/build.sh \
                 -LDPl \
                 -a \
+                -d mold \
                 -S /sources \
                 -R /orig \
                 -o /dist \
                 ${{ inputs.extra-build-flags }} \
                 -T "${{ inputs.target }}"'
 
-      # Build on macOS
+      # Build on macOS (mold/lld not supported, use default linker)
       - name: Build (macOS)
         if: ${{ startsWith(inputs.platform, 'darwin') }}
         working-directory: /Volumes/cross

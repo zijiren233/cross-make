@@ -250,6 +250,7 @@ function Help() {
     echo "-C: use china mirror"
     echo "-c: set CC"
     echo "-x: set CXX"
+    echo "-d: set linker (e.g., mold, lld, gold)"
     echo "-n: with native build"
     echo "-N: only native build"
     echo "-L: log to std"
@@ -262,7 +263,7 @@ function Help() {
 }
 
 function ParseArgs() {
-    while getopts "haT:S:o:IR:Cc:x:nLlO:j:NDPb" arg; do
+    while getopts "haT:S:o:IR:Cc:x:d:nLlO:j:NDPb" arg; do
         case $arg in
         h)
             Help
@@ -294,6 +295,9 @@ function ParseArgs() {
             ;;
         x)
             CXX="$OPTARG"
+            ;;
+        d)
+            LINKER="$OPTARG"
             ;;
         n)
             NATIVE_BUILD="true"
@@ -447,6 +451,10 @@ endif
 CHINA = ${USE_CHINA_MIRROR}
 
 COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
+$(if [ -n "$LINKER" ] && [ -z "$NATIVE" ]; then
+        echo "# Use custom linker for cross build only"
+        echo "COMMON_FLAGS += -fuse-ld=${LINKER}"
+    fi)
 
 CCACHE = ${CCACHE}
 
