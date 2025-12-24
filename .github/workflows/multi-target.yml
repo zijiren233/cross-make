@@ -79,13 +79,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ARTIFACT_NAME="${{ needs.cache-key.outputs.key }}"
-          ARTIFACT_COUNT=$(gh api repos/${{ github.repository }}/actions/artifacts \
-            --jq "[.artifacts[] | select(.name == \"${ARTIFACT_NAME}\" and .expired == false)] | length")
+          ARTIFACT_COUNT=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${ARTIFACT_NAME}" \
+            --jq '.total_count')
           if [ "$ARTIFACT_COUNT" -gt 0 ]; then
-            echo "Artifact '${ARTIFACT_NAME}' already exists, skipping preparation"
+            echo "Artifact '${ARTIFACT_NAME}' already exists in run ${{ github.run_id }}, skipping preparation"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Artifact '${ARTIFACT_NAME}' not found, will prepare sources"
+            echo "Artifact '${ARTIFACT_NAME}' not found in run ${{ github.run_id }}, will prepare sources"
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
