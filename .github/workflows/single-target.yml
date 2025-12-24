@@ -117,7 +117,7 @@ jobs:
         run: |
           diskutil list
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
-            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://12582912)
+            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://16777216)
           else
             # aarch64 使用物理磁盘
             diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
@@ -166,9 +166,10 @@ jobs:
         run: |
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
-            --tmpfs /work:exec,size=6G \
+            --tmpfs /work:exec,size=8G \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/dist:/dist" \
+            --volume "${PWD}/orig:/orig" \
             ${{ needs.setup.outputs.docker-image }} \
             /bin/sh -c '
               apk add --no-cache \
@@ -198,9 +199,10 @@ jobs:
                 -LDPl \
                 -a \
                 -S /sources \
+                -R /orig \
+                -o /dist \
                 ${{ inputs.extra-build-flags }} \
-                -T "${{ inputs.target }}" && \
-              cp -r /work/dist/* /dist/'
+                -T "${{ inputs.target }}"'
 
       # Build on macOS
       - name: Build (macOS)
@@ -213,6 +215,8 @@ jobs:
             -x "g++-15" \
             -a \
             -S "${{ github.workspace }}/sources" \
+            -R "${{ github.workspace }}/orig" \
+            -o "${{ github.workspace }}/dist" \
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
 
@@ -221,7 +225,7 @@ jobs:
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
           if-no-files-found: error
-          path: ${{ startsWith(inputs.platform, 'darwin') && '/Volumes/cross/dist' || 'dist' }}
+          path: dist
 
   # Release job runs immediately after this target's build completes
   release:
