@@ -172,39 +172,38 @@ jobs:
             yq \
             rsync
 
-      # Option 1: Download from pre-uploaded artifact (when called from multi-target with sources-artifact)
-      - name: Download sources from artifact
-        if: inputs.sources-artifact != ''
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ inputs.sources-artifact }}
-          path: sources
-
-      # Option 2: Restore from cache (when called directly without sources-artifact)
+      # Try cache first
       - name: Restore sources cache
-        if: inputs.sources-artifact == ''
         id: cache
         uses: actions/cache/restore@v5
         with:
           path: sources
           key: ${{ needs.setup.outputs.sources-cache-key }}
 
-      # Download sources if cache miss (only when not using artifact)
+      # If cache miss, try artifact
+      - name: Download sources from artifact
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.sources-artifact }}
+          path: sources
+
+      # If cache miss and no artifact, download directly
       - name: Download sources (Linux)
-        if: inputs.sources-artifact == '' && steps.cache.outputs.cache-hit != 'true' && startsWith(inputs.platform, 'linux')
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'linux')
         run: |
           sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
           sudo chmod +x /usr/local/bin/yq
           bash ./scripts/sources.sh download -S sources
 
       - name: Download sources (macOS)
-        if: inputs.sources-artifact == '' && steps.cache.outputs.cache-hit != 'true' && startsWith(inputs.platform, 'darwin')
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'darwin')
         run: |
           bash ./scripts/sources.sh download -S sources
 
-      # Save cache immediately after download
+      # Save cache if we downloaded (not from artifact, to avoid redundant cache)
       - name: Save sources cache
-        if: inputs.sources-artifact == '' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: sources
