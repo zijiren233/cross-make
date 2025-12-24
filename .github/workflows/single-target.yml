@@ -169,7 +169,8 @@ jobs:
             libtool \
             bison \
             texinfo \
-            yq
+            yq \
+            rsync
 
       # Option 1: Download from pre-uploaded artifact (when called from multi-target with sources-artifact)
       - name: Download sources from artifact
@@ -220,7 +221,7 @@ jobs:
             # aarch64 使用物理磁盘
             diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
           fi
-          cp -r ./* /Volumes/cross
+          rsync -a --exclude=sources ./ /Volumes/cross/
 
       # For Linux with QEMU
       - name: Set up QEMU
@@ -261,7 +262,7 @@ jobs:
                 file \
                 zip \
                 yq && \
-              cp -r /src/* /work/ && \
+              rsync -a --exclude=sources /src/ /work/ && \
               cd /work && \
               bash scripts/build.sh \
                 -LDPl \
