@@ -228,7 +228,9 @@ DownloadSources() {
         MAKE="gmake"
     fi
 
-    $MAKE SOURCES="$sources_dir" $china_flag $download_targets
+    # Use parallel downloads (default: 4 jobs)
+    local jobs="${JOBS:-4}"
+    $MAKE -j"$jobs" SOURCES="$sources_dir" $china_flag $download_targets
 
     echo ""
     echo "Download complete!"
