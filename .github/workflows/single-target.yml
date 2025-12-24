@@ -141,7 +141,7 @@ jobs:
 
       # For macOS: Install dependencies via brew
       - name: Init Dependencies (macOS)
-        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        if: startsWith(inputs.platform, 'darwin')
         run: |
           xcrun simctl delete all || true
           sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* || true
@@ -212,7 +212,7 @@ jobs:
 
       # For macOS: Create case-sensitive volume
       - name: Create Case-sensitive volume
-        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        if: startsWith(inputs.platform, 'darwin')
         run: |
           diskutil list
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
@@ -225,12 +225,12 @@ jobs:
 
       # For Linux with QEMU
       - name: Set up QEMU
-        if: ${{ needs.setup.outputs.use-qemu == 'true' }}
+        if: needs.setup.outputs.use-qemu == 'true'
         uses: docker/setup-qemu-action@v3
 
       # Build on Linux (Docker with tmpfs)
       - name: Build (Linux)
-        if: ${{ startsWith(inputs.platform, 'linux') }}
+        if: startsWith(inputs.platform, 'linux')
         run: |
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
@@ -277,7 +277,7 @@ jobs:
 
       # Build on macOS (mold/lld not supported, use default linker)
       - name: Build (macOS)
-        if: ${{ startsWith(inputs.platform, 'darwin') }}
+        if: startsWith(inputs.platform, 'darwin')
         working-directory: /Volumes/cross
         run: |
           bash scripts/build.sh \
@@ -302,7 +302,7 @@ jobs:
   release:
     name: Release ${{ inputs.target }}
     needs: build
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.tag != '' }}
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
     runs-on: ubuntu-24.04
     env:
       RELEASE_TAG_BASE: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}

@@ -68,68 +68,67 @@ jobs:
     name: Prepare Sources
     needs: cache-key
     runs-on: ubuntu-24.04
-    # Prevent concurrent downloads for same cache key
-    concurrency:
-      group: ${{ needs.cache-key.outputs.key }}
-      cancel-in-progress: false
     steps:
-      - name: Check if artifact exists
-        id: check-artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          ARTIFACT_NAME="${{ needs.cache-key.outputs.key }}"
-          ARTIFACT_COUNT=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${ARTIFACT_NAME}" \
-            --jq '.total_count')
-          if [ "$ARTIFACT_COUNT" -gt 0 ]; then
-            echo "Artifact '${ARTIFACT_NAME}' already exists in run ${{ github.run_id }}, skipping preparation"
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Artifact '${ARTIFACT_NAME}' not found in run ${{ github.run_id }}, will prepare sources"
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.check-artifact.outputs.exists != 'true'
+
+      - name: Check artifact before cache
+        id: check-before-cache
+        uses: ./.github/actions/check-artifact
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
 
       - name: Install yq
-        if: steps.check-artifact.outputs.exists != 'true'
+        if: steps.check-before-cache.outputs.exists != 'true'
         run: |
           sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
           sudo chmod +x /usr/local/bin/yq
 
       - name: Restore sources cache
-        if: steps.check-artifact.outputs.exists != 'true'
+        if: steps.check-before-cache.outputs.exists != 'true'
         id: cache
         uses: actions/cache/restore@v5
         with:
           path: sources
           key: ${{ needs.cache-key.outputs.key }}
 
+      - name: Check artifact before download
+        if: steps.check-before-cache.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
+        id: check-before-download
+        uses: ./.github/actions/check-artifact
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+
       - name: Download sources
-        if: steps.check-artifact.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.check-before-cache.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
         run: ./scripts/sources.sh download -S sources
 
       - name: Save sources cache
-        if: steps.check-artifact.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.check-before-cache.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
         uses: actions/cache/save@v5
         with:
           path: sources
           key: ${{ needs.cache-key.outputs.key }}
 
+      - name: Check artifact before upload
+        if: steps.check-before-cache.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
+        id: check-before-upload
+        uses: ./.github/actions/check-artifact
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+
       - name: Upload sources artifact
-        if: steps.check-artifact.outputs.exists != 'true'
+        if: steps.check-before-cache.outputs.exists != 'true' && steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true' && steps.check-before-upload.outputs.exists != 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: ${{ needs.cache-key.outputs.key }}
           path: sources
-          overwrite: true
-          compression-level: 1
+          compression-level: 3
 
   build-and-release:
     name: ${{ matrix.targets }}
     needs: [cache-key, sources]
-    if: ${{ inputs.targets != '[]' }}
+    if: inputs.targets != '[]'
     strategy:
       fail-fast: false
       matrix:

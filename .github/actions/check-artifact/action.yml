@@ -1,0 +1,32 @@
+name: 'Check Artifact Exists'
+description: 'Check if an artifact exists in the current GitHub Actions run'
+
+inputs:
+  name:
+    description: 'Artifact name to check'
+    required: true
+
+outputs:
+  exists:
+    description: 'Whether the artifact exists (true/false)'
+    value: ${{ steps.check.outputs.exists }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check artifact
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        ARTIFACT_NAME: ${{ inputs.name }}
+      run: |
+        ARTIFACT_COUNT=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${ARTIFACT_NAME}" \
+          --jq '.total_count' 2>/dev/null || echo "0")
+        if [ "$ARTIFACT_COUNT" -gt 0 ]; then
+          echo "Artifact '${ARTIFACT_NAME}' exists in run ${{ github.run_id }}"
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Artifact '${ARTIFACT_NAME}' not found in run ${{ github.run_id }}"
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
