@@ -376,14 +376,14 @@ define find_and_prefix
 $(addprefix $(SOURCES)/,$(notdir $(wildcard hashes/\$1*.sha1)))
 endef
 
-# Force symlink mode for linux kernel (saves ~1.3GB memory)
+# Force symlink mode for linux kernel (saves ~1GB memory)
 linux-%: COWPATCH_EXTRACT = -I
 
 %: %.orig | $(SOURCES)/config.sub $(SOURCES)/config.guess
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir $@.tmp
-	( cd $@.tmp && $(COWPATCH) $(COWPATCH_EXTRACT) ../$< )
+	( cd $@.tmp && $(COWPATCH) $(COWPATCH_EXTRACT) $(ORIG_DIR)/$< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
 		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
 			cat $(filter-out %-musl.diff %-gnu.diff %-freebsd.diff %-netbsd.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \
