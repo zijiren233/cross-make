@@ -513,9 +513,51 @@ int main()
     fi
 }
 
+# Run make with logging
+# Usage: RunMake <dist_name> <log_file> <log_prefix>
+function RunMake() {
+    local DIST_NAME="$1"
+    local LOG_FILE="$2"
+    local LOG_PREFIX="$3"
+    local EXIT_CODE
+
+    $MAKE clean
+    rm -rf "${DIST_NAME}" "${LOG_FILE}"
+
+    # Fast path: when output is just passed through unchanged, skip the pipe
+    if [ "$LOG_TO_STD" ] && [ "$DISABLE_LOG_TO_FILE" ] && [ "$DISABLE_LOG_PRINT_TARGET_PREFIX" ] && [ "$DISABLE_LOG_PRINT_DATE_PREFIX" ]; then
+        set +e
+        $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
+        EXIT_CODE=$?
+        set -e
+    else
+        while IFS= read -r line; do
+            local CURRENT_DATE=$(Date)
+            if [ "$LOG_TO_STD" ]; then
+                if [ "$DISABLE_LOG_PRINT_TARGET_PREFIX" ]; then
+                    echo "${CURRENT_DATE}$line"
+                else
+                    echo "${CURRENT_DATE}${LOG_PREFIX}: $line"
+                fi
+            fi
+            if [ ! "$DISABLE_LOG_TO_FILE" ]; then
+                echo "${CURRENT_DATE}$line" >>"${LOG_FILE}"
+            fi
+        done < <(
+            set +e
+            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
+            echo $? >"${DIST_NAME}.exit"
+            set -e
+        )
+        read EXIT_CODE <"${DIST_NAME}.exit"
+        rm "${DIST_NAME}.exit"
+    fi
+
+    return $EXIT_CODE
+}
+
 function Build() {
-    BUILD_ID="$1"
-    # Resolve actual TARGET from BUILD_ID (BUILD_ID can be an ID or a TARGET)
+    local BUILD_ID="$1"
     local TARGET="$(GetTargetFromId "$BUILD_ID")"
 
     # Warn about -I mode with glibc targets
@@ -528,101 +570,54 @@ function Build() {
         fi
     fi
 
-    # Use BUILD_ID for artifact naming to ensure uniqueness
-    DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${BUILD_ID}"
-    CROSS_DIST_NAME="${DIST_NAME}-cross${CROSS_DIST_NAME_SUFFIX}"
-    NATIVE_DIST_NAME="${DIST_NAME}-native${NATIVE_DIST_NAME_SUFFIX}"
-    CROSS_LOG_FILE="${CROSS_DIST_NAME}.log"
-    NATIVE_LOG_FILE="${NATIVE_DIST_NAME}.log"
+    local DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${BUILD_ID}"
+    local CROSS_DIST_NAME="${DIST_NAME}-cross${CROSS_DIST_NAME_SUFFIX}"
+    local NATIVE_DIST_NAME="${DIST_NAME}-native${NATIVE_DIST_NAME_SUFFIX}"
 
+    # Cross build
     if [ ! "$ONLY_NATIVE_BUILD" ]; then
         echo "build cross ${DIST_NAME_PREFIX}${BUILD_ID} (TARGET=${TARGET}) to ${CROSS_DIST_NAME}"
-        {
-            OUTPUT="${CROSS_DIST_NAME}"
-            NATIVE=""
-            WriteConfig "export PATH=$PATH"
-        }
-        $MAKE clean
-        rm -rf "${CROSS_DIST_NAME}" "${CROSS_LOG_FILE}"
-        while IFS= read -r line; do
-            CURRENT_DATE=$(Date)
-            if [ "$LOG_TO_STD" ]; then
-                if [ "$DISABLE_LOG_PRINT_TARGET_PREFIX" ]; then
-                    echo "${CURRENT_DATE}$line"
-                else
-                    echo "${CURRENT_DATE}${DIST_NAME_PREFIX}${TARGET}-cross: $line"
-                fi
-            fi
-            if [ ! "$DISABLE_LOG_TO_FILE" ]; then
-                echo "${CURRENT_DATE}$line" >>"${CROSS_LOG_FILE}"
-            fi
-        done < <(
-            set +e
-            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
-            echo $? >"${CROSS_DIST_NAME}.exit"
-            set -e
-        )
-        read EXIT_CODE <"${CROSS_DIST_NAME}.exit"
-        rm "${CROSS_DIST_NAME}.exit"
-        if [ $EXIT_CODE -ne 0 ]; then
-            if [ ! "$LOG_TO_STD" ]; then
-                tail -n 3000 "${CROSS_LOG_FILE}"
-                echo "full build log: ${CROSS_LOG_FILE}"
-            fi
-            echo "build cross ${DIST_NAME_PREFIX}${TARGET} error"
-            exit $EXIT_CODE
-        else
+        OUTPUT="${CROSS_DIST_NAME}" NATIVE="" WriteConfig "export PATH=$PATH"
+
+        if RunMake "${CROSS_DIST_NAME}" "${CROSS_DIST_NAME}.log" "${DIST_NAME_PREFIX}${TARGET}-cross"; then
             echo "build cross ${DIST_NAME_PREFIX}${TARGET} success"
             TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc"
             TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++"
             TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc -static --static"
             TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++ -static --static"
+        else
+            local EXIT_CODE=$?
+            if [ ! "$LOG_TO_STD" ]; then
+                tail -n 3000 "${CROSS_DIST_NAME}.log"
+                echo "full build log: ${CROSS_DIST_NAME}.log"
+            fi
+            echo "build cross ${DIST_NAME_PREFIX}${TARGET} error"
+            exit $EXIT_CODE
         fi
+
         if [ "$ENABLE_ARCHIVE" ]; then
             tar -zcf "${CROSS_DIST_NAME}.tgz" -C "${CROSS_DIST_NAME}" .
             echo "package ${CROSS_DIST_NAME} to ${CROSS_DIST_NAME}.tgz success"
         fi
     fi
 
+    # Native build
     if [ "$NATIVE_BUILD" ]; then
         echo "build native ${DIST_NAME_PREFIX}${TARGET} to ${NATIVE_DIST_NAME}"
-        {
-            OUTPUT="${NATIVE_DIST_NAME}"
-            NATIVE="true"
-            WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
-        }
-        $MAKE clean
-        rm -rf "${NATIVE_DIST_NAME}" "${NATIVE_LOG_FILE}"
-        while IFS= read -r line; do
-            CURRENT_DATE=$(Date)
-            if [ "$LOG_TO_STD" ]; then
-                if [ "$DISABLE_LOG_PRINT_TARGET_PREFIX" ]; then
-                    echo "${CURRENT_DATE}$line"
-                else
-                    echo "${CURRENT_DATE}${DIST_NAME_PREFIX}${TARGET}-native: $line"
-                fi
-            fi
-            if [ ! "$DISABLE_LOG_TO_FILE" ]; then
-                echo "${CURRENT_DATE}$line" >>"${NATIVE_LOG_FILE}"
-            fi
-        done < <(
-            set +e
-            $MAKE -j${CPU_NUM} $MORE_ARGS 2>&1 && $MAKE $MORE_ARGS -j1 install 2>&1
-            echo $? >"${NATIVE_DIST_NAME}.exit"
-            set -e
-        )
-        read EXIT_CODE <"${NATIVE_DIST_NAME}.exit"
-        rm "${NATIVE_DIST_NAME}.exit"
-        if [ $EXIT_CODE -ne 0 ]; then
+        OUTPUT="${NATIVE_DIST_NAME}" NATIVE="true" WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
+
+        if RunMake "${NATIVE_DIST_NAME}" "${NATIVE_DIST_NAME}.log" "${DIST_NAME_PREFIX}${TARGET}-native"; then
+            echo "build native ${DIST_NAME_PREFIX}${TARGET} success"
+        else
+            local EXIT_CODE=$?
             if [ ! "$LOG_TO_STD" ]; then
-                tail -n 3000 "${NATIVE_LOG_FILE}"
-                echo "full build log: ${NATIVE_LOG_FILE}"
+                tail -n 3000 "${NATIVE_DIST_NAME}.log"
+                echo "full build log: ${NATIVE_DIST_NAME}.log"
             fi
             echo "build native ${DIST_NAME_PREFIX}${TARGET} error"
             exit $EXIT_CODE
-        else
-            echo "build native ${DIST_NAME_PREFIX}${TARGET} success"
         fi
+
         if [ "$ENABLE_ARCHIVE" ]; then
             tar -zcf "${NATIVE_DIST_NAME}.tgz" -C "${NATIVE_DIST_NAME}" .
             echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.tgz success"
