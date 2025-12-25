@@ -170,7 +170,12 @@ jobs:
             bison \
             texinfo \
             yq \
-            rsync
+            rsync \
+            vmtouch
+
+          # Lock gcc/g++ in memory for faster access
+          GCC_PREFIX=$(brew --prefix gcc@15)
+          sudo vmtouch -l -d "$GCC_PREFIX/bin" "$GCC_PREFIX/libexec"
 
       # Try cache first
       - name: Restore sources cache
@@ -240,6 +245,7 @@ jobs:
         run: |
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
+            --cap-add=IPC_LOCK \
             --tmpfs /work:exec,size=5G \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
@@ -268,7 +274,9 @@ jobs:
                 file \
                 zip \
                 yq \
-                mold && \
+                mold \
+                vmtouch && \
+              vmtouch -l -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
               rsync -a --exclude=sources /src/ /work/ && \
               find /sources -type f -exec touch {} + && \
               cd /work && \
