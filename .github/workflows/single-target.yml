@@ -209,10 +209,6 @@ jobs:
           path: sources
           key: ${{ needs.setup.outputs.sources-cache-key }}
 
-      # Touch source files to update timestamps (prevent Make from re-downloading)
-      - name: Touch sources
-        run: find sources -type f -exec touch {} + 2>/dev/null || true
-
       # For macOS: Create case-sensitive volume
       - name: Create Case-sensitive volume
         if: startsWith(inputs.platform, 'darwin')
@@ -267,6 +263,7 @@ jobs:
                 yq \
                 mold && \
               rsync -a --exclude=sources /src/ /work/ && \
+              find /sources -type f -exec touch {} + && \
               cd /work && \
               bash scripts/build.sh \
                 -LDPl \
@@ -283,6 +280,7 @@ jobs:
         if: startsWith(inputs.platform, 'darwin')
         working-directory: /Volumes/cross
         run: |
+          find "${{ github.workspace }}/sources" -type f -exec touch {} +
           bash scripts/build.sh \
             -LDPl \
             -c "gcc-15" \
