@@ -31,15 +31,15 @@ CXXFLAGS =
 LDFLAGS = -s
 HOSTCC = gcc$(EXE_EXT)
 
-ifeq ($(HOST),)
-# build cross
+-include config.mak
+
+ifndef NATIVE
+# Cross and Canadian Cross builds need static linking
 STAT = -static --static
 endif
 ifeq ($(shell uname -s),Darwin)
 STAT =
 endif
-
--include config.mak
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
 XGCC = $(CCACHE) $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
@@ -280,11 +280,14 @@ BUILD = $(GUESS)$(if $(subst $(TARGET_CANON),,$(GUESS)),,xx)
 endif
 
 ifeq ($(HOST),)
-# build cross
+# build cross: runs on BUILD, targets TARGET
 SYSROOT = /$(TARGET)
-else
-# build native
+else ifeq ($(HOST),$(TARGET))
+# build native: runs on HOST, targets HOST (same as TARGET)
 SYSROOT = /
+else
+# build canadian cross: runs on HOST, targets TARGET (different from HOST)
+SYSROOT = /$(TARGET)
 endif
 
 COMMON_CONFIG := --disable-werror \
@@ -435,7 +438,7 @@ fi
 endef
 
 ifeq ($(HOST),)
-# build cross
+# build cross: runs on BUILD, targets TARGET
 obj_gcc/%: export CC:=$(CCACHE) $(CC) $(STAT)
 obj_gcc/%: export CXX:=$(CCACHE) $(CXX) $(STAT)
 obj_gcc/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
@@ -445,7 +448,60 @@ obj_binutils/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
 
 FULL_BINUTILS_CONFIG += --host=$(BUILD)
 FULL_GCC_CONFIG += --host=$(BUILD)
-GCC_MAKE_ARGS += AR_FOR_TARGET="$(XAR)" \
+
+else ifdef NATIVE
+# build native: runs on HOST, targets HOST (same as TARGET)
+# Triggered by NATIVE=1, HOST is automatically set to TARGET
+FULL_BINUTILS_CONFIG += --host=$(HOST)
+FULL_GCC_CONFIG += --host=$(HOST)
+
+# prevent parallelization of obj_musl/.lc_built and obj_sysroot/.lc_headers
+obj_musl/.lc_built: | obj_sysroot/.lc_headers
+obj_glibc/.lc_built: | obj_sysroot/.lc_headers
+obj_gcc/gcc/.lc_built: | obj_sysroot/.lc_headers
+
+export CC_FOR_TARGET:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+export CXX_FOR_TARGET:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+export CC_FOR_BUILD:=$(CCACHE) $(CC)
+export CXX_FOR_BUILD:=$(CCACHE) $(CXX)
+obj_gcc/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+obj_gcc/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_binutils/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+obj_binutils/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_musl/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+obj_musl/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_mingw%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+obj_mingw%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+
+else
+# build canadian cross: runs on HOST, targets TARGET
+# HOST may or may not equal TARGET - the key is NATIVE is not set
+# Uses HOST compiler to build binutils/gcc (the tools themselves)
+# Uses xgcc to build TARGET libraries (musl/glibc/mingw) - shared with cross build below
+obj_gcc/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+obj_gcc/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_gcc/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
+obj_binutils/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
+obj_binutils/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_binutils/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
+
+FULL_BINUTILS_CONFIG += --host=$(HOST)
+FULL_GCC_CONFIG += --host=$(HOST)
+
+export CC_FOR_BUILD:=$(CCACHE) $(CC)
+export CXX_FOR_BUILD:=$(CCACHE) $(CXX)
+
+endif
+
+# Shared configurations for Cross and Canadian Cross builds
+# Both use xgcc to build target libraries (musl/glibc/mingw)
+# Condition: NATIVE not defined covers both cases:
+# - Cross build: HOST is empty, NATIVE not set
+# - Canadian Cross: HOST is set, NATIVE not set
+# - Native build: NATIVE is set, so this block is skipped
+ifndef NATIVE
+GCC_MAKE_ARGS += GCC_FOR_TARGET="$(XGCC)" \
+	AR_FOR_TARGET="$(XAR)" \
 	AS_FOR_TARGET="$(XAS)" \
 	LD_FOR_TARGET="$(XLD)" \
 	NM_FOR_TARGET="$(XNM)" \
@@ -506,30 +562,6 @@ obj_musl/.lc_built: | obj_gcc/$(TARGET)/libgcc/libgcc.a
 obj_glibc/.lc_configured: | obj_gcc/gcc/.lc_built
 obj_glibc/.lc_built: | obj_gcc/$(TARGET)/libgcc/libgcc.a
 obj_gcc/.lc_configured: obj_binutils/.lc_built
-
-else
-# build native
-FULL_BINUTILS_CONFIG += --host=$(HOST)
-FULL_GCC_CONFIG += --host=$(HOST)
-
-# prevent parallelization of obj_musl/.lc_built and obj_sysroot/.lc_headers
-obj_musl/.lc_built: | obj_sysroot/.lc_headers
-obj_glibc/.lc_built: | obj_sysroot/.lc_headers
-obj_gcc/gcc/.lc_built: | obj_sysroot/.lc_headers
-
-export CC_FOR_TARGET:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
-export CXX_FOR_TARGET:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
-export CC_FOR_BUILD:=$(CCACHE) $(CC)
-export CXX_FOR_BUILD:=$(CCACHE) $(CXX)
-obj_gcc/%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
-obj_gcc/%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
-obj_binutils/%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
-obj_binutils/%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
-obj_musl/%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
-obj_musl/%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
-obj_mingw%: export CC:=$(CCACHE) $(TARGET)-gcc$(EXE_EXT)
-obj_mingw%: export CXX:=$(CCACHE) $(TARGET)-g++$(EXE_EXT)
-
 endif
 
 ifeq ($(TARGET),)
@@ -640,28 +672,47 @@ src_zstd: | $(ZSTD_SRCDIR)
 	ln -sf "$(ZSTD_SRCDIR)" $@
 
 ifeq ($(HOST),)
-# Cross build: zstd for host-running gcc/binutils
+# Cross build: zstd for BUILD-running gcc/binutils
 ZSTD_CC = $(CCACHE) $(CC)
-ZSTD_AR = $(AR)
+# On macOS, use native ar to avoid GNU ar incompatibility with macOS ld
+ifeq ($(shell uname -s),Darwin)
+ZSTD_AR = /usr/bin/ar
 else
-# Native build: zstd for target-running gcc/binutils
-ZSTD_CC = $(CCACHE) $(TARGET)-gcc$(EXE_EXT)
-ZSTD_AR = $(TARGET)-ar$(EXE_EXT)
+ZSTD_AR = $(AR)
+endif
+else
+# Canadian Cross and Native: zstd for HOST-running gcc/binutils
+# In Native: HOST == TARGET, so this is equivalent
+# In Canadian Cross: HOST != TARGET, we need HOST compiler (not TARGET)
+ZSTD_CC = $(CCACHE) $(HOST)-gcc$(EXE_EXT)
+ZSTD_AR = $(HOST)-ar$(EXE_EXT)
 endif
 
 obj_zstd/.lc_built: | obj_zstd src_zstd
 	cd src_zstd/lib && $(MAKE) clean || true
 	cd src_zstd/lib && $(MAKE) CC="$(ZSTD_CC)" AR="$(ZSTD_AR)" libzstd.a
-	mkdir -p obj_zstd/include obj_zstd/lib
+	mkdir -p obj_zstd/include obj_zstd/lib obj_zstd/lib/pkgconfig
 	cp src_zstd/lib/libzstd.a obj_zstd/lib/
 	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h obj_zstd/include/
+	# Create pkg-config file - required because binutils sub-configures
+	# only receive PKG_CONFIG_PATH via HOST_EXPORTS, not ZSTD_CFLAGS/ZSTD_LIBS
+	printf '%s\n' \
+		"prefix=$(CURDIR)/obj_zstd" \
+		"libdir=\$${prefix}/lib" \
+		"includedir=\$${prefix}/include" \
+		"" \
+		"Name: zstd" \
+		"Description: fast lossless compression algorithm library" \
+		"Version: $(ZSTD_VER)" \
+		"Libs: -L\$${libdir} -lzstd" \
+		"Cflags: -I\$${includedir}" \
+		> obj_zstd/lib/pkgconfig/libzstd.pc
 	touch $@
 
-# Export zstd paths via environment variables instead of --with-zstd=PATH
-# For binutils: uses ZSTD_CFLAGS/ZSTD_LIBS (pkg-config style)
-# For gcc: uses CXXFLAGS/LDFLAGS
-obj_binutils/%: export ZSTD_CFLAGS := -I$(CURDIR)/obj_zstd/include
-obj_binutils/%: export ZSTD_LIBS := -L$(CURDIR)/obj_zstd/lib -lzstd
+# Export PKG_CONFIG_PATH for binutils - this IS passed to sub-configures via HOST_EXPORTS
+# Note: ZSTD_CFLAGS/ZSTD_LIBS are NOT in HOST_EXPORTS, so they won't reach sub-configures
+obj_binutils/%: export PKG_CONFIG_PATH := $(CURDIR)/obj_zstd/lib/pkgconfig
+# For gcc: uses CXXFLAGS/LDFLAGS (gcc doesn't have the sub-configure issue)
 obj_gcc/%: export CXXFLAGS += -I$(CURDIR)/obj_zstd/include
 obj_gcc/%: export LDFLAGS += -L$(CURDIR)/obj_zstd/lib
 
@@ -700,8 +751,9 @@ obj_binutils/.lc_configured: | obj_binutils src_binutils
 
 obj_binutils/.lc_built: | obj_binutils/.lc_configured
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" all
-ifeq ($(HOST),)
-	# Create symlinks without -new suffix for glibc configure to find (cross build only)
+ifndef NATIVE
+	# Create symlinks without -new suffix for glibc configure to find
+	# Both Cross and Canadian Cross use xgcc which needs these symlinks
 	cd $(XBINUTILS_DIR) && for f in *-new$(EXE_EXT); do \
 		if [ -f "$$f" ]; then \
 			ln -sf "$$f" "$${f%-new$(EXE_EXT)}$(EXE_EXT)"; \
@@ -842,17 +894,17 @@ else
 # musl
 obj_sysroot/.lc_libs: | obj_musl/.lc_built src_ssp
 	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot install
-ifeq ($(HOST),)
-	# Cross build: Build libssp_nonshared.a for musl SSP support
+ifndef NATIVE
+	# Cross and Canadian Cross: Build libssp_nonshared.a using xgcc
 	$(XGCC) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
 	$(XAR) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
 	$(XRANLIB) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
 	rm -f $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
 else
-	# Native build: Build libssp_nonshared.a for musl SSP support
-	$(CCACHE) $(TARGET)-gcc$(EXE_EXT) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
-	$(TARGET)-ar$(EXE_EXT) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
-	$(TARGET)-ranlib$(EXE_EXT) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
+	# Native build: Build libssp_nonshared.a using HOST compiler (HOST == TARGET)
+	$(CCACHE) $(HOST)-gcc$(EXE_EXT) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(HOST)-ar$(EXE_EXT) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(HOST)-ranlib$(EXE_EXT) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
 	rm -f $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
 endif
 	touch $@
