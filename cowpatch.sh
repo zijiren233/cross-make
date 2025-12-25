@@ -112,7 +112,7 @@ EOF
 }
 
 gotcmd=0
-while getopts ":p:i:RNEI:C:S:" opt; do
+while getopts ":p:i:RNEI:C:S:l:" opt; do
     case "$opt" in
     I)
         find "$OPTARG" -path "$OPTARG/*" -prune -exec sh -c 'ln -sf "$@" .' sh {} +
@@ -124,6 +124,18 @@ while getopts ":p:i:RNEI:C:S:" opt; do
         ;;
     S)
         cowp "$OPTARG"
+        gotcmd=1
+        ;;
+    l)
+        # Link mode: replace current directory with symlink to source directory
+        # This is useful for freebsd/netbsd where no patching is needed
+        src_abs="$(cd "$OPTARG" && pwd)"
+        curdir="$(pwd)"
+        parent="$(dirname "$curdir")"
+        name="$(basename "$curdir")"
+        cd "$parent"
+        rmdir "$name"
+        ln -sf "$src_abs" "$name"
         gotcmd=1
         ;;
     esac

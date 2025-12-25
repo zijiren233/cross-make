@@ -378,8 +378,9 @@ endef
 
 # Force symlink mode for large source trees (saves memory)
 linux-%: COWPATCH_EXTRACT = -I
-freebsd-%: COWPATCH_EXTRACT = -I
-netbsd-%: COWPATCH_EXTRACT = -I
+# Direct link mode for binary-only targets (no patching needed)
+freebsd-%: COWPATCH_EXTRACT = -l
+netbsd-%: COWPATCH_EXTRACT = -l
 
 %: %.orig | $(SOURCES)/config.sub $(SOURCES)/config.guess
 	case "$@" in */*) exit 1 ;; esac
