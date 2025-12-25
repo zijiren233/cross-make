@@ -175,6 +175,7 @@ jobs:
       # Try cache first
       - name: Restore sources cache
         id: cache
+        timeout-minutes: 10
         uses: actions/cache/restore@v5
         with:
           path: sources
@@ -183,6 +184,7 @@ jobs:
       # If cache miss, try artifact
       - name: Download sources from artifact
         if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact != ''
+        timeout-minutes: 10
         uses: actions/download-artifact@v7
         with:
           name: ${{ inputs.sources-artifact }}
@@ -204,6 +206,7 @@ jobs:
       # Save cache if we downloaded (not from artifact, to avoid redundant cache)
       - name: Save sources cache
         if: steps.cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
         uses: actions/cache/save@v5
         with:
           path: sources
@@ -293,6 +296,7 @@ jobs:
             -T "${{ inputs.target }}"
 
       - name: Upload dist
+        timeout-minutes: 10
         uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
@@ -311,6 +315,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download artifact
+        timeout-minutes: 10
         uses: actions/download-artifact@v7
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}

@@ -86,6 +86,7 @@ jobs:
       - name: Restore sources cache
         if: steps.check-before-cache.outputs.exists != 'true'
         id: cache
+        timeout-minutes: 10
         uses: actions/cache/restore@v5
         with:
           path: sources
@@ -104,6 +105,7 @@ jobs:
 
       - name: Save sources cache
         if: steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
+        timeout-minutes: 10
         uses: actions/cache/save@v5
         with:
           path: sources
@@ -118,6 +120,7 @@ jobs:
       - name: Upload sources artifact
         if: steps.check-before-upload.outputs.exists != 'true'
         continue-on-error: true
+        timeout-minutes: 10
         uses: actions/upload-artifact@v6
         with:
           name: ${{ needs.cache-key.outputs.key }}
