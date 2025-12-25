@@ -284,7 +284,7 @@ $$(SOURCES)/netbsd-%-$(1)-comp.tar.xz: hashes/netbsd-%-$(1)-comp.tar.xz.sha1 | $
 	mv $$@.tmp/$$(notdir $$@) $$@
 	rm -rf $$@.tmp
 
-netbsd-%-$(1): $$(SOURCES)/netbsd-%-$(1)-base.tar.xz $$(SOURCES)/netbsd-%-$(1)-comp.tar.xz
+$$(ORIG_DIR)/netbsd-%-$(1).orig: $$(SOURCES)/netbsd-%-$(1)-base.tar.xz $$(SOURCES)/netbsd-%-$(1)-comp.tar.xz
 	( chmod -R u+rwX $$@.tmp $$@ 2>/dev/null || true ) && rm -rf $$@.tmp $$@
 	mkdir -p $$@.tmp
 	cd $$@.tmp && tar -Jxf $$(SOURCES)/netbsd-$$*-$(1)-base.tar.xz
@@ -312,7 +312,7 @@ $$(SOURCES)/netbsd-%-$(1)-comp.tgz: hashes/netbsd-%-$(1)-comp.tgz.sha1 | $$(SOUR
 	mv $$@.tmp/$$(notdir $$@) $$@
 	rm -rf $$@.tmp
 
-netbsd-%-$(1): $$(SOURCES)/netbsd-%-$(1)-base.tgz $$(SOURCES)/netbsd-%-$(1)-comp.tgz
+$$(ORIG_DIR)/netbsd-%-$(1).orig: $$(SOURCES)/netbsd-%-$(1)-base.tgz $$(SOURCES)/netbsd-%-$(1)-comp.tgz
 	( chmod -R u+rwX $$@.tmp $$@ 2>/dev/null || true ) && rm -rf $$@.tmp $$@
 	mkdir -p $$@.tmp
 	cd $$@.tmp && tar -xzf $$(SOURCES)/netbsd-$$*-$(1)-base.tgz
@@ -345,32 +345,26 @@ musl-git-%:
 	test ! -d patches/$@ || cat $(wildcard patches/$@/*) | ( cd $@.tmp && patch -p1 )
 	mv $@.tmp $@
 
-%.orig: $(SOURCES)/%.tar.gz
-	case "$@" in */*) exit 1 ;; esac
-	rm -rf $@ $(ORIG_DIR)/$@.tmp $(ORIG_DIR)/$@
-	mkdir -p $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@)
-	( tar -zxf - --strip-components 1 -C $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) ) < $<
-	mv $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) $(ORIG_DIR)/$@
-	rm -rf $(ORIG_DIR)/$@.tmp
-	if [ "$(ORIG_DIR)" != "$(CURDIR)" ]; then ln -sf $(ORIG_DIR)/$@ $@; fi
+$(ORIG_DIR)/%.orig: $(SOURCES)/%.tar.gz
+	rm -rf $@.tmp $@
+	mkdir -p $@.tmp/$(patsubst %.orig,%,$(notdir $@))
+	( tar -zxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$(notdir $@)) ) < $<
+	mv $@.tmp/$(patsubst %.orig,%,$(notdir $@)) $@
+	rm -rf $@.tmp
 
-%.orig: $(SOURCES)/%.tar.bz2
-	case "$@" in */*) exit 1 ;; esac
-	rm -rf $@ $(ORIG_DIR)/$@.tmp $(ORIG_DIR)/$@
-	mkdir -p $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@)
-	( tar -jxf - --strip-components 1 -C $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) ) < $<
-	mv $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) $(ORIG_DIR)/$@
-	rm -rf $(ORIG_DIR)/$@.tmp
-	if [ "$(ORIG_DIR)" != "$(CURDIR)" ]; then ln -sf $(ORIG_DIR)/$@ $@; fi
+$(ORIG_DIR)/%.orig: $(SOURCES)/%.tar.bz2
+	rm -rf $@.tmp $@
+	mkdir -p $@.tmp/$(patsubst %.orig,%,$(notdir $@))
+	( tar -jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$(notdir $@)) ) < $<
+	mv $@.tmp/$(patsubst %.orig,%,$(notdir $@)) $@
+	rm -rf $@.tmp
 
-%.orig: $(SOURCES)/%.tar.xz
-	case "$@" in */*) exit 1 ;; esac
-	rm -rf $@ $(ORIG_DIR)/$@.tmp $(ORIG_DIR)/$@
-	mkdir -p $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@)
-	( tar -Jxf - --strip-components 1 -C $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) ) < $<
-	mv $(ORIG_DIR)/$@.tmp/$(patsubst %.orig,%,$@) $(ORIG_DIR)/$@
-	rm -rf $(ORIG_DIR)/$@.tmp
-	if [ "$(ORIG_DIR)" != "$(CURDIR)" ]; then ln -sf $(ORIG_DIR)/$@ $@; fi
+$(ORIG_DIR)/%.orig: $(SOURCES)/%.tar.xz
+	rm -rf $@.tmp $@
+	mkdir -p $@.tmp/$(patsubst %.orig,%,$(notdir $@))
+	( tar -Jxf - --strip-components 1 -C $@.tmp/$(patsubst %.orig,%,$(notdir $@)) ) < $<
+	mv $@.tmp/$(patsubst %.orig,%,$(notdir $@)) $@
+	rm -rf $@.tmp
 
 define find_and_prefix
 $(addprefix $(SOURCES)/,$(notdir $(wildcard hashes/\$1*.sha1)))
@@ -382,11 +376,12 @@ linux-%: COWPATCH_EXTRACT = -I
 freebsd-%: COWPATCH_EXTRACT = -l
 netbsd-%: COWPATCH_EXTRACT = -l
 
-%: %.orig | $(SOURCES)/config.sub $(SOURCES)/config.guess
+.SECONDEXPANSION:
+%: $$(ORIG_DIR)/$$@.orig | $(SOURCES)/config.sub $(SOURCES)/config.guess
 	case "$@" in */*) exit 1 ;; esac
 	rm -rf $@.tmp
 	mkdir $@.tmp
-	( cd $@.tmp && $(COWPATCH) $(COWPATCH_EXTRACT) $(ORIG_DIR)/$< )
+	( cd $@.tmp && $(COWPATCH) $(COWPATCH_EXTRACT) $< )
 	if [ -d patches/$@ ] && [ -n "$(shell find patches/$@ -type f)" ]; then \
 		if [ -n "$(findstring mingw,$(TARGET))" ]; then \
 			cat $(filter-out %-musl.diff %-gnu.diff %-freebsd.diff %-netbsd.diff %-nonmingw.diff,$(wildcard patches/$@/*)) | ( cd $@.tmp && $(COWPATCH) -p1 ); \

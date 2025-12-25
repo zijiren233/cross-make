@@ -212,17 +212,21 @@ jobs:
           path: sources
           key: ${{ needs.setup.outputs.sources-cache-key }}
 
-      # For macOS: Create case-sensitive volume
-      - name: Create Case-sensitive volume
+      # For macOS: Create case-sensitive volumes for work and orig directories
+      - name: Create Case-sensitive volumes (macOS)
         if: startsWith(inputs.platform, 'darwin')
         run: |
           diskutil list
+          # disk3 for aarch64, disk1 for x86_64
+          DISK=${{ contains(inputs.platform, 'aarch64') && 'disk3' || 'disk1' }}
+          # RAM disk for work directory (x86_64 only, aarch64 has enough disk space)
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
             diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://10485760)
           else
-            # aarch64 使用物理磁盘
-            diskutil apfs addVolume disk3 "Case-sensitive APFS" cross
+            diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
           fi
+          # Physical disk for orig directory (case-sensitive for FreeBSD/NetBSD)
+          diskutil apfs addVolume $DISK "Case-sensitive APFS" orig
           rsync -a --exclude=sources ./ /Volumes/cross/
 
       # For Linux with QEMU
@@ -290,7 +294,7 @@ jobs:
             -x "g++-15" \
             -a \
             -S "${{ github.workspace }}/sources" \
-            -R "${{ github.workspace }}/orig" \
+            -R /Volumes/orig \
             -o "${{ github.workspace }}/dist" \
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
