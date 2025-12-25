@@ -209,6 +209,10 @@ jobs:
           path: sources
           key: ${{ needs.setup.outputs.sources-cache-key }}
 
+      # Touch source files to update timestamps (prevent Make from re-downloading)
+      - name: Touch sources
+        run: find sources -type f -exec touch {} + 2>/dev/null || true
+
       # For macOS: Create case-sensitive volume
       - name: Create Case-sensitive volume
         if: startsWith(inputs.platform, 'darwin')
