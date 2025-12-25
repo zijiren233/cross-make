@@ -274,8 +274,8 @@ jobs:
                 file \
                 zip \
                 yq \
-                mold \
-                vmtouch && \
+                mold && \
+              apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
               vmtouch -l -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
               rsync -a --exclude=sources /src/ /work/ && \
               find /sources -type f -exec touch {} + && \
