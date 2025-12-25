@@ -175,7 +175,7 @@ jobs:
 
           # Lock gcc/g++ in memory for faster access
           GCC_PREFIX=$(brew --prefix gcc@15)
-          sudo vmtouch -l -d "$GCC_PREFIX/bin" "$GCC_PREFIX/libexec"
+          sudo vmtouch -l -h -f -d "$GCC_PREFIX/bin" "$GCC_PREFIX/libexec"
 
       # Try cache first
       - name: Restore sources cache
@@ -276,7 +276,7 @@ jobs:
                 yq \
                 mold && \
               apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
-              vmtouch -l -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
+              vmtouch -l -h -f -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
               rsync -a --exclude=sources /src/ /work/ && \
               find /sources -type f -exec touch {} + && \
               cd /work && \
