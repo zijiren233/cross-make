@@ -39,7 +39,11 @@ ORIG_DIR = $(CURDIR)
 override SOURCES := $(abspath $(SOURCES))
 override ORIG_DIR := $(abspath $(ORIG_DIR))
 
-HOST ?= $(if $(NATIVE),$(TARGET))
+ifdef NATIVE
+override HOST := $(TARGET)
+else
+HOST ?= local
+endif
 BUILD_DIR ?= build-$(COMPILER)/$(if $(HOST),$(HOST),local)/$(TARGET)
 OUTPUT ?= $(CURDIR)/output-$(COMPILER)$(if $(HOST),-$(HOST))
 

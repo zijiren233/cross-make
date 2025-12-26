@@ -41,6 +41,12 @@ ifeq ($(shell uname -s),Darwin)
 STAT =
 endif
 
+ifdef NATIVE
+override HOST := $(TARGET)
+else
+HOST ?= local
+endif
+
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
 XGCC = $(CCACHE) $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
 XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
