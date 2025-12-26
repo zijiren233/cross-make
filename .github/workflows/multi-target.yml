@@ -121,7 +121,7 @@ jobs:
         if: steps.check-before-upload.outputs.exists != 'true'
         continue-on-error: true
         timeout-minutes: 10
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ needs.cache-key.outputs.key }}
           path: sources

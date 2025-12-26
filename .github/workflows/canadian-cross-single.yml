@@ -270,7 +270,7 @@ jobs:
 
       - name: Upload artifact
         timeout-minutes: 10
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.target }}-${{ inputs.release-platform }}
           if-no-files-found: error

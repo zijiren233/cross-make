@@ -306,7 +306,7 @@ jobs:
 
       - name: Upload dist
         timeout-minutes: 10
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
           if-no-files-found: error
