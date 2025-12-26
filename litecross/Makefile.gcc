@@ -33,16 +33,26 @@ HOSTCC = gcc$(EXE_EXT)
 
 -include config.mak
 
+ifdef NATIVE
+override HOST := $(TARGET)
+endif
+
 ifndef NATIVE
-# Cross and Canadian Cross builds need static linking
+# Cross and Canadian Cross builds need static linking by default
 STAT = -static --static
 endif
+
+# Clear STAT if target platform doesn't support static linking
+# - If HOST is set: check if HOST contains darwin
+# - If HOST is empty (Cross build): check build machine with uname
+ifneq ($(HOST),)
+ifneq ($(findstring darwin,$(HOST)),)
+STAT =
+endif
+else
 ifeq ($(shell uname -s),Darwin)
 STAT =
 endif
-
-ifdef NATIVE
-override HOST := $(TARGET)
 endif
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
