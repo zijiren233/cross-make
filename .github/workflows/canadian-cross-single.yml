@@ -133,7 +133,7 @@ jobs:
       - name: Download sources from artifact
         if: steps.cache.outputs.cache-hit != 'true' && needs.setup.outputs.sources-artifact != ''
         timeout-minutes: 10
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: ${{ needs.setup.outputs.sources-artifact }}
           path: sources

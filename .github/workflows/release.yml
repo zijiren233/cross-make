@@ -30,7 +30,7 @@ jobs:
 
       - name: Download artifact
         timeout-minutes: 10
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact-name != '' && inputs.artifact-name || format('{0}-{1}', inputs.target, inputs.platform) }}
           path: dist
