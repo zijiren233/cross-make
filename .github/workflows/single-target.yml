@@ -273,7 +273,7 @@ jobs:
                 tar \
                 file \
                 zip \
-                yq \
+                yq && \
               apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
               vmtouch -l -h -f -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
               rsync -a --exclude=sources /src/ /work/ && \
