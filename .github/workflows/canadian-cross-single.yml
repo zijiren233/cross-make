@@ -209,7 +209,7 @@ jobs:
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
             --cap-add=IPC_LOCK \
-            --tmpfs /work:exec,size=5G \
+            --tmpfs /work:exec,size=6G \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \
@@ -258,6 +258,7 @@ jobs:
         run: |
           TARGET="${{ inputs.target }}"
           cd dist
+          sudo chmod -R a+rw .
           for file in *-canadian-*.tgz; do
             if [ -f "$file" ]; then
               NEW_NAME="${TARGET}-cross.tgz"
