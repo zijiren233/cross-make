@@ -274,7 +274,6 @@ jobs:
                 file \
                 zip \
                 yq \
-                mold && \
               apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
               vmtouch -l -h -f -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
               rsync -a --exclude=sources /src/ /work/ && \
@@ -283,14 +282,12 @@ jobs:
               bash scripts/build.sh \
                 -LDPl \
                 -a \
-                -d mold \
                 -S /sources \
                 -R /orig \
                 -o /dist \
                 ${{ inputs.extra-build-flags }} \
                 -T "${{ inputs.target }}"'
 
-      # Build on macOS (mold/lld not supported, use default linker)
       - name: Build (macOS)
         if: startsWith(inputs.platform, 'darwin')
         working-directory: /Volumes/cross
@@ -315,65 +312,14 @@ jobs:
           if-no-files-found: error
           path: dist
 
-  # Release job runs immediately after this target's build completes
+  # Release job uses reusable workflow
   release:
     name: Release ${{ inputs.target }}
     needs: build
     if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
-    runs-on: ubuntu-24.04
-    env:
-      RELEASE_TAG_BASE: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download artifact
-        timeout-minutes: 10
-        uses: actions/download-artifact@v7
-        with:
-          name: ${{ inputs.target }}-${{ inputs.platform }}
-          path: dist
-
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
-          sudo chmod +x /usr/local/bin/yq
-
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          NOTES=$(bash scripts/generate-release-notes.sh "${{ env.RELEASE_TAG_BASE }}")
-          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create or update release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
-        run: |
-          RELEASE_TAG="${{ env.RELEASE_TAG_BASE }}-${{ inputs.platform }}"
-
-          # Create release if it doesn't exist
-          # Use --target to point to current commit, preventing auto-creation of new git tag
-          gh release view "${{ env.RELEASE_TAG_BASE }}" --repo ${{ github.repository }} || \
-            gh release create "${{ env.RELEASE_TAG_BASE }}" --repo ${{ github.repository }} --title "${{ env.RELEASE_TAG_BASE }}" --notes "$RELEASE_NOTES" --target ${{ github.sha }} || true
-          gh release view "$RELEASE_TAG" --repo ${{ github.repository }} || \
-            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} --title "$RELEASE_TAG" --notes "$RELEASE_NOTES" --target ${{ github.sha }} --latest=false || true
-
-      - name: Upload to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RELEASE_TAG="${{ env.RELEASE_TAG_BASE }}-${{ inputs.platform }}"
-
-          # Upload all files in dist directory
-          for file in dist/*; do
-            if [ -f "$file" ]; then
-              echo "Uploading: $file"
-              if [[ "$file" == *"native"* ]]; then
-                gh release upload "${{ env.RELEASE_TAG_BASE }}" "$file" --clobber --repo ${{ github.repository }}
-              else
-                gh release upload "$RELEASE_TAG" "$file" --clobber --repo ${{ github.repository }}
-              fi
-            fi
-          done
+    uses: ./.github/workflows/release.yml
+    with:
+      target: ${{ inputs.target }}
+      platform: ${{ inputs.platform }}
+      tag: ${{ inputs.tag != '' && inputs.tag || github.ref_name }}
+    secrets: inherit

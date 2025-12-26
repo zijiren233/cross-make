@@ -39,7 +39,11 @@ ORIG_DIR = $(CURDIR)
 override SOURCES := $(abspath $(SOURCES))
 override ORIG_DIR := $(abspath $(ORIG_DIR))
 
-HOST ?= $(if $(NATIVE),$(TARGET))
+ifdef NATIVE
+override HOST := $(TARGET)
+else
+HOST ?= local
+endif
 BUILD_DIR ?= build-$(COMPILER)/$(if $(HOST),$(HOST),local)/$(TARGET)
 OUTPUT ?= $(CURDIR)/output-$(COMPILER)$(if $(HOST),-$(HOST))
 
@@ -433,7 +437,8 @@ $(BUILD_DIR)/Makefile: | $(BUILD_DIR)
 
 $(BUILD_DIR)/config.mak: | $(BUILD_DIR)
 	printf >$@ '%s\n' \
-	"HOST = $(HOST)" \
+	$(if $(filter-out local,$(HOST)),"HOST = $(HOST)") \
+	$(if $(NATIVE),"NATIVE = $(NATIVE)") \
 	$(if $(TARGET),"TARGET = $(TARGET)") \
 	$(if $(GCC_VER),"GCC_SRCDIR = $(REL_TOP)/gcc-$(GCC_VER)") \
 	$(if $(BINUTILS_VER),"BINUTILS_SRCDIR = $(REL_TOP)/binutils-$(BINUTILS_VER)") \

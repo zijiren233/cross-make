@@ -1,0 +1,83 @@
+name: Dispatch Canadian Cross Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.0.0)"
+        required: true
+        type: string
+      platform:
+        description: "Build platform"
+        required: true
+        type: choice
+        options:
+          - linux-aarch64
+          - linux-x86_64
+        default: linux-aarch64
+      hosts:
+        description: 'Canadian Cross hosts (space-separated, or "all" for default list)'
+        required: false
+        type: string
+        default: "all"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag"
+        required: true
+        type: string
+      platform:
+        description: "Build platform"
+        required: true
+        type: string
+      hosts:
+        description: 'Canadian Cross hosts (space-separated, or "all" for default list)'
+        required: false
+        type: string
+        default: "all"
+
+env:
+  DEFAULT_HOSTS: "x86_64-w64-mingw32 loongarch64-linux-musl s390x-linux-musl powerpc64-linux-musl powerpc64le-linux-musl mips64-linux-musl mips64el-linux-musl riscv64-linux-musl"
+
+jobs:
+  dispatch:
+    name: Dispatch Canadian Cross
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Dispatch Canadian Cross builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          PLATFORM="${{ inputs.platform }}"
+          HOSTS_INPUT="${{ inputs.hosts }}"
+
+          # Use default hosts if "all" or empty
+          if [ "$HOSTS_INPUT" = "all" ] || [ -z "$HOSTS_INPUT" ]; then
+            HOSTS="$DEFAULT_HOSTS"
+          else
+            HOSTS="$HOSTS_INPUT"
+          fi
+
+          echo "Dispatching Canadian Cross builds:"
+          echo "  Tag: $TAG"
+          echo "  Platform: $PLATFORM"
+          echo "  Hosts: $HOSTS"
+          echo ""
+
+          for HOST in $HOSTS; do
+            echo "Dispatching build for host: $HOST"
+            gh workflow run canadian-cross.yml \
+              --repo "${{ github.repository }}" \
+              --ref "refs/tags/$TAG" \
+              -f tag="$TAG" \
+              -f host="$HOST" \
+              -f targets="all" \
+              -f platform="$PLATFORM"
+
+            # Small delay to avoid rate limiting
+            sleep 2
+          done
+
+          echo ""
+          echo "All Canadian Cross builds dispatched"

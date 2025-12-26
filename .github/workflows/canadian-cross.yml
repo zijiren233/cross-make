@@ -1,0 +1,109 @@
+name: Canadian Cross Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to download cross compilers from (e.g., v1.0.0)"
+        required: true
+        type: string
+      host:
+        description: "HOST target (the platform the compiler will run on)"
+        required: true
+        type: string
+        default: "loongarch64-linux-musl"
+      platform:
+        description: "Build platform (must match the release tag platform)"
+        required: true
+        type: choice
+        options:
+          - linux-aarch64
+          - linux-x86_64
+        default: linux-aarch64
+
+jobs:
+  # Get all targets using shared workflow
+  get-targets:
+    uses: ./.github/workflows/get-targets.yml
+
+  init:
+    name: Initialize
+    runs-on: ubuntu-24.04
+    outputs:
+      release-platform: ${{ steps.platform.outputs.release_platform }}
+    steps:
+      - name: Calculate release platform from host
+        id: platform
+        run: |
+          HOST="${{ inputs.host }}"
+
+          # Extract OS and ARCH from host triplet (e.g., loongarch64-linux-musl -> linux-loongarch64)
+          if [[ "$HOST" =~ ^([^-]+)-([^-]+)-([^-]+)$ ]]; then
+            # 3-part: arch-os-libc (e.g., loongarch64-linux-musl)
+            HOST_ARCH="${BASH_REMATCH[1]}"
+            HOST_OS="${BASH_REMATCH[2]}"
+          elif [[ "$HOST" =~ ^([^-]+)-([^-]+)-([^-]+)-([^-]+)$ ]]; then
+            # 4-part: arch-vendor-os-libc (e.g., x86_64-unknown-linux-gnu)
+            HOST_ARCH="${BASH_REMATCH[1]}"
+            HOST_OS="${BASH_REMATCH[3]}"
+          elif [[ "$HOST" =~ ^([^-]+)-w64-mingw32$ ]]; then
+            # Windows: x86_64-w64-mingw32
+            HOST_ARCH="${BASH_REMATCH[1]}"
+            HOST_OS="windows"
+          else
+            HOST_ARCH=$(echo "$HOST" | cut -d'-' -f1)
+            HOST_OS="linux"
+          fi
+
+          RELEASE_PLATFORM="${HOST_OS}-${HOST_ARCH}"
+          echo "release_platform=${RELEASE_PLATFORM}" >> $GITHUB_OUTPUT
+          echo "Release platform: $RELEASE_PLATFORM"
+
+  # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
+  build_1:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_1 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ inputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_1 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_2:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_2 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ inputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_2 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_3:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_3 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ inputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_3 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_4:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_4 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ inputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_4 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
