@@ -5,6 +5,9 @@ inputs:
   name:
     description: 'Artifact name to check'
     required: true
+  token:
+    description: 'GitHub token for API access'
+    required: true
 
 outputs:
   exists:
@@ -18,7 +21,7 @@ runs:
       id: check
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
         ARTIFACT_NAME: ${{ inputs.name }}
       run: |
         ARTIFACT_COUNT=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${ARTIFACT_NAME}" \
