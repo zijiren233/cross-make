@@ -244,8 +244,6 @@ jobs:
               find /sources -type f -exec touch {} + && \
               cd /work && \
               export PATH=/toolchains/host/bin:/toolchains/target/bin:\$PATH && \
-              echo 'HOST compiler:' && which ${HOST}-gcc && ${HOST}-gcc --version | head -1 && \
-              echo 'TARGET compiler:' && which ${TARGET}-gcc && ${TARGET}-gcc --version | head -1 && \
               bash scripts/build.sh \
                 -LDPlK \
                 -a \
