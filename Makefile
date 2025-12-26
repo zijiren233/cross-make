@@ -437,7 +437,7 @@ $(BUILD_DIR)/Makefile: | $(BUILD_DIR)
 
 $(BUILD_DIR)/config.mak: | $(BUILD_DIR)
 	printf >$@ '%s\n' \
-	"HOST = $(HOST)" \
+	$(if $(filter-out local,$(HOST)),"HOST = $(HOST)") \
 	$(if $(NATIVE),"NATIVE = $(NATIVE)") \
 	$(if $(TARGET),"TARGET = $(TARGET)") \
 	$(if $(GCC_VER),"GCC_SRCDIR = $(REL_TOP)/gcc-$(GCC_VER)") \

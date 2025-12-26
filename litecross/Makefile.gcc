@@ -43,8 +43,6 @@ endif
 
 ifdef NATIVE
 override HOST := $(TARGET)
-else
-HOST ?= local
 endif
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
@@ -285,14 +283,11 @@ TARGET_CANON = $(shell cd $(GCC_SRCDIR) && sh ./config.sub $(TARGET))
 BUILD = $(GUESS)$(if $(subst $(TARGET_CANON),,$(GUESS)),,xx)
 endif
 
-ifeq ($(HOST),)
-# build cross: runs on BUILD, targets TARGET
-SYSROOT = /$(TARGET)
-else ifeq ($(HOST),$(TARGET))
-# build native: runs on HOST, targets HOST (same as TARGET)
+ifdef NATIVE
+# Native build: sysroot is /
 SYSROOT = /
 else
-# build canadian cross: runs on HOST, targets TARGET (different from HOST)
+# Cross and Canadian Cross: sysroot is /$(TARGET)
 SYSROOT = /$(TARGET)
 endif
 
@@ -490,11 +485,11 @@ else
 #   2. BUILD→TARGET ($(TARGET)-gcc) - to build target libraries, must run on BUILD
 #
 # If BUILD_TARGET_GCC is set, use it; otherwise assume $(TARGET)-gcc exists in PATH
-obj_gcc/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
-obj_gcc/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_gcc/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT) $(STAT)
+obj_gcc/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT) $(STAT)
 obj_gcc/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
-obj_binutils/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
-obj_binutils/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT)
+obj_binutils/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT) $(STAT)
+obj_binutils/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT) $(STAT)
 obj_binutils/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
 
 FULL_BINUTILS_CONFIG += --host=$(HOST)
@@ -743,27 +738,15 @@ endif
 obj_zstd/.lc_built: | obj_zstd src_zstd
 	cd src_zstd/lib && $(MAKE) clean || true
 	cd src_zstd/lib && $(MAKE) CC="$(ZSTD_CC)" AR="$(ZSTD_AR)" libzstd.a
-	mkdir -p obj_zstd/include obj_zstd/lib obj_zstd/lib/pkgconfig
+	mkdir -p obj_zstd/include obj_zstd/lib
 	cp src_zstd/lib/libzstd.a obj_zstd/lib/
 	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h obj_zstd/include/
-	# Create pkg-config file - required because binutils sub-configures
-	# only receive PKG_CONFIG_PATH via HOST_EXPORTS, not ZSTD_CFLAGS/ZSTD_LIBS
-	printf '%s\n' \
-		"prefix=$(CURDIR)/obj_zstd" \
-		"libdir=\$${prefix}/lib" \
-		"includedir=\$${prefix}/include" \
-		"" \
-		"Name: zstd" \
-		"Description: fast lossless compression algorithm library" \
-		"Version: $(ZSTD_VER)" \
-		"Libs: -L\$${libdir} -lzstd" \
-		"Cflags: -I\$${includedir}" \
-		> obj_zstd/lib/pkgconfig/libzstd.pc
 	touch $@
 
-# Export PKG_CONFIG_PATH for binutils - this IS passed to sub-configures via HOST_EXPORTS
-# Note: ZSTD_CFLAGS/ZSTD_LIBS are NOT in HOST_EXPORTS, so they won't reach sub-configures
-obj_binutils/%: export PKG_CONFIG_PATH := $(CURDIR)/obj_zstd/lib/pkgconfig
+# Export ZSTD_CFLAGS and ZSTD_LIBS for binutils/bfd
+# bfd/configure checks these env vars first, bypassing pkg-config if set
+obj_binutils/%: export ZSTD_CFLAGS := -I$(CURDIR)/obj_zstd/include
+obj_binutils/%: export ZSTD_LIBS := -L$(CURDIR)/obj_zstd/lib -lzstd
 # For gcc: uses CXXFLAGS/LDFLAGS (gcc doesn't have the sub-configure issue)
 obj_gcc/%: export CXXFLAGS += -I$(CURDIR)/obj_zstd/include
 obj_gcc/%: export LDFLAGS += -L$(CURDIR)/obj_zstd/lib

@@ -253,6 +253,9 @@ function Help() {
     echo "-d: set linker (e.g., mold, lld, gold)"
     echo "-n: with native build"
     echo "-N: only native build"
+    echo "-H: HOST triplet for Canadian Cross build (e.g., x86_64-linux-musl)"
+    echo "    Builds a cross-compiler that runs on HOST and targets TARGET"
+    echo "    Requires HOST-gcc and TARGET-gcc in PATH (will auto-build if missing)"
     echo "-L: log to std"
     echo "-l: disable log to file"
     echo "-O: set optimize level"
@@ -263,7 +266,7 @@ function Help() {
 }
 
 function ParseArgs() {
-    while getopts "haT:S:o:IR:Cc:x:d:nLlO:j:NDPb" arg; do
+    while getopts "haT:S:o:IR:Cc:x:d:nNH:LlO:j:DPb" arg; do
         case $arg in
         h)
             Help
@@ -306,6 +309,9 @@ function ParseArgs() {
             NATIVE_BUILD="true"
             ONLY_NATIVE_BUILD="true"
             ;;
+        H)
+            CANADIAN_HOST="$OPTARG"
+            ;;
         L)
             LOG_TO_STD="true"
             ;;
@@ -343,6 +349,12 @@ function ParseArgs() {
 }
 
 function FixArgs() {
+    # Check for conflicting options
+    if [ -n "$CANADIAN_HOST" ] && [ -n "$NATIVE_BUILD" ]; then
+        echo "Error: Cannot use both Canadian Cross (-H) and Native build (-n/-N) at the same time"
+        exit 1
+    fi
+
     if [ -n "$DIST_DIR" ]; then
         DIST="$DIST_DIR"
     fi
@@ -423,6 +435,7 @@ function WriteConfig() {
     cat >config.mak <<EOF
 CONFIG_SUB_REV = ${CONFIG_SUB_REV}
 TARGET = ${TARGET}
+$(if [ -n "$HOST" ]; then echo "HOST = ${HOST}"; fi)
 NATIVE = ${NATIVE}
 OUTPUT = ${OUTPUT}
 $(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
@@ -451,7 +464,7 @@ endif
 CHINA = ${USE_CHINA_MIRROR}
 
 COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
-$(if [ -n "$LINKER" ] && [ -z "$NATIVE" ]; then
+$(if [ -n "$LINKER" ] && [ -z "$NATIVE" ] && [ -z "$HOST" ]; then
         echo "# Use custom linker for cross build only"
         echo "LDFLAGS += -fuse-ld=${LINKER}"
     fi)
@@ -465,6 +478,86 @@ EOF
     for arg in "$@"; do
         echo "$arg" >>config.mak
     done
+}
+
+# Check if cross compiler exists for given ID or TARGET
+# Usage: CheckCrossCompiler ID_OR_TARGET
+# Returns: 0 if found, 1 if not found
+# Also adds to PATH if found in dist directory
+function CheckCrossCompiler() {
+    local ID_OR_TARGET="$1"
+    local TRIPLET="$(GetTargetFromId "$ID_OR_TARGET")"
+    local GCC_NAME="${TRIPLET}-gcc"
+
+    # First check if already in PATH
+    if command -v "$GCC_NAME" &>/dev/null; then
+        echo "Found cross compiler in PATH: $GCC_NAME"
+        return 0
+    fi
+
+    # Check if exists in dist directory
+    local CROSS_OUTPUT="${DIST}/${DIST_NAME_PREFIX}${ID_OR_TARGET}-cross${CROSS_DIST_NAME_SUFFIX}"
+    if [ -x "$CROSS_OUTPUT/bin/$GCC_NAME" ]; then
+        export PATH="$CROSS_OUTPUT/bin:$PATH"
+        echo "Found cross compiler in dist: $CROSS_OUTPUT/bin/$GCC_NAME"
+        return 0
+    fi
+
+    echo "Cross compiler not found: $GCC_NAME"
+    return 1
+}
+
+# Build a cross compiler for the given ID or TARGET
+# Usage: BuildCrossCompiler ID_OR_TARGET
+function BuildCrossCompiler() {
+    local ID_OR_TARGET="$1"
+    local TRIPLET="$(GetTargetFromId "$ID_OR_TARGET")"
+    local CROSS_OUTPUT="${DIST}/${DIST_NAME_PREFIX}${ID_OR_TARGET}-cross${CROSS_DIST_NAME_SUFFIX}"
+
+    echo "========================================"
+    echo "Auto-building cross compiler for: $ID_OR_TARGET (TARGET=$TRIPLET)"
+    echo "========================================"
+
+    # Save current state
+    local SAVED_CANADIAN_HOST="$CANADIAN_HOST"
+    local SAVED_NATIVE_BUILD="$NATIVE_BUILD"
+    local SAVED_ONLY_NATIVE_BUILD="$ONLY_NATIVE_BUILD"
+
+    # Clear Canadian mode for this build
+    CANADIAN_HOST=""
+    NATIVE_BUILD=""
+    ONLY_NATIVE_BUILD=""
+
+    # Build the cross compiler using the same logic as normal cross build
+    Build "$ID_OR_TARGET"
+
+    # Restore state
+    CANADIAN_HOST="$SAVED_CANADIAN_HOST"
+    NATIVE_BUILD="$SAVED_NATIVE_BUILD"
+    ONLY_NATIVE_BUILD="$SAVED_ONLY_NATIVE_BUILD"
+
+    # Add to PATH
+    if [ -d "$CROSS_OUTPUT/bin" ]; then
+        export PATH="$CROSS_OUTPUT/bin:$PATH"
+        echo "Added $CROSS_OUTPUT/bin to PATH"
+        return 0
+    else
+        echo "Failed to build cross compiler for $ID_OR_TARGET"
+        return 1
+    fi
+}
+
+# Ensure cross compiler exists, build if missing
+# Usage: EnsureCrossCompiler ID_OR_TARGET
+function EnsureCrossCompiler() {
+    local ID_OR_TARGET="$1"
+
+    if CheckCrossCompiler "$ID_OR_TARGET"; then
+        return 0
+    fi
+
+    echo "Cross compiler for $ID_OR_TARGET not found, attempting to build..."
+    BuildCrossCompiler "$ID_OR_TARGET"
 }
 
 function TestCrossCC() {
@@ -573,11 +666,68 @@ function Build() {
     local DIST_NAME="${DIST}/${DIST_NAME_PREFIX}${BUILD_ID}"
     local CROSS_DIST_NAME="${DIST_NAME}-cross${CROSS_DIST_NAME_SUFFIX}"
     local NATIVE_DIST_NAME="${DIST_NAME}-native${NATIVE_DIST_NAME_SUFFIX}"
+    local CANADIAN_DIST_NAME="${DIST_NAME}-canadian-${CANADIAN_HOST}${CANADIAN_DIST_NAME_SUFFIX}"
+
+    # Canadian Cross build
+    if [ -n "$CANADIAN_HOST" ]; then
+        # CANADIAN_HOST can be an ID (e.g., s390x-linux-gnu-2.31) or a TARGET triplet
+        local HOST_ID="$CANADIAN_HOST"
+        local HOST_TARGET="$(GetTargetFromId "$CANADIAN_HOST")"
+
+        echo "========================================"
+        echo "Canadian Cross Build"
+        echo "  HOST:   $HOST_ID -> $HOST_TARGET (compiler runs on this)"
+        echo "  TARGET: $BUILD_ID -> $TARGET (compiler outputs for this)"
+        echo "========================================"
+
+        # Check/build required cross compilers
+        # 1. HOST cross compiler (BUILD -> HOST)
+        if ! CheckCrossCompiler "$HOST_ID"; then
+            echo "Need to build HOST cross compiler first..."
+            BuildCrossCompiler "$HOST_ID" || {
+                echo "Failed to build HOST cross compiler"
+                exit 1
+            }
+        fi
+
+        # 2. TARGET cross compiler (BUILD -> TARGET)
+        if ! CheckCrossCompiler "$BUILD_ID"; then
+            echo "Need to build TARGET cross compiler first..."
+            BuildCrossCompiler "$BUILD_ID" || {
+                echo "Failed to build TARGET cross compiler"
+                exit 1
+            }
+        fi
+
+        echo "build canadian cross ${DIST_NAME_PREFIX}${BUILD_ID} (HOST=${HOST_TARGET}, TARGET=${TARGET}) to ${CANADIAN_DIST_NAME}"
+        # Pass the actual HOST triplet (not the ID) to Makefile
+        OUTPUT="${CANADIAN_DIST_NAME}" HOST="${HOST_TARGET}" NATIVE="" WriteConfig "export PATH=$PATH"
+
+        if RunMake "${CANADIAN_DIST_NAME}" "${CANADIAN_DIST_NAME}.log" "${DIST_NAME_PREFIX}${TARGET}-canadian"; then
+            echo "build canadian cross ${DIST_NAME_PREFIX}${TARGET} success"
+            echo "Note: The produced compiler runs on ${HOST_TARGET} and targets ${TARGET}"
+        else
+            local EXIT_CODE=$?
+            if [ ! "$LOG_TO_STD" ]; then
+                tail -n 3000 "${CANADIAN_DIST_NAME}.log"
+                echo "full build log: ${CANADIAN_DIST_NAME}.log"
+            fi
+            echo "build canadian cross ${DIST_NAME_PREFIX}${TARGET} error"
+            exit $EXIT_CODE
+        fi
+
+        if [ "$ENABLE_ARCHIVE" ]; then
+            tar -zcf "${CANADIAN_DIST_NAME}.tgz" -C "${CANADIAN_DIST_NAME}" .
+            echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.tgz success"
+        fi
+
+        return 0
+    fi
 
     # Cross build
     if [ ! "$ONLY_NATIVE_BUILD" ]; then
         echo "build cross ${DIST_NAME_PREFIX}${BUILD_ID} (TARGET=${TARGET}) to ${CROSS_DIST_NAME}"
-        OUTPUT="${CROSS_DIST_NAME}" NATIVE="" WriteConfig "export PATH=$PATH"
+        OUTPUT="${CROSS_DIST_NAME}" HOST="" NATIVE="" WriteConfig "export PATH=$PATH"
 
         if RunMake "${CROSS_DIST_NAME}" "${CROSS_DIST_NAME}.log" "${DIST_NAME_PREFIX}${TARGET}-cross"; then
             echo "build cross ${DIST_NAME_PREFIX}${TARGET} success"
@@ -604,7 +754,7 @@ function Build() {
     # Native build
     if [ "$NATIVE_BUILD" ]; then
         echo "build native ${DIST_NAME_PREFIX}${TARGET} to ${NATIVE_DIST_NAME}"
-        OUTPUT="${NATIVE_DIST_NAME}" NATIVE="true" WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
+        OUTPUT="${NATIVE_DIST_NAME}" HOST="" NATIVE="true" WriteConfig "export PATH=${CROSS_DIST_NAME}/bin:$PATH"
 
         if RunMake "${NATIVE_DIST_NAME}" "${NATIVE_DIST_NAME}.log" "${DIST_NAME_PREFIX}${TARGET}-native"; then
             echo "build native ${DIST_NAME_PREFIX}${TARGET} success"
