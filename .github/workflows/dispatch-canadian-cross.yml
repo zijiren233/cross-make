@@ -72,7 +72,6 @@ jobs:
               --ref "refs/tags/$TAG" \
               -f tag="$TAG" \
               -f host="$HOST" \
-              -f targets="all" \
               -f platform="$PLATFORM"
 
             # Small delay to avoid rate limiting
