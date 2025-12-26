@@ -175,7 +175,7 @@ jobs:
 
           # Lock gcc/g++ in memory for faster access
           GCC_PREFIX=$(brew --prefix gcc@15)
-          sudo vmtouch -l -h -f -d "$GCC_PREFIX/bin" "$GCC_PREFIX/libexec"
+          sudo vmtouch -l -h -f -d "$GCC_PREFIX"
 
       # Try cache first
       - name: Restore sources cache
