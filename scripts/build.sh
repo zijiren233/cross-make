@@ -256,6 +256,7 @@ function Help() {
     echo "-H: HOST triplet for Canadian Cross build (e.g., x86_64-linux-musl)"
     echo "    Builds a cross-compiler that runs on HOST and targets TARGET"
     echo "    Requires HOST-gcc and TARGET-gcc in PATH (will auto-build if missing)"
+    echo "-K: Canadian Cross only mode (require cross compilers in PATH, error if missing)"
     echo "-L: log to std"
     echo "-l: disable log to file"
     echo "-O: set optimize level"
@@ -266,7 +267,7 @@ function Help() {
 }
 
 function ParseArgs() {
-    while getopts "haT:S:o:IR:Cc:x:d:nNH:LlO:j:DPb" arg; do
+    while getopts "haT:S:o:IR:Cc:x:d:nNH:KLlO:j:DPb" arg; do
         case $arg in
         h)
             Help
@@ -311,6 +312,9 @@ function ParseArgs() {
             ;;
         H)
             CANADIAN_HOST="$OPTARG"
+            ;;
+        K)
+            CANADIAN_ONLY="true"
             ;;
         L)
             LOG_TO_STD="true"
@@ -683,6 +687,11 @@ function Build() {
         # Check/build required cross compilers
         # 1. HOST cross compiler (BUILD -> HOST)
         if ! CheckCrossCompiler "$HOST_ID"; then
+            if [ -n "$CANADIAN_ONLY" ]; then
+                echo "Error: HOST cross compiler not found: ${HOST_TARGET}-gcc"
+                echo "Canadian-only mode (-K) requires cross compilers in PATH"
+                exit 1
+            fi
             echo "Need to build HOST cross compiler first..."
             BuildCrossCompiler "$HOST_ID" || {
                 echo "Failed to build HOST cross compiler"
@@ -692,6 +701,11 @@ function Build() {
 
         # 2. TARGET cross compiler (BUILD -> TARGET)
         if ! CheckCrossCompiler "$BUILD_ID"; then
+            if [ -n "$CANADIAN_ONLY" ]; then
+                echo "Error: TARGET cross compiler not found: ${TARGET}-gcc"
+                echo "Canadian-only mode (-K) requires cross compilers in PATH"
+                exit 1
+            fi
             echo "Need to build TARGET cross compiler first..."
             BuildCrossCompiler "$BUILD_ID" || {
                 echo "Failed to build TARGET cross compiler"

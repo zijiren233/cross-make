@@ -1,0 +1,156 @@
+name: Canadian Cross Multi Target
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to download cross compilers from"
+        required: true
+        type: string
+      host:
+        description: "HOST target (the platform the compiler will run on)"
+        required: true
+        type: string
+      targets:
+        description: 'JSON array of TARGETs to build'
+        required: true
+        type: string
+      build-platform:
+        description: "Build platform"
+        required: true
+        type: choice
+        options:
+          - linux-aarch64
+          - linux-x86_64
+      release-platform:
+        description: "Release platform (derived from HOST)"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to download cross compilers from"
+        required: true
+        type: string
+      host:
+        description: "HOST target"
+        required: true
+        type: string
+      targets:
+        description: "JSON array of TARGETs to build"
+        required: true
+        type: string
+      build-platform:
+        description: "Build platform"
+        required: true
+        type: string
+      release-platform:
+        description: "Release platform"
+        required: true
+        type: string
+
+jobs:
+  # Get sources cache key first
+  cache-key:
+    name: Get Cache Key
+    runs-on: ubuntu-24.04
+    outputs:
+      key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate cache key
+        id: cache-key
+        run: |
+          KEY=$(./scripts/sources.sh cache-key)
+          echo "key=sources-${KEY}" >> $GITHUB_OUTPUT
+          echo "Sources cache key: sources-${KEY}"
+
+  # Download sources once, shared by all targets
+  sources:
+    name: Prepare Sources
+    needs: cache-key
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check artifact before cache
+        id: check-before-cache
+        uses: ./.github/actions/check-artifact
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+
+      - name: Install yq
+        if: steps.check-before-cache.outputs.exists != 'true'
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Restore sources cache
+        if: steps.check-before-cache.outputs.exists != 'true'
+        id: cache
+        timeout-minutes: 10
+        uses: actions/cache/restore@v5
+        with:
+          path: sources
+          key: ${{ needs.cache-key.outputs.key }}
+
+      - name: Check artifact before download
+        if: steps.cache.outputs.cache-hit != 'true'
+        id: check-before-download
+        uses: ./.github/actions/check-artifact
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+
+      - name: Download sources
+        if: steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
+        run: ./scripts/sources.sh download -S sources
+
+      - name: Save sources cache
+        if: steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
+        timeout-minutes: 10
+        uses: actions/cache/save@v5
+        with:
+          path: sources
+          key: ${{ needs.cache-key.outputs.key }}
+
+      - name: Check artifact before upload
+        id: check-before-upload
+        uses: ./.github/actions/check-artifact
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+
+      - name: Upload sources artifact
+        if: steps.check-before-upload.outputs.exists != 'true'
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ needs.cache-key.outputs.key }}
+          path: sources
+          compression-level: 3
+
+  # Build each target using single-target workflow
+  build-and-release:
+    name: ${{ matrix.target }}
+    needs: [cache-key, sources]
+    if: inputs.targets != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(inputs.targets) }}
+    uses: ./.github/workflows/canadian-cross-single.yml
+    with:
+      tag: ${{ inputs.tag }}
+      host: ${{ inputs.host }}
+      target: ${{ matrix.target }}
+      build-platform: ${{ inputs.build-platform }}
+      release-platform: ${{ inputs.release-platform }}
+      sources-cache-key: ${{ needs.cache-key.outputs.key }}
+      sources-artifact: ${{ needs.cache-key.outputs.key }}
+    secrets: inherit

@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "Target name (e.g., aarch64-linux-musl)"
+        required: true
+        type: string
+      platform:
+        description: "Platform identifier for release tag (e.g., linux-x86_64, linux-loongarch64)"
+        required: true
+        type: string
+      artifact-name:
+        description: "Artifact name to download (defaults to {target}-{platform})"
+        required: false
+        type: string
+        default: ""
+      tag:
+        description: "Release tag base (e.g., v1.0.0)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Release ${{ inputs.target }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        timeout-minutes: 10
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifact-name != '' && inputs.artifact-name || format('{0}-{1}', inputs.target, inputs.platform) }}
+          path: dist
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          NOTES=$(bash scripts/generate-release-notes.sh "${{ inputs.tag }}")
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create or update release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
+        run: |
+          RELEASE_TAG="${{ inputs.tag }}-${{ inputs.platform }}"
+
+          # Create base release if it doesn't exist
+          gh release view "${{ inputs.tag }}" --repo ${{ github.repository }} || \
+            gh release create "${{ inputs.tag }}" --repo ${{ github.repository }} \
+              --title "${{ inputs.tag }}" \
+              --notes "$RELEASE_NOTES" \
+              --target ${{ github.sha }} || true
+
+          # Create platform-specific release if it doesn't exist
+          gh release view "$RELEASE_TAG" --repo ${{ github.repository }} || \
+            gh release create "$RELEASE_TAG" --repo ${{ github.repository }} \
+              --title "$RELEASE_TAG" \
+              --notes "$RELEASE_NOTES" \
+              --target ${{ github.sha }} \
+              --latest=false || true
+
+      - name: Upload to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="${{ inputs.tag }}-${{ inputs.platform }}"
+
+          for file in dist/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading: $file"
+              if [[ "$file" == *"native"* ]]; then
+                # Native builds go to base release
+                gh release upload "${{ inputs.tag }}" "$file" --clobber --repo ${{ github.repository }}
+              else
+                # Cross builds go to platform-specific release
+                gh release upload "$RELEASE_TAG" "$file" --clobber --repo ${{ github.repository }}
+              fi
+            fi
+          done
