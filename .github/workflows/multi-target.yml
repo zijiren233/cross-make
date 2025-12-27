@@ -76,6 +76,7 @@ jobs:
         uses: ./.github/actions/check-artifact
         with:
           name: ${{ needs.cache-key.outputs.key }}
+          token: ${{ github.token }}
 
       - name: Install yq
         if: steps.check-before-cache.outputs.exists != 'true'
@@ -98,6 +99,7 @@ jobs:
         uses: ./.github/actions/check-artifact
         with:
           name: ${{ needs.cache-key.outputs.key }}
+          token: ${{ github.token }}
 
       - name: Download sources
         if: steps.cache.outputs.cache-hit != 'true' && steps.check-before-download.outputs.exists != 'true'
@@ -116,6 +118,7 @@ jobs:
         uses: ./.github/actions/check-artifact
         with:
           name: ${{ needs.cache-key.outputs.key }}
+          token: ${{ github.token }}
 
       - name: Upload sources artifact
         if: steps.check-before-upload.outputs.exists != 'true'
