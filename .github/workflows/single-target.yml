@@ -226,7 +226,7 @@ jobs:
           DISK=${{ contains(inputs.platform, 'aarch64') && 'disk3' || 'disk1' }}
           # RAM disk for work directory (x86_64 only, aarch64 has enough disk space)
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
-            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://10485760)
+            diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://12582912)
           else
             diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
           fi
@@ -246,7 +246,7 @@ jobs:
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
             --cap-add=IPC_LOCK \
-            --tmpfs /work:exec,size=5G \
+            --tmpfs /work:exec,size=8G \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \

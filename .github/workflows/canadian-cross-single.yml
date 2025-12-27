@@ -182,23 +182,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          HOST="${{ inputs.host }}"
           TARGET="${{ inputs.target }}"
           TAG="${{ inputs.tag }}"
           PLATFORM="${{ inputs.build-platform }}"
           RELEASE_TAG="${TAG}-${PLATFORM}"
 
-          echo "Downloading TARGET compiler: ${TARGET} from ${RELEASE_TAG}"
+          if [ "$HOST" = "$TARGET" ]; then
+            echo "TARGET is same as HOST ($TARGET), creating symlink"
+            ln -s host toolchains/target
+          else
+            echo "Downloading TARGET compiler: ${TARGET} from ${RELEASE_TAG}"
 
-          ASSET_NAME="${TARGET}-cross.tgz"
-          mkdir -p toolchains/target
+            ASSET_NAME="${TARGET}-cross.tgz"
+            mkdir -p toolchains/target
 
-          gh release download "${RELEASE_TAG}" \
-            --repo "${{ github.repository }}" \
-            --pattern "${ASSET_NAME}" \
-            --dir toolchains
+            gh release download "${RELEASE_TAG}" \
+              --repo "${{ github.repository }}" \
+              --pattern "${ASSET_NAME}" \
+              --dir toolchains
 
-          tar -xzf "toolchains/${ASSET_NAME}" -C "toolchains/target"
-          echo "TARGET compiler extracted to toolchains/target"
+            tar -xzf "toolchains/${ASSET_NAME}" -C "toolchains/target"
+          fi
+
+          echo "TARGET compiler at toolchains/target"
           ls -la toolchains/target/bin/ | head -20
 
       - name: Build Canadian Cross (Alpine Docker)
@@ -209,7 +216,7 @@ jobs:
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
             --cap-add=IPC_LOCK \
-            --tmpfs /work:exec,size=6G \
+            --tmpfs /work:exec,size=8G \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \
