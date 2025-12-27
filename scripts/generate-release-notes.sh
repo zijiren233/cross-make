@@ -26,6 +26,7 @@ GMP_VER=$(yq '.defaults.GMP_VER' "$TARGETS_FILE")
 MPC_VER=$(yq '.defaults.MPC_VER' "$TARGETS_FILE")
 MPFR_VER=$(yq '.defaults.MPFR_VER' "$TARGETS_FILE")
 ISL_VER=$(yq '.defaults.ISL_VER' "$TARGETS_FILE")
+ZSTD_VER=$(yq '.defaults.ZSTD_VER' "$TARGETS_FILE")
 LINUX_VER=$(yq '.defaults.LINUX_VER' "$TARGETS_FILE")
 DEFAULT_MUSL_VER=$(yq '.defaults.MUSL_VER' "$TARGETS_FILE")
 DEFAULT_GLIBC_VER=$(yq '.defaults.GLIBC_VER' "$TARGETS_FILE")
@@ -41,52 +42,52 @@ fi
 # Linux musl targets
 echo "## Linux musl Targets"
 echo ""
-echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | musl | Linux Headers |"
-echo "|--------|-----|----------|-----|-----|------|-----|------|---------------|"
+echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | musl | Linux Headers |"
+echo "|--------|-----|----------|-----|-----|------|-----|------|------|---------------|"
 yq -r ".targets[] | select(.TARGET | test(\"linux-musl\")) | [.TARGET, .MUSL_VER] | @tsv" "$TARGETS_FILE" | \
 while IFS=$'\t' read -r target musl_ver; do
     musl_ver="${musl_ver:-$DEFAULT_MUSL_VER}"
     [ "$musl_ver" = "null" ] && musl_ver="$DEFAULT_MUSL_VER"
-    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $musl_ver | $LINUX_VER |"
+    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $musl_ver | $LINUX_VER |"
 done
 echo ""
 
 # Linux glibc targets
 echo "## Linux glibc Targets"
 echo ""
-echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | glibc | Linux Headers |"
-echo "|--------|-----|----------|-----|-----|------|-----|-------|---------------|"
+echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | glibc | Linux Headers |"
+echo "|--------|-----|----------|-----|-----|------|-----|------|-------|---------------|"
 yq -r ".targets[] | select(.TARGET | test(\"linux-gnu\")) | [(.ID // .TARGET), .GLIBC_VER] | @tsv" "$TARGETS_FILE" | \
 while IFS=$'\t' read -r id glibc_ver; do
     glibc_ver="${glibc_ver:-$DEFAULT_GLIBC_VER}"
     [ "$glibc_ver" = "null" ] && glibc_ver="$DEFAULT_GLIBC_VER"
-    echo "| \`$id\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $glibc_ver | $LINUX_VER |"
+    echo "| \`$id\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $glibc_ver | $LINUX_VER |"
 done
 echo ""
 
 # Windows mingw targets
 echo "## Windows MinGW Targets"
 echo ""
-echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | MinGW |"
-echo "|--------|-----|----------|-----|-----|------|-----|-------|"
+echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | MinGW |"
+echo "|--------|-----|----------|-----|-----|------|-----|------|-------|"
 yq -r ".targets[] | select(.TARGET | test(\"mingw\")) | [.TARGET, .MINGW_VER] | @tsv" "$TARGETS_FILE" | \
 while IFS=$'\t' read -r target mingw_ver; do
     mingw_ver="${mingw_ver:-$DEFAULT_MINGW_VER}"
     [ "$mingw_ver" = "null" ] && mingw_ver="$DEFAULT_MINGW_VER"
-    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $mingw_ver |"
+    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $mingw_ver |"
 done
 echo ""
 
 # FreeBSD targets
 echo "## FreeBSD Targets"
 echo ""
-echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | FreeBSD |"
-echo "|--------|-----|----------|-----|-----|------|-----|---------|"
+echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | FreeBSD |"
+echo "|--------|-----|----------|-----|-----|------|-----|------|---------|"
 yq -r ".targets[] | select(.TARGET | test(\"freebsd\")) | [.TARGET, .FREEBSD_VER] | @tsv" "$TARGETS_FILE" | \
 while IFS=$'\t' read -r target freebsd_ver; do
     freebsd_ver="${freebsd_ver:-$DEFAULT_FREEBSD_VER}"
     [ "$freebsd_ver" = "null" ] && freebsd_ver="$DEFAULT_FREEBSD_VER"
-    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $freebsd_ver |"
+    echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $freebsd_ver |"
 done
 echo ""
 
@@ -95,6 +96,7 @@ echo "## Host Platforms"
 echo ""
 echo "| Platform | Architecture |"
 echo "|----------|--------------|"
-echo "| Linux | x86_64, aarch64, armv7, riscv64, powerpc64le, s390x |"
+echo "| Linux | x86_64, aarch64, armv7, loongarch64, s390x, powerpc64, powerpc64le, mips64, mips64el, riscv64 |"
 echo "| macOS | x86_64, aarch64 |"
+echo "| Windows | x86_64 |"
 echo ""
