@@ -24,12 +24,13 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         ARTIFACT_NAME: ${{ inputs.name }}
       run: |
-        ARTIFACT_COUNT=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${ARTIFACT_NAME}" \
+        # Use GITHUB_REPOSITORY and GITHUB_RUN_ID environment variables which are always available
+        ARTIFACT_COUNT=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?name=${ARTIFACT_NAME}" \
           --jq '.total_count' 2>/dev/null || echo "0")
         if [ "$ARTIFACT_COUNT" -gt 0 ]; then
-          echo "Artifact '${ARTIFACT_NAME}' exists in run ${{ github.run_id }}"
+          echo "Artifact '${ARTIFACT_NAME}' exists in run ${GITHUB_RUN_ID}"
           echo "exists=true" >> $GITHUB_OUTPUT
         else
-          echo "Artifact '${ARTIFACT_NAME}' not found in run ${{ github.run_id }}"
+          echo "Artifact '${ARTIFACT_NAME}' not found in run ${GITHUB_RUN_ID}"
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
