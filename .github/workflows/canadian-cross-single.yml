@@ -5,7 +5,7 @@ on:
     inputs:
       tag:
         description: "Release tag to download cross compilers from"
-        required: true
+        required: false
         type: string
       host:
         description: "HOST target (the platform the compiler will run on)"
@@ -40,7 +40,7 @@ on:
     inputs:
       tag:
         description: "Release tag to download cross compilers from"
-        required: true
+        required: false
         type: string
       host:
         description: "HOST target"
@@ -79,9 +79,15 @@ jobs:
       docker-image: ${{ steps.config.outputs.docker-image }}
       sources-cache-key: ${{ inputs.sources-cache-key || steps.cache-key.outputs.key }}
       sources-artifact: ${{ inputs.sources-artifact }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-        if: inputs.sources-cache-key == ''
+
+      - name: Resolve tag
+        id: tag
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ inputs.tag }}
 
       - name: Install yq
         if: inputs.sources-cache-key == ''
@@ -160,7 +166,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           HOST="${{ inputs.host }}"
-          TAG="${{ inputs.tag }}"
+          TAG="${{ needs.setup.outputs.tag }}"
           PLATFORM="${{ inputs.build-platform }}"
           RELEASE_TAG="${TAG}-${PLATFORM}"
 
@@ -184,7 +190,7 @@ jobs:
         run: |
           HOST="${{ inputs.host }}"
           TARGET="${{ inputs.target }}"
-          TAG="${{ inputs.tag }}"
+          TAG="${{ needs.setup.outputs.tag }}"
           PLATFORM="${{ inputs.build-platform }}"
           RELEASE_TAG="${TAG}-${PLATFORM}"
 
@@ -285,11 +291,11 @@ jobs:
 
   release:
     name: Release ${{ inputs.target }}
-    needs: build
-    if: inputs.tag != ''
+    needs: [setup, build]
+    if: startsWith(github.ref, 'refs/tags/')
     uses: ./.github/workflows/release.yml
     with:
       target: ${{ inputs.target }}
       platform: ${{ inputs.release-platform }}
-      tag: ${{ inputs.tag }}
+      tag: ${{ needs.setup.outputs.tag }}
     secrets: inherit

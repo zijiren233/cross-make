@@ -1,0 +1,42 @@
+name: 'Resolve Tag'
+description: 'Resolve tag from ref or input. Tag ref overrides input, branch ref requires input.'
+
+inputs:
+  tag:
+    description: 'Input tag (optional for tag ref trigger, required for branch ref trigger)'
+    required: false
+    default: ''
+
+outputs:
+  tag:
+    description: 'Resolved tag value'
+    value: ${{ steps.resolve.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve tag
+      id: resolve
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        CURRENT_REF: ${{ github.ref }}
+      run: |
+        # Determine tag based on ref type
+        # - Tag ref: extract tag from ref (overrides input)
+        # - Branch ref: use input tag (required)
+        if [[ "$CURRENT_REF" == refs/tags/* ]]; then
+          TAG="${CURRENT_REF#refs/tags/}"
+          echo "Tag ref trigger: $CURRENT_REF"
+          echo "Using tag from ref: $TAG"
+        else
+          if [ -z "$INPUT_TAG" ]; then
+            echo "::error::Branch trigger requires tag input to download cross compilers"
+            exit 1
+          fi
+          TAG="$INPUT_TAG"
+          echo "Branch ref trigger: $CURRENT_REF"
+          echo "Using input tag: $TAG"
+        fi
+
+        echo "tag=${TAG}" >> $GITHUB_OUTPUT

@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to download cross compilers from (e.g., v1.0.0)"
-        required: true
+        description: "Release tag to download cross compilers from (optional for branch trigger)"
+        required: false
         type: string
       host:
         description: "HOST target (the platform the compiler will run on)"
@@ -31,7 +31,16 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       release-platform: ${{ steps.platform.outputs.release_platform }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ inputs.tag }}
+
       - name: Calculate release platform from host
         id: platform
         run: |
@@ -65,7 +74,7 @@ jobs:
     if: needs.get-targets.outputs.TARGETS_1 != '[]'
     uses: ./.github/workflows/canadian-cross-multi.yml
     with:
-      tag: ${{ inputs.tag }}
+      tag: ${{ needs.init.outputs.tag }}
       host: ${{ inputs.host }}
       targets: ${{ needs.get-targets.outputs.TARGETS_1 }}
       build-platform: ${{ inputs.platform }}
@@ -77,7 +86,7 @@ jobs:
     if: needs.get-targets.outputs.TARGETS_2 != '[]'
     uses: ./.github/workflows/canadian-cross-multi.yml
     with:
-      tag: ${{ inputs.tag }}
+      tag: ${{ needs.init.outputs.tag }}
       host: ${{ inputs.host }}
       targets: ${{ needs.get-targets.outputs.TARGETS_2 }}
       build-platform: ${{ inputs.platform }}
@@ -89,7 +98,7 @@ jobs:
     if: needs.get-targets.outputs.TARGETS_3 != '[]'
     uses: ./.github/workflows/canadian-cross-multi.yml
     with:
-      tag: ${{ inputs.tag }}
+      tag: ${{ needs.init.outputs.tag }}
       host: ${{ inputs.host }}
       targets: ${{ needs.get-targets.outputs.TARGETS_3 }}
       build-platform: ${{ inputs.platform }}
@@ -101,7 +110,7 @@ jobs:
     if: needs.get-targets.outputs.TARGETS_4 != '[]'
     uses: ./.github/workflows/canadian-cross-multi.yml
     with:
-      tag: ${{ inputs.tag }}
+      tag: ${{ needs.init.outputs.tag }}
       host: ${{ inputs.host }}
       targets: ${{ needs.get-targets.outputs.TARGETS_4 }}
       build-platform: ${{ inputs.platform }}

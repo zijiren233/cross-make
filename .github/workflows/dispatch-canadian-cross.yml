@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g., v1.0.0)"
-        required: true
+        description: "Release tag (e.g., v1.0.0). Required for tag trigger, optional for branch trigger (used to download dependencies)"
+        required: false
         type: string
       platform:
         description: "Build platform"
@@ -23,8 +23,8 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: "Release tag"
-        required: true
+        description: "Release tag (optional for branch trigger)"
+        required: false
         type: string
       platform:
         description: "Build platform"
@@ -44,13 +44,22 @@ jobs:
     name: Dispatch Canadian Cross
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ inputs.tag }}
+
       - name: Dispatch Canadian Cross builds
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ inputs.tag }}"
+          TAG="${{ steps.tag.outputs.tag }}"
           PLATFORM="${{ inputs.platform }}"
           HOSTS_INPUT="${{ inputs.hosts }}"
+          CURRENT_REF="${{ github.ref }}"
 
           # Use default hosts if "all" or empty
           if [ "$HOSTS_INPUT" = "all" ] || [ -z "$HOSTS_INPUT" ]; then
@@ -63,7 +72,7 @@ jobs:
             echo "Dispatching build for host: $HOST"
             gh workflow run canadian-cross.yml \
               --repo "${{ github.repository }}" \
-              --ref refs/tags/$TAG \
+              --ref "$CURRENT_REF" \
               -f tag="$TAG" \
               -f host="$HOST" \
               -f platform="$PLATFORM"
