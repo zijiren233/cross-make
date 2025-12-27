@@ -17,6 +17,7 @@ COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
 PIE_CONFIG = --enable-default-pie
 SSP_CONFIG = --enable-default-ssp
+THREADS_CONFIG = --enable-threads=posix
 
 ifeq ($(OS),Windows_NT)
 EXE_EXT = .exe
@@ -226,10 +227,18 @@ GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
 	--enable-fully-dynamic-string
 
+ifneq ($(findstring aarch64,$(TARGET)),)
+THREADS_CONFIG = --enable-threads=win32
+endif
+
 ifneq ($(findstring x86_64,$(TARGET)),)
-# 64
+# x86_64: enable lib64, disable lib32
 MINGW_CRT_CONFIG += --disable-lib32 --enable-lib64
+else ifneq ($(findstring aarch64,$(TARGET)),)
+# aarch64: enable libarm64, disable others
+MINGW_CRT_CONFIG += --disable-lib32 --disable-lib64 --enable-libarm64
 else
+# i*86: enable lib32, disable lib64
 MINGW_CRT_CONFIG += --enable-lib32 --disable-lib64
 endif
 
@@ -324,7 +333,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
 	--enable-libstdcxx-filesystem-ts=yes \
-	--enable-threads=posix \
+	$(THREADS_CONFIG) \
 	--enable-tls \
 	$(PIE_CONFIG) \
 	$(SSP_CONFIG) \
