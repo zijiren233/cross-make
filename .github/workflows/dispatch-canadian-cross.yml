@@ -59,24 +59,11 @@ jobs:
             HOSTS="$HOSTS_INPUT"
           fi
 
-          echo "Dispatching Canadian Cross builds:"
-          echo "  Tag: $TAG"
-          echo "  Platform: $PLATFORM"
-          echo "  Hosts: $HOSTS"
-          echo ""
-
-          # Determine ref: use current branch for workflow_dispatch, use tag for workflow_call
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            REF_ARG="--ref ${{ github.ref_name }}"
-          else
-            REF_ARG="--ref refs/tags/$TAG"
-          fi
-
           for HOST in $HOSTS; do
             echo "Dispatching build for host: $HOST"
             gh workflow run canadian-cross.yml \
               --repo "${{ github.repository }}" \
-              $REF_ARG \
+              --ref refs/tags/$TAG \
               -f tag="$TAG" \
               -f host="$HOST" \
               -f platform="$PLATFORM"
