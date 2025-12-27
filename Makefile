@@ -293,6 +293,7 @@ $$(ORIG_DIR)/netbsd-%-$(1).orig: $$(SOURCES)/netbsd-%-$(1)-base.tar.xz $$(SOURCE
 	mkdir -p $$@.tmp
 	cd $$@.tmp && tar -Jxf $$(SOURCES)/netbsd-$$*-$(1)-base.tar.xz
 	cd $$@.tmp && tar -Jxf $$(SOURCES)/netbsd-$$*-$(1)-comp.tar.xz
+	chmod -R u+rwX $$@.tmp
 	mv $$@.tmp $$@
 endef
 
@@ -321,6 +322,7 @@ $$(ORIG_DIR)/netbsd-%-$(1).orig: $$(SOURCES)/netbsd-%-$(1)-base.tgz $$(SOURCES)/
 	mkdir -p $$@.tmp
 	cd $$@.tmp && tar -xzf $$(SOURCES)/netbsd-$$*-$(1)-base.tgz
 	cd $$@.tmp && tar -xzf $$(SOURCES)/netbsd-$$*-$(1)-comp.tgz
+	chmod -R u+rwX $$@.tmp
 	mv $$@.tmp $$@
 endef
 

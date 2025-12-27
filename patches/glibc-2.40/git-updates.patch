@@ -2761,6 +2761,108 @@ index bfdf632e77..dc65b6e404 100644
  #if defined USE_LDCONFIG && !defined MAP_COPY
    /* We must munmap() the cache file.  */
    _dl_unload_cache ();
+diff --git a/elf/sprof.c b/elf/sprof.c
+index b19aca3292..1f5ab25ac3 100644
+--- a/elf/sprof.c
++++ b/elf/sprof.c
+@@ -38,6 +38,7 @@
+ #include <sys/mman.h>
+ #include <sys/param.h>
+ #include <sys/stat.h>
++#include <intprops.h>
+ 
+ /* Get libc version number.  */
+ #include "../version.h"
+@@ -410,6 +411,7 @@ load_shobj (const char *name)
+   int fd;
+   ElfW(Shdr) *shdr;
+   size_t pagesize = getpagesize ();
++  struct stat st;
+ 
+   /* Since we use dlopen() we must be prepared to work around the sometimes
+      strange lookup rules for the shared objects.  If we have a file foo.so
+@@ -553,14 +555,39 @@ load_shobj (const char *name)
+     error (EXIT_FAILURE, errno, _("Reopening shared object `%s' failed"),
+ 	   map->l_name);
+ 
++  if (fstat (fd, &st) < 0)
++    error (EXIT_FAILURE, errno, _("stat(%s) failure"), map->l_name);
++
++  /* We're depending on data that's being read from the file, so be a
++     bit paranoid here and make sure the requests are reasonable -
++     i.e. both size and offset are nonnegative and smaller than the
++     file size, as well as the offset of the end of the data.  PREAD
++     would have failed anyway, but this is more robust and explains
++     what happened better.  Note that SZ must be unsigned and OFF may
++     be signed or unsigned.  */
++#define PCHECK(sz1,off1) {						\
++    size_t sz = sz1, end_off;						\
++    off_t off = off1;							\
++    if (sz > st.st_size							\
++	|| off < 0 || off > st.st_size					\
++	|| INT_ADD_WRAPV (sz, off, &end_off)				\
++	|| end_off > st.st_size)					\
++      error (EXIT_FAILURE, ERANGE,					\
++	     _("read outside of file extents %zu + %jd > %jd"),		\
++	     sz, (intmax_t) off, (intmax_t) st.st_size);		\
++	}
++
+   /* Map the section header.  */
+   size_t size = ehdr->e_shnum * sizeof (ElfW(Shdr));
+   shdr = (ElfW(Shdr) *) alloca (size);
++  PCHECK (size, ehdr->e_shoff);
+   if (pread (fd, shdr, size, ehdr->e_shoff) != size)
+     error (EXIT_FAILURE, errno, _("reading of section headers failed"));
+ 
+   /* Get the section header string table.  */
+   char *shstrtab = (char *) alloca (shdr[ehdr->e_shstrndx].sh_size);
++  PCHECK (shdr[ehdr->e_shstrndx].sh_size,
++	  shdr[ehdr->e_shstrndx].sh_offset);
+   if (pread (fd, shstrtab, shdr[ehdr->e_shstrndx].sh_size,
+ 	     shdr[ehdr->e_shstrndx].sh_offset)
+       != shdr[ehdr->e_shstrndx].sh_size)
+@@ -588,6 +615,7 @@ load_shobj (const char *name)
+       size_t size = debuglink_entry->sh_size;
+       char *debuginfo_fname = (char *) alloca (size + 1);
+       debuginfo_fname[size] = '\0';
++      PCHECK (size, debuglink_entry->sh_offset);
+       if (pread (fd, debuginfo_fname, size, debuglink_entry->sh_offset)
+ 	  != size)
+ 	{
+@@ -641,21 +669,32 @@ load_shobj (const char *name)
+       if (fd2 != -1)
+ 	{
+ 	  ElfW(Ehdr) ehdr2;
++	  struct stat st;
++
++	  if (fstat (fd2, &st) < 0)
++	    error (EXIT_FAILURE, errno, _("stat(%s) failure"), workbuf);
+ 
+ 	  /* Read the ELF header.  */
++	  PCHECK (sizeof (ehdr2), 0);
+ 	  if (pread (fd2, &ehdr2, sizeof (ehdr2), 0) != sizeof (ehdr2))
+ 	    error (EXIT_FAILURE, errno,
+ 		   _("reading of ELF header failed"));
+ 
+ 	  /* Map the section header.  */
+-	  size_t size = ehdr2.e_shnum * sizeof (ElfW(Shdr));
++	  size_t size;
++	  if (INT_MULTIPLY_WRAPV (ehdr2.e_shnum, sizeof (ElfW(Shdr)), &size))
++	    error (EXIT_FAILURE, errno, _("too many section headers"));
++	    
+ 	  ElfW(Shdr) *shdr2 = (ElfW(Shdr) *) alloca (size);
++	  PCHECK (size, ehdr2.e_shoff);
+ 	  if (pread (fd2, shdr2, size, ehdr2.e_shoff) != size)
+ 	    error (EXIT_FAILURE, errno,
+ 		   _("reading of section headers failed"));
+ 
+ 	  /* Get the section header string table.  */
+ 	  shstrtab = (char *) alloca (shdr2[ehdr2.e_shstrndx].sh_size);
++	  PCHECK (shdr2[ehdr2.e_shstrndx].sh_size,
++		  shdr2[ehdr2.e_shstrndx].sh_offset);
+ 	  if (pread (fd2, shstrtab, shdr2[ehdr2.e_shstrndx].sh_size,
+ 		     shdr2[ehdr2.e_shstrndx].sh_offset)
+ 	      != shdr2[ehdr2.e_shstrndx].sh_size)
 diff --git a/elf/tst-audit-tlsdesc-dlopen2.c b/elf/tst-audit-tlsdesc-dlopen2.c
 new file mode 100644
 index 0000000000..7ba2c4129a
@@ -7737,6 +7839,101 @@ index fe7d5b7d0e..3a15b1a4ae 100644
    })
  
  /* Type of the lookup function we need here.  */
+diff --git a/nss/getaddrinfo.c b/nss/getaddrinfo.c
+index 3ccd3905fa..542b362af3 100644
+--- a/nss/getaddrinfo.c
++++ b/nss/getaddrinfo.c
+@@ -1865,6 +1865,22 @@ scopecmp (const void *p1, const void *p2)
+   return 1;
+ }
+ 
++/* Return true if PTR points to a valid decimal value string and
++   store the value in *VALUE_P.  Otherwise, return false.  */
++
++static bool
++valid_decimal_value (const char *str, unsigned long int *value_p)
++{
++  char *endp;
++  unsigned long int value = strtoul (str, &endp, 10);
++  if (str == endp
++      || *endp != '\0'
++      || (value == ULONG_MAX && errno == ERANGE))
++    return false;
++  *value_p = value;
++  return true;
++}
++
+ static bool
+ add_prefixlist (struct prefixlist **listp, size_t *lenp, bool *nullbitsp,
+ 		char *val1, char *val2, char **pos)
+@@ -1872,7 +1888,6 @@ add_prefixlist (struct prefixlist **listp, size_t *lenp, bool *nullbitsp,
+   struct in6_addr prefix;
+   unsigned long int bits;
+   unsigned long int val;
+-  char *endp;
+ 
+   bits = 128;
+   __set_errno (0);
+@@ -1881,14 +1896,9 @@ add_prefixlist (struct prefixlist **listp, size_t *lenp, bool *nullbitsp,
+     *cp++ = '\0';
+   *pos = cp;
+   if (inet_pton (AF_INET6, val1, &prefix)
+-      && (cp == NULL
+-	  || (bits = strtoul (cp, &endp, 10)) != ULONG_MAX
+-	  || errno != ERANGE)
+-      && *endp == '\0'
++      && (cp == NULL || valid_decimal_value (cp, &bits))
+       && bits <= 128
+-      && ((val = strtoul (val2, &endp, 10)) != ULONG_MAX
+-	  || errno != ERANGE)
+-      && *endp == '\0'
++      && valid_decimal_value (val2, &val)
+       && val <= INT_MAX)
+     {
+       struct prefixlist *newp = malloc (sizeof (*newp));
+@@ -2031,7 +2041,6 @@ gaiconf_init (void)
+ 	      struct in6_addr prefix;
+ 	      unsigned long int bits;
+ 	      unsigned long int val;
+-	      char *endp;
+ 
+ 	      bits = 32;
+ 	      __set_errno (0);
+@@ -2042,15 +2051,10 @@ gaiconf_init (void)
+ 		{
+ 		  bits = 128;
+ 		  if (IN6_IS_ADDR_V4MAPPED (&prefix)
+-		      && (cp == NULL
+-			  || (bits = strtoul (cp, &endp, 10)) != ULONG_MAX
+-			  || errno != ERANGE)
+-		      && *endp == '\0'
++		      && (cp == NULL || valid_decimal_value (cp, &bits))
+ 		      && bits >= 96
+ 		      && bits <= 128
+-		      && ((val = strtoul (val2, &endp, 10)) != ULONG_MAX
+-			  || errno != ERANGE)
+-		      && *endp == '\0'
++		      && valid_decimal_value (val2, &val)
+ 		      && val <= INT_MAX)
+ 		    {
+ 		      if (!add_scopelist (&scopelist, &nscopelist,
+@@ -2064,14 +2068,9 @@ gaiconf_init (void)
+ 		    }
+ 		}
+ 	      else if (inet_pton (AF_INET, val1, &prefix.s6_addr32[3])
+-		       && (cp == NULL
+-			   || (bits = strtoul (cp, &endp, 10)) != ULONG_MAX
+-			   || errno != ERANGE)
+-		       && *endp == '\0'
++		       && (cp == NULL || valid_decimal_value (cp, &bits))
+ 		       && bits <= 32
+-		       && ((val = strtoul (val2, &endp, 10)) != ULONG_MAX
+-			   || errno != ERANGE)
+-		       && *endp == '\0'
++		       && valid_decimal_value (val2, &val)
+ 		       && val <= INT_MAX)
+ 		{
+ 		  if (!add_scopelist (&scopelist, &nscopelist,
 diff --git a/posix/Makefile b/posix/Makefile
 index 2c598cd20a..830278a423 100644
 --- a/posix/Makefile
@@ -28424,6 +28621,19 @@ index 1cf902e91b..9541d8c343 100644
 +support_process_state_wait (pid_t pid, enum support_process_state state);
  
  #endif
+diff --git a/support/resolv_test.c b/support/resolv_test.c
+index f1613bd255..d4cc26b4aa 100644
+--- a/support/resolv_test.c
++++ b/support/resolv_test.c
+@@ -326,7 +326,7 @@ resolv_response_add_name (struct resolv_response_builder *b,
+               crname_target = *ptr;
+             else
+               crname_target = NULL;
+-            TEST_VERIFY (crname_target != crname);
++            TEST_VERIFY_EXIT (crname_target != crname);
+             /* Not added to the tree.  */
+             free (crname);
+           }
 diff --git a/support/support.h b/support/support.h
 index ba21ec9b5a..1a77f79793 100644
 --- a/support/support.h
@@ -28710,6 +28920,18 @@ index 978123701d..72ee2b232f 100644
 +      exit (1);
 +    }
 +}
+diff --git a/support/test-container.c b/support/test-container.c
+index ebcc722da5..23fe31071c 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -705,6 +705,7 @@ check_for_unshare_hints (int require_pidns)
+ 
+       val = -1; /* Sentinel.  */
+       int cnt = fscanf (f, "%d", &val);
++      fclose (f);
+       if (cnt == 1 && val != files[i].bad_value)
+ 	continue;
+ 
 diff --git a/support/test-driver.c b/support/test-driver.c
 index f4c3e4d666..04ceebc08f 100644
 --- a/support/test-driver.c

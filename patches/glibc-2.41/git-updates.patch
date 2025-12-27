@@ -2270,6 +2270,108 @@ index 00bec15316..18c96bd5c1 100644
    LIBC_PROBE (init_complete, 2, LM_ID_BASE, r);
  
    /* Auditing checkpoint: we have added all objects.  */
+diff --git a/elf/sprof.c b/elf/sprof.c
+index 4baff86d2a..1c9807dd6d 100644
+--- a/elf/sprof.c
++++ b/elf/sprof.c
+@@ -38,6 +38,7 @@
+ #include <sys/mman.h>
+ #include <sys/param.h>
+ #include <sys/stat.h>
++#include <intprops.h>
+ 
+ /* Get libc version number.  */
+ #include "../version.h"
+@@ -410,6 +411,7 @@ load_shobj (const char *name)
+   int fd;
+   ElfW(Shdr) *shdr;
+   size_t pagesize = getpagesize ();
++  struct stat st;
+ 
+   /* Since we use dlopen() we must be prepared to work around the sometimes
+      strange lookup rules for the shared objects.  If we have a file foo.so
+@@ -553,14 +555,39 @@ load_shobj (const char *name)
+     error (EXIT_FAILURE, errno, _("Reopening shared object `%s' failed"),
+ 	   map->l_name);
+ 
++  if (fstat (fd, &st) < 0)
++    error (EXIT_FAILURE, errno, _("stat(%s) failure"), map->l_name);
++
++  /* We're depending on data that's being read from the file, so be a
++     bit paranoid here and make sure the requests are reasonable -
++     i.e. both size and offset are nonnegative and smaller than the
++     file size, as well as the offset of the end of the data.  PREAD
++     would have failed anyway, but this is more robust and explains
++     what happened better.  Note that SZ must be unsigned and OFF may
++     be signed or unsigned.  */
++#define PCHECK(sz1,off1) {						\
++    size_t sz = sz1, end_off;						\
++    off_t off = off1;							\
++    if (sz > st.st_size							\
++	|| off < 0 || off > st.st_size					\
++	|| INT_ADD_WRAPV (sz, off, &end_off)				\
++	|| end_off > st.st_size)					\
++      error (EXIT_FAILURE, ERANGE,					\
++	     _("read outside of file extents %zu + %jd > %jd"),		\
++	     sz, (intmax_t) off, (intmax_t) st.st_size);		\
++	}
++
+   /* Map the section header.  */
+   size_t size = ehdr->e_shnum * sizeof (ElfW(Shdr));
+   shdr = (ElfW(Shdr) *) alloca (size);
++  PCHECK (size, ehdr->e_shoff);
+   if (pread (fd, shdr, size, ehdr->e_shoff) != size)
+     error (EXIT_FAILURE, errno, _("reading of section headers failed"));
+ 
+   /* Get the section header string table.  */
+   char *shstrtab = (char *) alloca (shdr[ehdr->e_shstrndx].sh_size);
++  PCHECK (shdr[ehdr->e_shstrndx].sh_size,
++	  shdr[ehdr->e_shstrndx].sh_offset);
+   if (pread (fd, shstrtab, shdr[ehdr->e_shstrndx].sh_size,
+ 	     shdr[ehdr->e_shstrndx].sh_offset)
+       != shdr[ehdr->e_shstrndx].sh_size)
+@@ -588,6 +615,7 @@ load_shobj (const char *name)
+       size_t size = debuglink_entry->sh_size;
+       char *debuginfo_fname = (char *) alloca (size + 1);
+       debuginfo_fname[size] = '\0';
++      PCHECK (size, debuglink_entry->sh_offset);
+       if (pread (fd, debuginfo_fname, size, debuglink_entry->sh_offset)
+ 	  != size)
+ 	{
+@@ -641,21 +669,32 @@ load_shobj (const char *name)
+       if (fd2 != -1)
+ 	{
+ 	  ElfW(Ehdr) ehdr2;
++	  struct stat st;
++
++	  if (fstat (fd2, &st) < 0)
++	    error (EXIT_FAILURE, errno, _("stat(%s) failure"), workbuf);
+ 
+ 	  /* Read the ELF header.  */
++	  PCHECK (sizeof (ehdr2), 0);
+ 	  if (pread (fd2, &ehdr2, sizeof (ehdr2), 0) != sizeof (ehdr2))
+ 	    error (EXIT_FAILURE, errno,
+ 		   _("reading of ELF header failed"));
+ 
+ 	  /* Map the section header.  */
+-	  size_t size = ehdr2.e_shnum * sizeof (ElfW(Shdr));
++	  size_t size;
++	  if (INT_MULTIPLY_WRAPV (ehdr2.e_shnum, sizeof (ElfW(Shdr)), &size))
++	    error (EXIT_FAILURE, errno, _("too many section headers"));
++	    
+ 	  ElfW(Shdr) *shdr2 = (ElfW(Shdr) *) alloca (size);
++	  PCHECK (size, ehdr2.e_shoff);
+ 	  if (pread (fd2, shdr2, size, ehdr2.e_shoff) != size)
+ 	    error (EXIT_FAILURE, errno,
+ 		   _("reading of section headers failed"));
+ 
+ 	  /* Get the section header string table.  */
+ 	  shstrtab = (char *) alloca (shdr2[ehdr2.e_shstrndx].sh_size);
++	  PCHECK (shdr2[ehdr2.e_shstrndx].sh_size,
++		  shdr2[ehdr2.e_shstrndx].sh_offset);
+ 	  if (pread (fd2, shstrtab, shdr2[ehdr2.e_shstrndx].sh_size,
+ 		     shdr2[ehdr2.e_shstrndx].sh_offset)
+ 	      != shdr2[ehdr2.e_shstrndx].sh_size)
 diff --git a/elf/tst-audit-tlsdesc-dlopen2.c b/elf/tst-audit-tlsdesc-dlopen2.c
 new file mode 100644
 index 0000000000..7ba2c4129a
@@ -4405,6 +4507,19 @@ index 91d75e5d6b..b37462d0d1 100644
  
  /* Deallocate the subprocess data captured by
     support_capture_subprocess.  */
+diff --git a/support/resolv_test.c b/support/resolv_test.c
+index ab37d3d58c..29e59da958 100644
+--- a/support/resolv_test.c
++++ b/support/resolv_test.c
+@@ -326,7 +326,7 @@ resolv_response_add_name (struct resolv_response_builder *b,
+               crname_target = *ptr;
+             else
+               crname_target = NULL;
+-            TEST_VERIFY (crname_target != crname);
++            TEST_VERIFY_EXIT (crname_target != crname);
+             /* Not added to the tree.  */
+             free (crname);
+           }
 diff --git a/support/support_capture_subprocess.c b/support/support_capture_subprocess.c
 index c3ef478d17..b4e4bf9502 100644
 --- a/support/support_capture_subprocess.c
@@ -4631,6 +4746,18 @@ index c3ef478d17..b4e4bf9502 100644
  }
  
  void
+diff --git a/support/test-container.c b/support/test-container.c
+index 79d3189e2f..e35cd7316f 100644
+--- a/support/test-container.c
++++ b/support/test-container.c
+@@ -705,6 +705,7 @@ check_for_unshare_hints (int require_pidns)
+ 
+       val = -1; /* Sentinel.  */
+       int cnt = fscanf (f, "%d", &val);
++      fclose (f);
+       if (cnt == 1 && val != files[i].bad_value)
+ 	continue;
+ 
 diff --git a/sysdeps/aarch64/Makefile b/sysdeps/aarch64/Makefile
 index 4b7f8a5c07..53f5bd4ce0 100644
 --- a/sysdeps/aarch64/Makefile
