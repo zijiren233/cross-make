@@ -1,0 +1,72 @@
+name: 'Create Release'
+description: 'Create GitHub release early to avoid permission issues when branch changes during workflow run'
+
+inputs:
+  tag:
+    description: 'Release tag base (e.g., v1.0.0)'
+    required: true
+  platform:
+    description: 'Platform identifier for release tag (e.g., linux-x86_64)'
+    required: true
+  token:
+    description: 'GitHub token for API access'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install yq
+      shell: bash
+      run: |
+        if ! command -v yq &>/dev/null; then
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+        fi
+
+    - name: Generate release notes
+      id: notes
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        NOTES=$(bash scripts/generate-release-notes.sh "$TAG")
+        echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+        echo "$NOTES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create or update releases
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        TAG: ${{ inputs.tag }}
+        PLATFORM: ${{ inputs.platform }}
+        RELEASE_NOTES: ${{ steps.notes.outputs.NOTES }}
+      run: |
+        RELEASE_TAG="${TAG}-${PLATFORM}"
+
+        # Create or update base release
+        if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" &>/dev/null; then
+          echo "Updating base release notes: $TAG"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --notes "$RELEASE_NOTES" || true
+        else
+          echo "Creating base release: $TAG"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes "$RELEASE_NOTES" \
+            --target "$GITHUB_SHA" || true
+        fi
+
+        # Create or update platform-specific release
+        if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" &>/dev/null; then
+          echo "Updating platform release notes: $RELEASE_TAG"
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --notes "$RELEASE_NOTES" || true
+        else
+          echo "Creating platform release: $RELEASE_TAG"
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "$RELEASE_TAG" \
+            --notes "$RELEASE_NOTES" \
+            --target "$GITHUB_SHA" \
+            --latest=false || true
+        fi
