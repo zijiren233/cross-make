@@ -1,0 +1,58 @@
+name: Dispatch Native Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.0.0). Required for tag trigger, optional for branch trigger"
+        required: false
+        type: string
+      platform:
+        description: "Build platform"
+        required: true
+        type: choice
+        options:
+          - linux-aarch64
+          - linux-x86_64
+        default: linux-aarch64
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag (optional for branch trigger)"
+        required: false
+        type: string
+      platform:
+        description: "Build platform"
+        required: true
+        type: string
+
+jobs:
+  dispatch:
+    name: Dispatch Native Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ inputs.tag }}
+
+      - name: Dispatch Native build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          PLATFORM="${{ inputs.platform }}"
+          CURRENT_REF="${{ github.ref }}"
+
+          echo "Dispatching native build for platform: $PLATFORM"
+          gh workflow run native.yml \
+            --repo "${{ github.repository }}" \
+            --ref "$CURRENT_REF" \
+            -f tag="$TAG" \
+            -f platform="$PLATFORM"
+
+          echo ""
+          echo "Native build dispatched"

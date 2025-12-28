@@ -1,0 +1,260 @@
+name: Native Single Target
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to download cross compilers from"
+        required: false
+        type: string
+      target:
+        description: "TARGET to build (also becomes HOST in native build)"
+        required: true
+        type: string
+      build-platform:
+        description: "Build platform"
+        required: true
+        type: choice
+        options:
+          - linux-aarch64
+          - linux-x86_64
+      sources-cache-key:
+        description: "Sources cache key"
+        required: false
+        type: string
+        default: ""
+      sources-artifact:
+        description: "Sources artifact name"
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to download cross compilers from"
+        required: false
+        type: string
+      target:
+        description: "TARGET to build"
+        required: true
+        type: string
+      build-platform:
+        description: "Build platform"
+        required: true
+        type: string
+      sources-cache-key:
+        description: "Sources cache key"
+        required: false
+        type: string
+        default: ""
+      sources-artifact:
+        description: "Sources artifact name"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  setup:
+    name: Setup ${{ inputs.target }}
+    runs-on: ubuntu-24.04
+    outputs:
+      runs-on: ${{ steps.config.outputs.runs-on }}
+      docker-platform: ${{ steps.config.outputs.docker-platform }}
+      docker-image: ${{ steps.config.outputs.docker-image }}
+      sources-cache-key: ${{ inputs.sources-cache-key || steps.cache-key.outputs.key }}
+      sources-artifact: ${{ inputs.sources-artifact }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        uses: ./.github/actions/resolve-tag
+        with:
+          tag: ${{ inputs.tag }}
+
+      - name: Install yq
+        if: inputs.sources-cache-key == ''
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate sources cache key
+        if: inputs.sources-cache-key == ''
+        id: cache-key
+        run: |
+          KEY=$(./scripts/sources.sh cache-key)
+          echo "key=sources-${KEY}" >> $GITHUB_OUTPUT
+          echo "Sources cache key: sources-${KEY}"
+
+      - name: Determine platform config
+        id: config
+        run: |
+          case "${{ inputs.build-platform }}" in
+            linux-x86_64)
+              echo "runs-on=ubuntu-24.04" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/amd64" >> $GITHUB_OUTPUT
+              echo "docker-image=amd64/alpine:latest" >> $GITHUB_OUTPUT
+              ;;
+            linux-aarch64)
+              echo "runs-on=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/arm64" >> $GITHUB_OUTPUT
+              echo "docker-image=arm64v8/alpine:latest" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+  build:
+    name: Build ${{ inputs.target }}-native
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Try cache first
+      - name: Restore sources cache
+        id: cache
+        timeout-minutes: 10
+        uses: actions/cache/restore@v5
+        with:
+          path: sources
+          key: ${{ needs.setup.outputs.sources-cache-key }}
+
+      # If cache miss, try artifact
+      - name: Download sources from artifact
+        if: steps.cache.outputs.cache-hit != 'true' && needs.setup.outputs.sources-artifact != ''
+        timeout-minutes: 10
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.sources-artifact }}
+          path: sources
+
+      # If cache miss and no artifact, download directly
+      - name: Download sources
+        if: steps.cache.outputs.cache-hit != 'true' && needs.setup.outputs.sources-artifact == ''
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+          bash ./scripts/sources.sh download -S sources
+
+      # Save cache if we downloaded (not from artifact, to avoid redundant cache)
+      - name: Save sources cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        uses: actions/cache/save@v5
+        with:
+          path: sources
+          key: ${{ needs.setup.outputs.sources-cache-key }}
+
+      - name: Download TARGET cross compiler
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TARGET="${{ inputs.target }}"
+          TAG="${{ needs.setup.outputs.tag }}"
+          PLATFORM="${{ inputs.build-platform }}"
+          RELEASE_TAG="${TAG}-${PLATFORM}"
+
+          echo "Downloading TARGET cross compiler: ${TARGET} from ${RELEASE_TAG}"
+
+          ASSET_NAME="${TARGET}-cross.tgz"
+          mkdir -p toolchains/target
+
+          gh release download "${RELEASE_TAG}" \
+            --repo "${{ github.repository }}" \
+            --pattern "${ASSET_NAME}" \
+            --dir toolchains
+
+          tar -xzf "toolchains/${ASSET_NAME}" -C "toolchains/target"
+          echo "TARGET compiler extracted to toolchains/target"
+          ls -la toolchains/target/bin/ | head -20
+
+      - name: Build Native (Alpine Docker)
+        run: |
+          TARGET="${{ inputs.target }}"
+
+          docker run --rm \
+            --platform ${{ needs.setup.outputs.docker-platform }} \
+            --cap-add=IPC_LOCK \
+            --tmpfs /work:exec,size=8G \
+            --volume "${PWD}:/src:ro" \
+            --volume "${PWD}/sources:/sources" \
+            --volume "${PWD}/dist:/dist" \
+            --volume "${PWD}/orig:/orig" \
+            --volume "${PWD}/toolchains:/toolchains:ro" \
+            ${{ needs.setup.outputs.docker-image }} \
+            /bin/sh -c "
+              apk add --no-cache \
+                coreutils \
+                curl \
+                bzip2 \
+                xz \
+                make \
+                bison \
+                rsync \
+                patch \
+                perl \
+                flex \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep \
+                bash \
+                tar \
+                file \
+                zip \
+                yq && \
+              apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
+              vmtouch -l -h -f -d /toolchains/target && \
+              rsync -a --exclude=sources /src/ /work/ && \
+              find /sources -type f -exec touch {} + && \
+              cd /work && \
+              export PATH=/toolchains/target/bin:\$PATH && \
+              bash scripts/build.sh \
+                -LDPlK \
+                -a \
+                -S /sources \
+                -R /orig \
+                -o /dist \
+                -N \
+                -T '${TARGET}'
+            "
+
+      - name: Rename output files
+        run: |
+          TARGET="${{ inputs.target }}"
+          cd dist
+          sudo chmod -R a+rw .
+          for file in *-native*.tgz; do
+            if [ -f "$file" ]; then
+              NEW_NAME="${TARGET}-native.tgz"
+              echo "Renaming: $file -> $NEW_NAME"
+              mv "$file" "$NEW_NAME"
+            fi
+          done
+          for file in *-native*.zip; do
+            if [ -f "$file" ]; then
+              NEW_NAME="${TARGET}-native.zip"
+              echo "Renaming: $file -> $NEW_NAME"
+              mv "$file" "$NEW_NAME"
+            fi
+          done
+          ls -la
+
+      - name: Upload artifact
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.target }}-native
+          if-no-files-found: error
+          path: dist
+
+  release:
+    name: Release ${{ inputs.target }}-native
+    needs: [setup, build]
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/release.yml
+    with:
+      target: ${{ inputs.target }}-native
+      tag: ${{ needs.setup.outputs.tag }}
+    secrets: inherit

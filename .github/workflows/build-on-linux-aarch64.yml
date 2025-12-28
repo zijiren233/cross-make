@@ -2,19 +2,7 @@ name: build-on-linux-aarch64
 
 on:
   workflow_dispatch:
-    inputs:
-      disable-native-build:
-        description: "Disable native build (-n flag)"
-        required: false
-        type: boolean
-        default: false
   workflow_call:
-    inputs:
-      disable-native-build:
-        description: "Disable native build (-n flag)"
-        required: false
-        type: boolean
-        default: false
   push:
     tags:
       # Only match version tags like v1.0.0, exclude release tags with suffix like v1.0.0-musl-linux-x86_64
@@ -27,14 +15,13 @@ jobs:
   init:
     uses: ./.github/workflows/get-targets.yml
 
-  # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
+  # Build cross compilers - split into 4 chunks to avoid GitHub's 256 job limit
   build_1:
     needs: init
     uses: ./.github/workflows/multi-target.yml
     with:
       targets: ${{ needs.init.outputs.TARGETS_1 }}
       platform: linux-aarch64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_2:
     needs: init
@@ -42,7 +29,6 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_2 }}
       platform: linux-aarch64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_3:
     needs: init
@@ -50,7 +36,6 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_3 }}
       platform: linux-aarch64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_4:
     needs: init
@@ -58,9 +43,17 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_4 }}
       platform: linux-aarch64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
-  # Dispatch Canadian Cross builds after all builds complete
+  # Dispatch Native builds after all cross builds complete
+  native:
+    needs: [build_1, build_2, build_3, build_4]
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/dispatch-native.yml
+    with:
+      tag: ${{ github.ref_name }}
+      platform: linux-aarch64
+
+  # Dispatch Canadian Cross builds after all cross builds complete
   canadian-cross:
     needs: [build_1, build_2, build_3, build_4]
     if: startsWith(github.ref, 'refs/tags/v')
