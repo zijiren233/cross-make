@@ -733,6 +733,11 @@ function Build() {
         if [ "$ENABLE_ARCHIVE" ]; then
             tar -zcf "${CANADIAN_DIST_NAME}.tgz" -C "${CANADIAN_DIST_NAME}" .
             echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.tgz success"
+            if [[ $HOST_TARGET =~ mingw ]]; then
+                find "${CANADIAN_DIST_NAME}" -type l -delete
+                zip -rq "${CANADIAN_DIST_NAME}.zip" "${CANADIAN_DIST_NAME}"
+                echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.zip success"
+            fi
         fi
 
         return 0

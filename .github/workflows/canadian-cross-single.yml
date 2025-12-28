@@ -279,6 +279,13 @@ jobs:
               mv "$file" "$NEW_NAME"
             fi
           done
+          for file in *-canadian-*.zip; do
+            if [ -f "$file" ]; then
+              NEW_NAME="${TARGET}-cross.zip"
+              echo "Renaming: $file -> $NEW_NAME"
+              mv "$file" "$NEW_NAME"
+            fi
+          done
           ls -la
 
       - name: Upload artifact
