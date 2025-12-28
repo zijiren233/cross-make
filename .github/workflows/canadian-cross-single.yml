@@ -71,7 +71,7 @@ on:
 
 jobs:
   setup:
-    name: Setup ${{ inputs.target }}
+    name: Setup ${{ inputs.host }} -> ${{ inputs.target }}
     runs-on: ubuntu-24.04
     outputs:
       runs-on: ${{ steps.config.outputs.runs-on }}
