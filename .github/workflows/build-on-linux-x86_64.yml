@@ -2,19 +2,7 @@ name: build-on-linux-x86_64
 
 on:
   workflow_dispatch:
-    inputs:
-      disable-native-build:
-        description: "Disable native build (-n flag)"
-        required: false
-        type: boolean
-        default: false
   workflow_call:
-    inputs:
-      disable-native-build:
-        description: "Disable native build (-n flag)"
-        required: false
-        type: boolean
-        default: false
   push:
     tags:
       # Only match version tags like v1.0.0, exclude release tags with suffix like v1.0.0-musl-linux-x86_64
@@ -34,7 +22,6 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_1 }}
       platform: linux-x86_64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_2:
     needs: init
@@ -42,7 +29,6 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_2 }}
       platform: linux-x86_64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_3:
     needs: init
@@ -50,7 +36,6 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_3 }}
       platform: linux-x86_64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
 
   build_4:
     needs: init
@@ -58,4 +43,3 @@ jobs:
     with:
       targets: ${{ needs.init.outputs.TARGETS_4 }}
       platform: linux-x86_64
-      extra-build-flags: ${{ !inputs.disable-native-build && '-n' || '' }}
