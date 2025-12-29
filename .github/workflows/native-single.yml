@@ -220,27 +220,6 @@ jobs:
                 -T '${TARGET}'
             "
 
-      - name: Rename output files
-        run: |
-          TARGET="${{ inputs.target }}"
-          cd dist
-          sudo chmod -R a+rw .
-          for file in *-native*.tgz; do
-            if [ -f "$file" ]; then
-              NEW_NAME="${TARGET}-native.tgz"
-              echo "Renaming: $file -> $NEW_NAME"
-              mv "$file" "$NEW_NAME"
-            fi
-          done
-          for file in *-native*.zip; do
-            if [ -f "$file" ]; then
-              NEW_NAME="${TARGET}-native.zip"
-              echo "Renaming: $file -> $NEW_NAME"
-              mv "$file" "$NEW_NAME"
-            fi
-          done
-          ls -la
-
       - name: Upload artifact
         timeout-minutes: 10
         uses: actions/upload-artifact@v6
