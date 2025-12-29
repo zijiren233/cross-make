@@ -47,18 +47,26 @@ jobs:
           HOST="${{ inputs.host }}"
 
           # Extract OS and ARCH from host triplet (e.g., loongarch64-linux-musl -> linux-loongarch64)
-          if [[ "$HOST" =~ ^([^-]+)-([^-]+)-([^-]+)$ ]]; then
-            # 3-part: arch-os-libc (e.g., loongarch64-linux-musl)
+          if [[ "$HOST" =~ ^([^-]+)-w64-mingw32$ ]]; then
+            # Windows: x86_64-w64-mingw32 -> windows-x86_64
+            HOST_ARCH="${BASH_REMATCH[1]}"
+            HOST_OS="windows"
+          elif [[ "$HOST" =~ ^([^-]+)-unknown-(freebsd[0-9]*)$ ]]; then
+            # FreeBSD: x86_64-unknown-freebsd14 -> freebsd14-x86_64
+            HOST_ARCH="${BASH_REMATCH[1]}"
+            HOST_OS="${BASH_REMATCH[2]}"
+          elif [[ "$HOST" =~ ^([^-]+)-unknown-(netbsd[a-z]*)$ ]]; then
+            # NetBSD: x86_64-unknown-netbsd -> netbsd-x86_64
             HOST_ARCH="${BASH_REMATCH[1]}"
             HOST_OS="${BASH_REMATCH[2]}"
           elif [[ "$HOST" =~ ^([^-]+)-([^-]+)-([^-]+)-([^-]+)$ ]]; then
             # 4-part: arch-vendor-os-libc (e.g., x86_64-unknown-linux-gnu)
             HOST_ARCH="${BASH_REMATCH[1]}"
             HOST_OS="${BASH_REMATCH[3]}"
-          elif [[ "$HOST" =~ ^([^-]+)-w64-mingw32$ ]]; then
-            # Windows: x86_64-w64-mingw32
+          elif [[ "$HOST" =~ ^([^-]+)-([^-]+)-([^-]+)$ ]]; then
+            # 3-part: arch-os-libc (e.g., loongarch64-linux-musl)
             HOST_ARCH="${BASH_REMATCH[1]}"
-            HOST_OS="windows"
+            HOST_OS="${BASH_REMATCH[2]}"
           else
             HOST_ARCH=$(echo "$HOST" | cut -d'-' -f1)
             HOST_OS="linux"
