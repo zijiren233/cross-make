@@ -210,6 +210,9 @@ GCC_CONFIG_FOR_TARGET += --disable-libssp
 # musl doesn't use symbol versioning
 GCC_CONFIG_FOR_TARGET += --disable-symvers
 
+# musl doesn't support STB_GNU_UNIQUE
+GCC_CONFIG_FOR_TARGET += --disable-gnu-unique-object
+
 # musl doesn't support IFUNC
 obj_gcc/%: export libat_cv_have_ifunc=no
 
@@ -229,7 +232,8 @@ MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
-	--enable-fully-dynamic-string
+	--enable-fully-dynamic-string \
+	--disable-gnu-unique-object
 
 ifneq ($(findstring aarch64,$(TARGET)),)
 THREADS_CONFIG = --enable-threads=win32
@@ -257,7 +261,8 @@ override NETBSD_SRCDIR =
 MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-shared
+	--disable-shared \
+	--enable-gnu-unique-object
 
 PIE_CONFIG = --disable-default-pie
 
@@ -276,7 +281,8 @@ override FREEBSD_SRCDIR =
 MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-shared
+	--disable-shared \
+	--enable-gnu-unique-object
 
 PIE_CONFIG = --disable-default-pie
 
@@ -292,7 +298,8 @@ override MINGW_SRCDIR =
 override FREEBSD_SRCDIR =
 override NETBSD_SRCDIR =
 
-GCC_CONFIG_FOR_TARGET += --enable-initfini-array
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
+	--enable-gnu-unique-object
 
 endif
 
@@ -335,6 +342,7 @@ COMMON_CONFIG := --disable-werror \
 	--enable-libgomp \
 	--enable-deterministic-archives \
 	--enable-compressed-debug-sections=none \
+	--enable-plugins \
 	$(COMMON_CONFIG) \
 	--prefix= \
 	--with-sysroot=$(SYSROOT) \
@@ -369,6 +377,7 @@ BINUTILS_CONFIG := --disable-gprofng \
 	--enable-default-execstack=no \
 	--enable-default-hash-style=gnu \
 	--enable-deterministic-archives \
+	--enable-install-libiberty \
 	--enable-ld=default \
 	--enable-new-dtags \
 	--enable-relro \
@@ -761,36 +770,61 @@ ifneq ($(ZSTD_SRCDIR),)
 src_zstd: | $(ZSTD_SRCDIR)
 	ln -sf "$(ZSTD_SRCDIR)" $@
 
-ifeq ($(HOST),)
-# Cross build: zstd for BUILD-running gcc/binutils
-ZSTD_CC = $(CCACHE) $(CC)
 # On macOS, use native ar to avoid GNU ar incompatibility with macOS ld
-ifeq ($(shell uname -s),Darwin)
-ZSTD_AR = /usr/bin/ar
+ZSTD_BUILD_AR = $(if $(filter Darwin,$(shell uname -s)),/usr/bin/ar,$(AR))
+
+# Generic zstd build recipe: $(1)=output_dir
+define BUILD_ZSTD
+	cd src_zstd/lib && $(MAKE) BUILD_DIR="$(CURDIR)/$(1)/build" libzstd.a
+	mkdir -p $(1)/include $(1)/lib
+	cp $(CURDIR)/$(1)/build/static/libzstd.a $(1)/lib/
+	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h $(1)/include/
+endef
+
+# Determine compilers for HOST and BUILD versions
+ifeq ($(HOST),)
+ZSTD_HOST_CC = $(CC)
+ZSTD_HOST_AR = $(ZSTD_BUILD_AR)
 else
-ZSTD_AR = $(AR)
-endif
-else
-# Canadian Cross and Native: zstd for HOST-running gcc/binutils
-# In Native: HOST == TARGET, so this is equivalent
-# In Canadian Cross: HOST != TARGET, we need HOST compiler (not TARGET)
-ZSTD_CC = $(CCACHE) $(HOST)-gcc$(EXE_EXT)
-ZSTD_AR = $(HOST)-ar$(EXE_EXT)
+ZSTD_HOST_CC = $(HOST)-gcc$(EXE_EXT)
+ZSTD_HOST_AR = $(HOST)-ar$(EXE_EXT)
 endif
 
+# obj_zstd: HOST version - for final gcc/binutils executables
+# Explicit target-specific CC to override any inherited value from obj_gcc/%
+obj_zstd/.lc_built: export CC := $(CCACHE) $(ZSTD_HOST_CC)
+obj_zstd/.lc_built: export AR := $(ZSTD_HOST_AR)
 obj_zstd/.lc_built: | obj_zstd src_zstd
-	cd src_zstd/lib && $(MAKE) clean || true
-	cd src_zstd/lib && $(MAKE) CC="$(ZSTD_CC)" AR="$(ZSTD_AR)" libzstd.a
-	mkdir -p obj_zstd/include obj_zstd/lib
-	cp src_zstd/lib/libzstd.a obj_zstd/lib/
-	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h obj_zstd/include/
+	$(call BUILD_ZSTD,obj_zstd)
 	touch $@
 
+# Common exports for gcc/binutils
 obj_gcc/%: export with_zstd := $(CURDIR)/obj_zstd
-obj_binutils/%: export with_zstd := $(CURDIR)/obj_zstd
+obj_binutils/%: export with_zstd := yes
+obj_binutils/%: export ZSTD_CFLAGS := -I$(CURDIR)/obj_zstd/include
+obj_binutils/%: export ZSTD_LIBS := -L$(CURDIR)/obj_zstd/lib -lzstd
 
-obj_binutils/.lc_configured: | obj_zstd/.lc_built
-obj_gcc/.lc_configured: | obj_zstd/.lc_built
+ifneq ($(HOST),)
+# Canadian Cross and NATIVE: need BUILD version for GCC's build.XXXXX subdirectories
+# Explicit target-specific CC to use BUILD machine compiler, not inherited HOST compiler
+obj_zstd_build/.lc_built: export CC := $(CCACHE) $(CC)
+obj_zstd_build/.lc_built: export AR := $(ZSTD_BUILD_AR)
+obj_zstd_build/.lc_built: | obj_zstd_build src_zstd
+	$(call BUILD_ZSTD,obj_zstd_build)
+	touch $@
+
+obj_gcc/%: export CFLAGS_FOR_BUILD += -I$(CURDIR)/obj_zstd_build/include
+obj_gcc/%: export CXXFLAGS_FOR_BUILD += -I$(CURDIR)/obj_zstd_build/include
+obj_gcc/%: export LDFLAGS_FOR_BUILD += -L$(CURDIR)/obj_zstd_build/lib
+
+obj_binutils/.lc_configured obj_gcc/.lc_configured: | obj_zstd/.lc_built obj_zstd_build/.lc_built
+else
+obj_binutils/.lc_configured obj_gcc/.lc_configured: | obj_zstd/.lc_built
+endif
+
+else
+obj_gcc/%: export with_zstd := no
+obj_binutils/%: export with_zstd := no
 endif
 
 src_gcc: src_gcc_base
