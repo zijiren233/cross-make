@@ -162,7 +162,7 @@ endif
 
 # S390x configurations
 ifneq ($(filter s390x%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=z196 --with-tune=zEC12 --with-zarch --with-long-double-128 --enable-decimal-float
+GCC_CONFIG_FOR_TARGET += --with-arch=z196 --with-tune=zEC12 --with-zarch --with-long-double-128
 endif
 
 # RISC-V configurations
