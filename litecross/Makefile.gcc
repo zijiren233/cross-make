@@ -232,8 +232,7 @@ MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
-	--enable-fully-dynamic-string \
-	--disable-gnu-unique-object
+	--enable-fully-dynamic-string
 
 ifneq ($(findstring aarch64,$(TARGET)),)
 THREADS_CONFIG = --enable-threads=win32
@@ -261,8 +260,7 @@ override NETBSD_SRCDIR =
 MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-shared \
-	--enable-gnu-unique-object
+	--disable-shared
 
 PIE_CONFIG = --disable-default-pie
 
@@ -281,8 +279,7 @@ override FREEBSD_SRCDIR =
 MAKE += MAKEINFO=false
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-shared \
-	--enable-gnu-unique-object
+	--disable-shared
 
 PIE_CONFIG = --disable-default-pie
 
@@ -298,8 +295,7 @@ override MINGW_SRCDIR =
 override FREEBSD_SRCDIR =
 override NETBSD_SRCDIR =
 
-GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--enable-gnu-unique-object
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array
 
 endif
 
