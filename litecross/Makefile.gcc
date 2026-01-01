@@ -15,6 +15,9 @@ OPTIMIZE_LEVEL =
 CCACHE =
 COMMON_FLAGS = -O2 -g0 -Wno-error -w -Werror=format-security
 # COMMON_FLAGS += -fno-align-functions -fno-align-jumps -fno-align-loops -fno-align-labels
+COMMON_LDFLAGS = -s
+# GNU ld only option (not supported by Apple ld on macOS)
+LDFLAGS_BUILDID = -Wl,--build-id=none
 PIE_CONFIG = --enable-default-pie
 SSP_CONFIG = --enable-default-ssp
 THREADS_CONFIG = --enable-threads=posix
@@ -27,9 +30,7 @@ endif
 
 CC = gcc$(EXE_EXT)
 CXX = g++$(EXE_EXT)
-CFLAGS = 
-CXXFLAGS = 
-LDFLAGS = -s
+STRIP = strip$(EXE_EXT)
 HOSTCC = gcc$(EXE_EXT)
 
 -include config.mak
@@ -41,17 +42,46 @@ endif
 # Default: static linking for maximum portability
 STAT = -static --static
 
-# Clear STAT if platform doesn't support static linking (Darwin/macOS)
-# - If HOST is set (Native/Canadian): check if HOST contains darwin
-# - If HOST is empty (Cross build): check build machine with uname
+# Detect BUILD platform (machine running make)
+BUILD_IS_DARWIN := $(filter Darwin,$(shell uname -s))
+
+# Determine LDFLAGS_BUILDID for each context:
+# - HOST: gcc/binutils executables, linked by HOST's ld
+# - BUILD: generator tools, linked by BUILD's ld (always current machine)
+# - TARGET: libgcc/libstdc++, linked by GNU ld (always supported)
+
+# LDFLAGS_BUILDID_BUILD: BUILD tools use BUILD machine's ld
+ifneq ($(BUILD_IS_DARWIN),)
+LDFLAGS_BUILDID_BUILD =
+else
+LDFLAGS_BUILDID_BUILD = $(LDFLAGS_BUILDID)
+endif
+
+# LDFLAGS_BUILDID_HOST: HOST executables use HOST's ld
+# - Cross build (HOST empty): HOST = BUILD
+# - Native/Canadian: check if HOST contains darwin
 ifneq ($(HOST),)
 ifneq ($(findstring darwin,$(HOST)),)
 STAT =
+LDFLAGS_BUILDID_HOST =
+else
+LDFLAGS_BUILDID_HOST = $(LDFLAGS_BUILDID)
 endif
 else
-ifeq ($(shell uname -s),Darwin)
+ifneq ($(BUILD_IS_DARWIN),)
 STAT =
+LDFLAGS_BUILDID_HOST =
+else
+LDFLAGS_BUILDID_HOST = $(LDFLAGS_BUILDID)
 endif
+endif
+
+# LDFLAGS_BUILDID_TARGET: TARGET libs use the cross ld we're building
+# Usually GNU ld, but Darwin targets may use cctools ld64
+ifneq ($(findstring darwin,$(TARGET)),)
+LDFLAGS_BUILDID_TARGET =
+else
+LDFLAGS_BUILDID_TARGET = $(LDFLAGS_BUILDID)
 endif
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
@@ -75,10 +105,30 @@ LIBTOOL = $(XBINUTILS_DIR)/libtool$(EXE_EXT)
 
 CFLAGS := $(strip $(COMMON_FLAGS) $(CFLAGS))
 CXXFLAGS := $(strip $(COMMON_FLAGS) $(CXXFLAGS))
+LDFLAGS := $(strip $(COMMON_LDFLAGS) $(LDFLAGS_BUILDID_HOST) $(LDFLAGS))
 
 export CFLAGS
 export CXXFLAGS
 export LDFLAGS
+
+# Flags for TARGET libraries (libgcc, libstdc++, etc.)
+# Without explicit setting, GCC defaults to "-g -O2" for cross builds
+CFLAGS_FOR_TARGET += $(COMMON_FLAGS)
+CXXFLAGS_FOR_TARGET += $(COMMON_FLAGS)
+LDFLAGS_FOR_TARGET += $(COMMON_LDFLAGS) $(LDFLAGS_BUILDID_TARGET)
+
+export CFLAGS_FOR_TARGET
+export CXXFLAGS_FOR_TARGET
+export LDFLAGS_FOR_TARGET
+
+# Flags for BUILD tools (generators, etc.)
+CFLAGS_FOR_BUILD += $(COMMON_FLAGS)
+CXXFLAGS_FOR_BUILD += $(COMMON_FLAGS)
+LDFLAGS_FOR_BUILD += $(COMMON_LDFLAGS) $(LDFLAGS_BUILDID_BUILD)
+
+export CFLAGS_FOR_BUILD
+export CXXFLAGS_FOR_BUILD
+export LDFLAGS_FOR_BUILD
 
 ifneq ($(findstring fdpic,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --enable-fdpic
@@ -491,6 +541,8 @@ obj_gcc/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
 obj_binutils/%: export CC:=$(CCACHE) $(CC) $(STAT)
 obj_binutils/%: export CXX:=$(CCACHE) $(CXX) $(STAT)
 obj_binutils/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
+# STRIP for host executables (runs on BUILD, strips BUILD format)
+STRIP_FOR_HOST = $(STRIP)
 
 FULL_BINUTILS_CONFIG += --host=$(BUILD)
 FULL_GCC_CONFIG += --host=$(BUILD)
@@ -498,6 +550,9 @@ FULL_GCC_CONFIG += --host=$(BUILD)
 else ifdef NATIVE
 # build native: runs on HOST, targets HOST (same as TARGET)
 # Triggered by NATIVE=1, HOST is automatically set to TARGET
+# STRIP for host executables (cross-strip: runs on BUILD, strips HOST format)
+STRIP_FOR_HOST = $(HOST)-strip$(EXE_EXT)
+
 FULL_BINUTILS_CONFIG += --host=$(HOST)
 FULL_GCC_CONFIG += --host=$(HOST)
 
@@ -538,6 +593,8 @@ obj_gcc/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
 obj_binutils/%: export CC:=$(CCACHE) $(HOST)-gcc$(EXE_EXT) $(STAT)
 obj_binutils/%: export CXX:=$(CCACHE) $(HOST)-g++$(EXE_EXT) $(STAT)
 obj_binutils/%: export LDFLAGS:=$(LDFLAGS) $(STAT)
+# STRIP for host executables (cross-strip: runs on BUILD, strips HOST format)
+STRIP_FOR_HOST = $(HOST)-strip$(EXE_EXT)
 
 FULL_BINUTILS_CONFIG += --host=$(HOST)
 FULL_GCC_CONFIG += --host=$(HOST)
@@ -614,7 +671,7 @@ FULL_MUSL_CONFIG += CC="$(TARGET_CC_FOR_BUILD)" \
 FULL_GLIBC_CONFIG += CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
 	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
-	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS)" \
+	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS_FOR_TARGET)" \
 	AR="$(TARGET_AR_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" \
 	GPROF="$(TARGET_GPROF_FOR_BUILD)" \
@@ -629,7 +686,7 @@ FULL_MINGW_PTHREADS_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
 	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
-	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS)" \
+	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS_FOR_TARGET)" \
 	DLLTOOL="$(TARGET_DLLTOOL_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" AR="$(TARGET_AR_FOR_BUILD)" RANLIB="$(TARGET_RANLIB_FOR_BUILD)" \
 	NM="$(TARGET_NM_FOR_BUILD)" \
@@ -641,7 +698,7 @@ FULL_MINGW_CRT_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
 	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
-	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS)" \
+	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS_FOR_TARGET)" \
 	DLLTOOL="$(TARGET_DLLTOOL_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" AR="$(TARGET_AR_FOR_BUILD)" RANLIB="$(TARGET_RANLIB_FOR_BUILD)" \
 	NM="$(TARGET_NM_FOR_BUILD)" \
@@ -769,11 +826,12 @@ src_zstd: | $(ZSTD_SRCDIR)
 # On macOS, use native ar to avoid GNU ar incompatibility with macOS ld
 ZSTD_BUILD_AR = $(if $(filter Darwin,$(shell uname -s)),/usr/bin/ar,$(AR))
 
-# Generic zstd build recipe: $(1)=output_dir
+# Generic zstd build recipe: $(1)=output_dir, $(2)=strip command
 define BUILD_ZSTD
 	cd src_zstd/lib && $(MAKE) BUILD_DIR="$(CURDIR)/$(1)/build" libzstd.a
 	mkdir -p $(1)/include $(1)/lib
 	cp $(CURDIR)/$(1)/build/static/libzstd.a $(1)/lib/
+	$(2) --strip-debug $(1)/lib/libzstd.a 2>/dev/null || true
 	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h $(1)/include/
 endef
 
@@ -791,7 +849,7 @@ endif
 obj_zstd/.lc_built: export CC := $(CCACHE) $(ZSTD_HOST_CC)
 obj_zstd/.lc_built: export AR := $(ZSTD_HOST_AR)
 obj_zstd/.lc_built: | obj_zstd src_zstd
-	$(call BUILD_ZSTD,obj_zstd)
+	$(call BUILD_ZSTD,obj_zstd,$(STRIP_FOR_HOST))
 	touch $@
 
 # Common exports for gcc/binutils
@@ -806,7 +864,7 @@ ifneq ($(HOST),)
 obj_zstd_build/.lc_built: export CC := $(CCACHE) $(CC)
 obj_zstd_build/.lc_built: export AR := $(ZSTD_BUILD_AR)
 obj_zstd_build/.lc_built: | obj_zstd_build src_zstd
-	$(call BUILD_ZSTD,obj_zstd_build)
+	$(call BUILD_ZSTD,obj_zstd_build,$(STRIP))
 	touch $@
 
 obj_gcc/%: export CFLAGS_FOR_BUILD += -I$(CURDIR)/obj_zstd_build/include
@@ -1055,10 +1113,10 @@ install-netbsd: | obj_sysroot/.lc_libs
 	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(NETBSD_FIX_SYMLINKS)
 
 install-binutils: | obj_binutils/.lc_built
-	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
+	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) STRIP="$(STRIP_FOR_HOST)" install-strip
 
 install-gcc: | obj_gcc/.lc_built
-	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) install
+	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) STRIP="$(STRIP_FOR_HOST)" install-strip
 
 obj_mingw_headers/.lc_configured: | obj_mingw_headers src_mingw
 	cd obj_mingw_headers && sh ../src_mingw/mingw-w64-headers/configure $(FULL_MINGW_HEADERS_CONFIG) || (cat config.log && exit 1)
