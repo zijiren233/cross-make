@@ -55,9 +55,9 @@ endif
 endif
 
 XGCC_DIR = $(CURDIR)/obj_gcc/gcc
-XGCC = $(CCACHE) $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
-XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
-XGXX = $(CCACHE) $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(CURDIR)/obj_sysroot/lib -B $(XBINUTILS_DIR)
+XGCC = $(CCACHE) $(XGCC_DIR)/xgcc$(EXE_EXT) -B $(XGCC_DIR) -B $(SYSROOT_LIBDIR) -B $(XBINUTILS_DIR)
+XCPP = $(XGCC_DIR)/cpp$(EXE_EXT) -B $(XGCC_DIR) -B $(SYSROOT_LIBDIR) -B $(XBINUTILS_DIR)
+XGXX = $(CCACHE) $(XGCC_DIR)/xg++$(EXE_EXT) -B $(XGCC_DIR) -B $(SYSROOT_LIBDIR) -B $(XBINUTILS_DIR)
 XAS = $(CURDIR)/obj_binutils/gas/as-new$(EXE_EXT)
 XLD = $(CURDIR)/obj_binutils/ld/ld-new$(EXE_EXT)
 XGPROF = $(CURDIR)/obj_binutils/gprof/gprof$(EXE_EXT)
@@ -69,7 +69,7 @@ XOBJDUMP = $(XBINUTILS_DIR)/objdump$(EXE_EXT)
 XRANLIB = $(XBINUTILS_DIR)/ranlib$(EXE_EXT)
 XREADELF = $(XBINUTILS_DIR)/readelf$(EXE_EXT)
 XSTRIP = $(XBINUTILS_DIR)/strip-new$(EXE_EXT)
-XRC = $(XBINUTILS_DIR)/windres$(EXE_EXT) --preprocessor=$(XGCC_DIR)/xgcc$(EXE_EXT) --preprocessor-arg=-B --preprocessor-arg=$(XGCC_DIR) --preprocessor-arg=-I$(CURDIR)/obj_sysroot/$(TARGET)/include --preprocessor-arg=-E --preprocessor-arg=-xc-header --preprocessor-arg=-DRC_INVOKED -c 1252
+XRC = $(XBINUTILS_DIR)/windres$(EXE_EXT) --preprocessor=$(XGCC_DIR)/xgcc$(EXE_EXT) --preprocessor-arg=-B --preprocessor-arg=$(XGCC_DIR) --preprocessor-arg=-I$(SYSROOT_INCLUDEDIR) --preprocessor-arg=-E --preprocessor-arg=-xc-header --preprocessor-arg=-DRC_INVOKED -c 1252
 DLLTOOL = $(XBINUTILS_DIR)/dlltool$(EXE_EXT)
 LIBTOOL = $(XBINUTILS_DIR)/libtool$(EXE_EXT)
 
@@ -162,12 +162,12 @@ endif
 
 # S390x configurations
 ifneq ($(filter s390x%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=z196 --with-tune=zEC12 --with-zarch --with-long-double-128
+GCC_CONFIG_FOR_TARGET += --with-arch=z196 --with-tune=zEC12 --with-zarch --with-long-double-128 --enable-decimal-float
 endif
 
 # RISC-V configurations
 ifneq ($(filter riscv64%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=rv64gc --with-abi=lp64d --enable-autolink-libatomic
+GCC_CONFIG_FOR_TARGET += --with-arch=rv64gc --with-abi=lp64d
 endif
 
 # LoongArch configurations
@@ -206,6 +206,15 @@ GCC_CONFIG_FOR_TARGET += --enable-initfini-array
 
 # use __stack_chk_fail_local
 GCC_CONFIG_FOR_TARGET += --disable-libssp
+
+# musl doesn't use symbol versioning
+GCC_CONFIG_FOR_TARGET += --disable-symvers
+
+# musl doesn't support STB_GNU_UNIQUE
+GCC_CONFIG_FOR_TARGET += --disable-gnu-unique-object
+
+# musl doesn't support IFUNC
+obj_gcc/%: export libat_cv_have_ifunc=no
 
 ifneq ($(filter powerpc64%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
@@ -308,23 +317,39 @@ else
 SYSROOT = /$(TARGET)
 endif
 
+# Build sysroot directory (temporary during build)
+OBJ_SYSROOT = $(CURDIR)/obj_sysroot
+
+# Sysroot paths for building target libraries
+# mingw uses $(TARGET)/ subdirectory, others use root level
+ifneq ($(MINGW_SRCDIR),)
+SYSROOT_INCLUDEDIR = $(OBJ_SYSROOT)/$(TARGET)/include
+SYSROOT_LIBDIR = $(OBJ_SYSROOT)/$(TARGET)/lib
+else
+SYSROOT_INCLUDEDIR = $(OBJ_SYSROOT)/include
+SYSROOT_LIBDIR = $(OBJ_SYSROOT)/lib
+endif
+
 COMMON_CONFIG := --disable-werror \
 	--disable-multilib \
 	--disable-bootstrap \
 	--disable-nls \
-	$(if $(ZSTD_SRCDIR),--with-zstd) \
 	--enable-lto \
 	--enable-libgomp \
 	--enable-deterministic-archives \
-	--with-debug-prefix-map=$(CURDIR)= \
 	--enable-compressed-debug-sections=none \
+	--enable-plugins \
 	$(COMMON_CONFIG) \
 	--prefix= \
 	--with-sysroot=$(SYSROOT) \
 	--libdir=/lib \
 	--build=$(BUILD) --target=$(TARGET)
 
+obj_gcc/%: export with_debug_prefix_map=$(CURDIR)=
+obj_binutils/%: export with_debug_prefix_map=$(CURDIR)=
+
 GCC_CONFIG := --enable-languages=c,c++ \
+	--enable-checking=release \
 	--disable-libmudflap --disable-libsanitizer \
 	--disable-gnu-indirect-function \
 	--disable-libmpx --disable-fixed-point \
@@ -337,6 +362,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	$(SSP_CONFIG) \
 	--disable-decimal-float \
 	--disable-cet \
+	--enable-__cxa_atexit \
 	$(if $(GLIBC_SRCDIR),--with-glibc-version=$(GLIBC_VER)) \
 	$(GCC_CONFIG)
 
@@ -347,6 +373,7 @@ BINUTILS_CONFIG := --disable-gprofng \
 	--enable-default-execstack=no \
 	--enable-default-hash-style=gnu \
 	--enable-deterministic-archives \
+	--enable-install-libiberty \
 	--enable-ld=default \
 	--enable-new-dtags \
 	--enable-relro \
@@ -376,15 +403,16 @@ FULL_BINUTILS_CONFIG = $(COMMON_CONFIG) $(BINUTILS_CONFIG) $(BINUTILS_CONFIG_FOR
 	$(BINUTILS_OVERRIDE)
 
 FULL_GCC_CONFIG = $(COMMON_CONFIG) $(GCC_CONFIG) $(GCC_CONFIG_FOR_TARGET) \
-	--with-build-sysroot=$(CURDIR)/obj_sysroot \
 	$(GCC_OVERRIDE)
+
+obj_gcc/%: export with_build_sysroot=$(OBJ_SYSROOT)
 
 FULL_MUSL_CONFIG = $(MUSL_CONFIG) \
 	--prefix= --host=$(TARGET)
 
 FULL_GLIBC_CONFIG = $(GLIBC_CONFIG) \
 	--prefix= --host=$(TARGET) --build=$(BUILD) \
-	--with-headers=$(CURDIR)/obj_sysroot/include \
+	--with-headers=$(SYSROOT_INCLUDEDIR) \
 	libc_cv_forced_unwind=yes \
 	libc_cv_c_cleanup=yes \
 	libc_cv_ssp=no libc_cv_ssp_strong=no \
@@ -585,8 +613,8 @@ FULL_MUSL_CONFIG += CC="$(TARGET_CC_FOR_BUILD)" \
 
 FULL_GLIBC_CONFIG += CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
-	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(CURDIR)/obj_sysroot/include" \
-	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(CURDIR)/obj_sysroot/lib $(LDFLAGS)" \
+	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
+	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS)" \
 	AR="$(TARGET_AR_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" \
 	GPROF="$(TARGET_GPROF_FOR_BUILD)" \
@@ -600,8 +628,8 @@ FULL_GLIBC_CONFIG += CC="$(TARGET_CC_FOR_BUILD)" \
 FULL_MINGW_PTHREADS_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
-	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(CURDIR)/obj_sysroot/$(TARGET)/include" \
-	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(CURDIR)/obj_sysroot/$(TARGET)/lib $(LDFLAGS)" \
+	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
+	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS)" \
 	DLLTOOL="$(TARGET_DLLTOOL_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" AR="$(TARGET_AR_FOR_BUILD)" RANLIB="$(TARGET_RANLIB_FOR_BUILD)" \
 	NM="$(TARGET_NM_FOR_BUILD)" \
@@ -612,8 +640,8 @@ FULL_MINGW_PTHREADS_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 FULL_MINGW_CRT_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
-	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(CURDIR)/obj_sysroot/$(TARGET)/include" \
-	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(CURDIR)/obj_sysroot/$(TARGET)/lib $(LDFLAGS)" \
+	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
+	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS)" \
 	DLLTOOL="$(TARGET_DLLTOOL_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" AR="$(TARGET_AR_FOR_BUILD)" RANLIB="$(TARGET_RANLIB_FOR_BUILD)" \
 	NM="$(TARGET_NM_FOR_BUILD)" \
@@ -738,41 +766,61 @@ ifneq ($(ZSTD_SRCDIR),)
 src_zstd: | $(ZSTD_SRCDIR)
 	ln -sf "$(ZSTD_SRCDIR)" $@
 
-ifeq ($(HOST),)
-# Cross build: zstd for BUILD-running gcc/binutils
-ZSTD_CC = $(CCACHE) $(CC)
 # On macOS, use native ar to avoid GNU ar incompatibility with macOS ld
-ifeq ($(shell uname -s),Darwin)
-ZSTD_AR = /usr/bin/ar
+ZSTD_BUILD_AR = $(if $(filter Darwin,$(shell uname -s)),/usr/bin/ar,$(AR))
+
+# Generic zstd build recipe: $(1)=output_dir
+define BUILD_ZSTD
+	cd src_zstd/lib && $(MAKE) BUILD_DIR="$(CURDIR)/$(1)/build" libzstd.a
+	mkdir -p $(1)/include $(1)/lib
+	cp $(CURDIR)/$(1)/build/static/libzstd.a $(1)/lib/
+	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h $(1)/include/
+endef
+
+# Determine compilers for HOST and BUILD versions
+ifeq ($(HOST),)
+ZSTD_HOST_CC = $(CC)
+ZSTD_HOST_AR = $(ZSTD_BUILD_AR)
 else
-ZSTD_AR = $(AR)
-endif
-else
-# Canadian Cross and Native: zstd for HOST-running gcc/binutils
-# In Native: HOST == TARGET, so this is equivalent
-# In Canadian Cross: HOST != TARGET, we need HOST compiler (not TARGET)
-ZSTD_CC = $(CCACHE) $(HOST)-gcc$(EXE_EXT)
-ZSTD_AR = $(HOST)-ar$(EXE_EXT)
+ZSTD_HOST_CC = $(HOST)-gcc$(EXE_EXT)
+ZSTD_HOST_AR = $(HOST)-ar$(EXE_EXT)
 endif
 
+# obj_zstd: HOST version - for final gcc/binutils executables
+# Explicit target-specific CC to override any inherited value from obj_gcc/%
+obj_zstd/.lc_built: export CC := $(CCACHE) $(ZSTD_HOST_CC)
+obj_zstd/.lc_built: export AR := $(ZSTD_HOST_AR)
 obj_zstd/.lc_built: | obj_zstd src_zstd
-	cd src_zstd/lib && $(MAKE) clean || true
-	cd src_zstd/lib && $(MAKE) CC="$(ZSTD_CC)" AR="$(ZSTD_AR)" libzstd.a
-	mkdir -p obj_zstd/include obj_zstd/lib
-	cp src_zstd/lib/libzstd.a obj_zstd/lib/
-	cp src_zstd/lib/zstd.h src_zstd/lib/zstd_errors.h obj_zstd/include/
+	$(call BUILD_ZSTD,obj_zstd)
 	touch $@
 
-# Export ZSTD_CFLAGS and ZSTD_LIBS for binutils/bfd
-# bfd/configure checks these env vars first, bypassing pkg-config if set
+# Common exports for gcc/binutils
+obj_gcc/%: export with_zstd := $(CURDIR)/obj_zstd
+obj_binutils/%: export with_zstd := yes
 obj_binutils/%: export ZSTD_CFLAGS := -I$(CURDIR)/obj_zstd/include
 obj_binutils/%: export ZSTD_LIBS := -L$(CURDIR)/obj_zstd/lib -lzstd
-# For gcc: uses CXXFLAGS/LDFLAGS (gcc doesn't have the sub-configure issue)
-obj_gcc/%: export CXXFLAGS += -I$(CURDIR)/obj_zstd/include
-obj_gcc/%: export LDFLAGS += -L$(CURDIR)/obj_zstd/lib
 
-obj_binutils/.lc_configured: | obj_zstd/.lc_built
-obj_gcc/.lc_configured: | obj_zstd/.lc_built
+ifneq ($(HOST),)
+# Canadian Cross and NATIVE: need BUILD version for GCC's build.XXXXX subdirectories
+# Explicit target-specific CC to use BUILD machine compiler, not inherited HOST compiler
+obj_zstd_build/.lc_built: export CC := $(CCACHE) $(CC)
+obj_zstd_build/.lc_built: export AR := $(ZSTD_BUILD_AR)
+obj_zstd_build/.lc_built: | obj_zstd_build src_zstd
+	$(call BUILD_ZSTD,obj_zstd_build)
+	touch $@
+
+obj_gcc/%: export CFLAGS_FOR_BUILD += -I$(CURDIR)/obj_zstd_build/include
+obj_gcc/%: export CXXFLAGS_FOR_BUILD += -I$(CURDIR)/obj_zstd_build/include
+obj_gcc/%: export LDFLAGS_FOR_BUILD += -L$(CURDIR)/obj_zstd_build/lib
+
+obj_binutils/.lc_configured obj_gcc/.lc_configured: | obj_zstd/.lc_built obj_zstd_build/.lc_built
+else
+obj_binutils/.lc_configured obj_gcc/.lc_configured: | obj_zstd/.lc_built
+endif
+
+else
+obj_gcc/%: export with_zstd := no
+obj_binutils/%: export with_zstd := no
 endif
 
 src_gcc: src_gcc_base
@@ -855,43 +903,43 @@ obj_mingw/.lc_configured: | obj_mingw src_mingw obj_mingw_headers/.lc_configured
 ifneq ($(MINGW_SRCDIR),)
 # mingw - always install to $(TARGET)/ subdir for GCC's target-specific search path
 obj_sysroot/.lc_headers: | obj_mingw_headers/.lc_configured obj_sysroot
-	cd obj_mingw_headers && $(MAKE) $(MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot/$(TARGET) install
-	rm -f $(CURDIR)/obj_sysroot/mingw
-	ln -s $(TARGET) $(CURDIR)/obj_sysroot/mingw
+	cd obj_mingw_headers && $(MAKE) $(MAKE_ARGS) DESTDIR=$(OBJ_SYSROOT)/$(TARGET) install
+	rm -f $(OBJ_SYSROOT)/mingw
+	ln -s $(TARGET) $(OBJ_SYSROOT)/mingw
 	touch $@
 else ifneq ($(FREEBSD_SRCDIR),)
 # freebsd - use prebuilt libc from base.txz
 obj_sysroot/.lc_headers: | obj_freebsd/.lc_built obj_sysroot
 	# Copy headers from prebuilt FreeBSD base
-	mkdir -p $(CURDIR)/obj_sysroot/include
-	rsync -a $(FREEBSD_SRCDIR)/usr/include/ $(CURDIR)/obj_sysroot/include/
+	mkdir -p $(SYSROOT_INCLUDEDIR)
+	rsync -a $(FREEBSD_SRCDIR)/usr/include/ $(SYSROOT_INCLUDEDIR)/
 	touch $@
 else ifneq ($(NETBSD_SRCDIR),)
 # netbsd - use prebuilt libc from base.tar.xz + comp.tar.xz
 obj_sysroot/.lc_headers: | obj_netbsd/.lc_built obj_sysroot
 	# Copy headers from prebuilt NetBSD base
-	mkdir -p $(CURDIR)/obj_sysroot/include
-	rsync -a $(NETBSD_SRCDIR)/usr/include/ $(CURDIR)/obj_sysroot/include/
+	mkdir -p $(SYSROOT_INCLUDEDIR)
+	rsync -a $(NETBSD_SRCDIR)/usr/include/ $(SYSROOT_INCLUDEDIR)/
 	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
 obj_sysroot/.lc_headers: | obj_glibc/.lc_configured obj_sysroot
-	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install-bootstrap-headers=yes install-headers DESTDIR=$(CURDIR)/obj_sysroot
+	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install-bootstrap-headers=yes install-headers DESTDIR=$(OBJ_SYSROOT)
 	# Build and install startup files
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) csu/subdir_lib
-	mkdir -p $(CURDIR)/obj_sysroot/lib
-	if [ -f obj_glibc/csu/crt1.o ]; then install obj_glibc/csu/crt1.o obj_glibc/csu/crti.o obj_glibc/csu/crtn.o $(CURDIR)/obj_sysroot/lib/; fi
+	mkdir -p $(SYSROOT_LIBDIR)
+	if [ -f obj_glibc/csu/crt1.o ]; then install obj_glibc/csu/crt1.o obj_glibc/csu/crti.o obj_glibc/csu/crtn.o $(SYSROOT_LIBDIR)/; fi
 	# Create stub libc.so for libgcc using the cross compiler
 	# Cross: uses XGCC, Canadian Cross: uses BUILD_TARGET_GCC
-	$(TARGET_CC_FOR_BUILD) -nostdlib -nostartfiles -shared -x c /dev/null -o $(CURDIR)/obj_sysroot/lib/libc.so 2>/dev/null || touch $(CURDIR)/obj_sysroot/lib/libc.so
+	$(TARGET_CC_FOR_BUILD) -nostdlib -nostartfiles -shared -x c /dev/null -o $(SYSROOT_LIBDIR)/libc.so 2>/dev/null || touch $(SYSROOT_LIBDIR)/libc.so
 	# Create gnu/stubs.h which is required for compilation
-	mkdir -p $(CURDIR)/obj_sysroot/include/gnu
-	touch $(CURDIR)/obj_sysroot/include/gnu/stubs.h
+	mkdir -p $(SYSROOT_INCLUDEDIR)/gnu
+	touch $(SYSROOT_INCLUDEDIR)/gnu/stubs.h
 	touch $@
 else
 # musl
 obj_sysroot/.lc_headers: | obj_musl/.lc_configured obj_sysroot
-	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot install-headers
+	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(OBJ_SYSROOT) install-headers
 	touch $@
 endif
 
@@ -922,11 +970,11 @@ else ifneq ($(FREEBSD_SRCDIR),)
 # freebsd - copy prebuilt libraries
 obj_sysroot/.lc_libs: | obj_freebsd/.lc_built
 	# Copy all libraries from prebuilt FreeBSD base
-	mkdir -p $(CURDIR)/obj_sysroot/lib
-	rsync -a $(FREEBSD_SRCDIR)/lib/ $(CURDIR)/obj_sysroot/lib/
-	rsync -a $(FREEBSD_SRCDIR)/usr/lib/ $(CURDIR)/obj_sysroot/lib/
+	mkdir -p $(SYSROOT_LIBDIR)
+	rsync -a $(FREEBSD_SRCDIR)/lib/ $(SYSROOT_LIBDIR)/
+	rsync -a $(FREEBSD_SRCDIR)/usr/lib/ $(SYSROOT_LIBDIR)/
 	# Fix broken symlinks (FreeBSD base.txz uses absolute paths like ../../lib/)
-	cd $(CURDIR)/obj_sysroot/lib && $(FREEBSD_FIX_SYMLINKS)
+	cd $(SYSROOT_LIBDIR) && $(FREEBSD_FIX_SYMLINKS)
 	touch $@
 else ifneq ($(NETBSD_SRCDIR),)
 # netbsd - copy prebuilt libraries
@@ -934,36 +982,36 @@ obj_sysroot/.lc_libs: | obj_netbsd/.lc_built
 	# Copy all libraries from prebuilt NetBSD base
 	# Note: Copy /usr/lib first (has broken symlinks to ../../lib/), then /lib (has actual files)
 	# so actual files overwrite the broken symlinks
-	mkdir -p $(CURDIR)/obj_sysroot/lib
-	rsync -a $(NETBSD_SRCDIR)/usr/lib/ $(CURDIR)/obj_sysroot/lib/
-	rsync -a $(NETBSD_SRCDIR)/lib/ $(CURDIR)/obj_sysroot/lib/ || true
+	mkdir -p $(SYSROOT_LIBDIR)
+	rsync -a $(NETBSD_SRCDIR)/usr/lib/ $(SYSROOT_LIBDIR)/
+	rsync -a $(NETBSD_SRCDIR)/lib/ $(SYSROOT_LIBDIR)/ || true
 	# Fix any remaining broken symlinks
-	cd $(CURDIR)/obj_sysroot/lib && $(NETBSD_FIX_SYMLINKS)
+	cd $(SYSROOT_LIBDIR) && $(NETBSD_FIX_SYMLINKS)
 	touch $@
 else ifneq ($(GLIBC_SRCDIR),)
 # glibc
 obj_sysroot/.lc_libs: | obj_glibc/.lc_built
-	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(CURDIR)/obj_sysroot
-	find $(CURDIR)/obj_sysroot/lib -name "*.so" -type f -exec sh -c 'head -n1 "$$1" 2>/dev/null | grep -q "GNU ld script" && sed -i "s|/lib/||g" "$$1"' sh {} \; || true
+	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(OBJ_SYSROOT)
+	find $(SYSROOT_LIBDIR) -name "*.so" -type f -exec sh -c 'head -n1 "$$1" 2>/dev/null | grep -q "GNU ld script" && sed -i "s|/lib/||g" "$$1"' sh {} \; || true
 	touch $@
 else
 # musl
 obj_sysroot/.lc_libs: | obj_musl/.lc_built src_ssp
-	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot install
+	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS) DESTDIR=$(OBJ_SYSROOT) install
 ifndef NATIVE
 	# Cross and Canadian Cross: Build libssp_nonshared.a
 	# Cross: uses XGCC (runs on BUILD)
 	# Canadian Cross: uses BUILD_TARGET_GCC (pre-existing cross compiler on BUILD)
-	$(TARGET_CC_FOR_BUILD) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
-	$(TARGET_AR_FOR_BUILD) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
-	$(TARGET_RANLIB_FOR_BUILD) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
-	rm -f $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(TARGET_CC_FOR_BUILD) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(OBJ_SYSROOT)/__stack_chk_fail_local.o
+	$(TARGET_AR_FOR_BUILD) r $(SYSROOT_LIBDIR)/libssp_nonshared.a $(OBJ_SYSROOT)/__stack_chk_fail_local.o
+	$(TARGET_RANLIB_FOR_BUILD) $(SYSROOT_LIBDIR)/libssp_nonshared.a
+	rm -f $(OBJ_SYSROOT)/__stack_chk_fail_local.o
 else
 	# Native build: Build libssp_nonshared.a using HOST compiler (HOST == TARGET)
-	$(CCACHE) $(HOST)-gcc$(EXE_EXT) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
-	$(HOST)-ar$(EXE_EXT) r $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
-	$(HOST)-ranlib$(EXE_EXT) $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a
-	rm -f $(CURDIR)/obj_sysroot/__stack_chk_fail_local.o
+	$(CCACHE) $(HOST)-gcc$(EXE_EXT) $(COMMON_FLAGS) -c $(CURDIR)/src_ssp/__stack_chk_fail_local.c -o $(OBJ_SYSROOT)/__stack_chk_fail_local.o
+	$(HOST)-ar$(EXE_EXT) r $(SYSROOT_LIBDIR)/libssp_nonshared.a $(OBJ_SYSROOT)/__stack_chk_fail_local.o
+	$(HOST)-ranlib$(EXE_EXT) $(SYSROOT_LIBDIR)/libssp_nonshared.a
+	rm -f $(OBJ_SYSROOT)/__stack_chk_fail_local.o
 endif
 	touch $@
 endif
@@ -979,7 +1027,7 @@ install-musl: | obj_sysroot/.lc_libs
 	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FIX_LIB_SYMLINKS)
 	# Install libssp_nonshared.a for musl SSP support
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
-	cp -f $(CURDIR)/obj_sysroot/lib/libssp_nonshared.a $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
+	cp -f $(SYSROOT_LIBDIR)/libssp_nonshared.a $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 
 install-glibc: | obj_sysroot/.lc_libs
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS) install DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT)
@@ -992,8 +1040,8 @@ install-freebsd: | obj_sysroot/.lc_libs
 	# Install prebuilt FreeBSD libraries and headers
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/include
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
-	rsync -a $(CURDIR)/obj_sysroot/include/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/include/
-	rsync -a $(CURDIR)/obj_sysroot/lib/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
+	rsync -a $(SYSROOT_INCLUDEDIR)/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/include/
+	rsync -a $(SYSROOT_LIBDIR)/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 	# Fix broken symlinks (already fixed in obj_sysroot, but rsync may preserve them)
 	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(FREEBSD_FIX_SYMLINKS)
 
@@ -1001,8 +1049,8 @@ install-netbsd: | obj_sysroot/.lc_libs
 	# Install prebuilt NetBSD libraries and headers
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/include
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib
-	rsync -a $(CURDIR)/obj_sysroot/include/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/include/
-	rsync -a $(CURDIR)/obj_sysroot/lib/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
+	rsync -a $(SYSROOT_INCLUDEDIR)/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/include/
+	rsync -a $(SYSROOT_LIBDIR)/ $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib/
 	# Fix broken symlinks
 	cd $(DESTDIR)$(OUTPUT)$(SYSROOT)/lib && $(NETBSD_FIX_SYMLINKS)
 
@@ -1037,11 +1085,11 @@ obj_mingw_pthreads/.lc_built: | obj_mingw_pthreads/.lc_configured
 	touch $@
 
 obj_sysroot/.lc_libs_pthreads: | obj_mingw_pthreads/.lc_built
-	cd obj_mingw_pthreads && $(MAKE) $(MAKE_ARGS) $(MINGW_MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot/$(TARGET) install
+	cd obj_mingw_pthreads && $(MAKE) $(MAKE_ARGS) $(MINGW_MAKE_ARGS) DESTDIR=$(OBJ_SYSROOT)/$(TARGET) install
 	touch $@
 
 obj_sysroot/.lc_libs_crt: | obj_mingw_crt/.lc_built
-	cd obj_mingw_crt && $(MAKE) $(MAKE_ARGS) $(MINGW_MAKE_ARGS) DESTDIR=$(CURDIR)/obj_sysroot/$(TARGET) install
+	cd obj_mingw_crt && $(MAKE) $(MAKE_ARGS) $(MINGW_MAKE_ARGS) DESTDIR=$(OBJ_SYSROOT)/$(TARGET) install
 	touch $@
 
 install-mingw-headers: | obj_mingw_headers/.lc_configured
@@ -1072,8 +1120,8 @@ obj_kernel_headers/.lc_built: | src_kernel_headers
 	find obj_kernel_headers/staged/include '(' -name .install -o -name ..install.cmd ')' -exec rm {} +
 	touch $@
 obj_kernel_headers/.lc_headers_installed: | obj_kernel_headers/.lc_built obj_sysroot
-	mkdir -p $(CURDIR)/obj_sysroot/include
-	cp -R obj_kernel_headers/staged/include/* $(CURDIR)/obj_sysroot/include
+	mkdir -p $(SYSROOT_INCLUDEDIR)
+	cp -R obj_kernel_headers/staged/include/* $(SYSROOT_INCLUDEDIR)
 	touch $@
 install-kernel-headers: | obj_kernel_headers/.lc_built
 	mkdir -p $(DESTDIR)$(OUTPUT)$(SYSROOT)/include

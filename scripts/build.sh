@@ -467,7 +467,10 @@ endif
 
 CHINA = ${USE_CHINA_MIRROR}
 
-COMMON_FLAGS += -O${OPTIMIZE_LEVEL}
+$(if [ -n "$OPTIMIZE_LEVEL" ] && [ "$OPTIMIZE_LEVEL" != "2" ]; then
+        echo "COMMON_FLAGS += -O${OPTIMIZE_LEVEL}"
+    fi)
+
 $(if [ -n "$LINKER" ] && [ -z "$NATIVE" ] && [ -z "$HOST" ]; then
         echo "# Use custom linker for cross build only"
         echo "LDFLAGS += -fuse-ld=${LINKER}"
