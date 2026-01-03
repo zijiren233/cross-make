@@ -737,8 +737,7 @@ function Build() {
             tar -zcf "${CANADIAN_DIST_NAME}.tgz" -C "${CANADIAN_DIST_NAME}" .
             echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.tgz success"
             if [[ $HOST_TARGET =~ mingw ]]; then
-                find "${CANADIAN_DIST_NAME}" -type l -delete
-                (cd "${CANADIAN_DIST_NAME}" && zip -rq "../${CANADIAN_DIST_NAME}.zip" .)
+                (cd "${CANADIAN_DIST_NAME}" && zip -rq "${CANADIAN_DIST_NAME}.zip" .)
                 echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.zip success"
             fi
         fi
@@ -794,8 +793,7 @@ function Build() {
             tar -zcf "${NATIVE_DIST_NAME}.tgz" -C "${NATIVE_DIST_NAME}" .
             echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.tgz success"
             if [[ $TARGET =~ mingw ]]; then
-                find "${NATIVE_DIST_NAME}" -type l -delete
-                (cd "${NATIVE_DIST_NAME}" && zip -rq "../${NATIVE_DIST_NAME}.zip" .)
+                (cd "${NATIVE_DIST_NAME}" && zip -rq "${NATIVE_DIST_NAME}.zip" .)
                 echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.zip success"
             fi
         fi
