@@ -309,7 +309,7 @@ jobs:
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
           if-no-files-found: error
-          path: dist
+          path: dist/*.*
 
   # Release job uses reusable workflow
   release:

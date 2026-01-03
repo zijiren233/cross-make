@@ -226,7 +226,7 @@ jobs:
         with:
           name: ${{ inputs.target }}-native
           if-no-files-found: error
-          path: dist
+          path: dist/*.*
 
   release:
     name: Release ${{ inputs.target }}-native

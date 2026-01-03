@@ -737,6 +737,8 @@ function Build() {
             tar -zcf "${CANADIAN_DIST_NAME}.tgz" -C "${CANADIAN_DIST_NAME}" .
             echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.tgz success"
             if [[ $HOST_TARGET =~ mingw ]]; then
+                # Remove circular symlinks (e.g., usr -> .) before zip
+                find "${CANADIAN_DIST_NAME}" -type l -lname '.' -delete
                 (cd "${CANADIAN_DIST_NAME}" && zip -rq "${CANADIAN_DIST_NAME}.zip" .)
                 echo "package ${CANADIAN_DIST_NAME} to ${CANADIAN_DIST_NAME}.zip success"
             fi
@@ -793,6 +795,8 @@ function Build() {
             tar -zcf "${NATIVE_DIST_NAME}.tgz" -C "${NATIVE_DIST_NAME}" .
             echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.tgz success"
             if [[ $TARGET =~ mingw ]]; then
+                # Remove circular symlinks (e.g., usr -> .) before zip
+                find "${NATIVE_DIST_NAME}" -type l -lname '.' -delete
                 (cd "${NATIVE_DIST_NAME}" && zip -rq "${NATIVE_DIST_NAME}.zip" .)
                 echo "package ${NATIVE_DIST_NAME} to ${NATIVE_DIST_NAME}.zip success"
             fi
