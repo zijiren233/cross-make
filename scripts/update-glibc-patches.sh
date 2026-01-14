@@ -96,6 +96,10 @@ extract_debian_patches() {
         for patch in debian/patches/any/submitted-*.patch debian/patches/any/git-*.patch; do
             if [ -f "$patch" ]; then
                 local filename=$(basename "$patch")
+                # Skip submitted-stt-gnu-ifunc-detection.patch
+                if [[ "$filename" == "submitted-stt-gnu-ifunc-detection.patch" ]]; then
+                    continue
+                fi
                 cp "$patch" "$target_dir/debian-$filename"
                 count=$((count + 1))
             fi
