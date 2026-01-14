@@ -12,7 +12,7 @@ TMP_DIR="/tmp/glibc-patches-$$"
 UPSTREAM_REPO="https://sourceware.org/git/glibc.git"
 DEBIAN_REPO="https://salsa.debian.org/glibc-team/glibc.git"
 
-GLIBC_VERSIONS="2.28 2.29 2.30 2.31 2.32 2.33 2.34 2.35 2.36 2.37 2.38 2.39 2.40 2.41 2.42"
+GLIBC_VERSIONS="2.17 2.27 2.28 2.29 2.30 2.31 2.32 2.33 2.34 2.35 2.36 2.37 2.38 2.39 2.40 2.41 2.42"
 
 cleanup() {
     if [ -d "$TMP_DIR" ]; then
@@ -116,8 +116,8 @@ process_version() {
 
     mkdir -p "$target_dir"
 
-    extract_upstream_patches "$version"
-    extract_debian_patches "$version"
+    extract_upstream_patches "$version" || true
+    extract_debian_patches "$version" || true
 
     local patch_count=$(find "$target_dir" -name "*.patch" 2>/dev/null | wc -l | tr -d ' ')
 

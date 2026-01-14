@@ -6324,7 +6324,7 @@ index 28237b0e58..888c12fe28 100644
  	oldval = mutex->__data.__lock;
  
 diff --git a/nptl/pthread_mutex_trylock.c b/nptl/pthread_mutex_trylock.c
-index 7de61f4f68..8e01113b0f 100644
+index 7de61f4f68..9cdb3255d9 100644
 --- a/nptl/pthread_mutex_trylock.c
 +++ b/nptl/pthread_mutex_trylock.c
 @@ -36,6 +36,8 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
@@ -6336,7 +6336,29 @@ index 7de61f4f68..8e01113b0f 100644
    switch (__builtin_expect (PTHREAD_MUTEX_TYPE_ELISION (mutex),
  			    PTHREAD_MUTEX_TIMED_NP))
      {
-@@ -92,6 +94,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -54,7 +56,8 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+ 	  return 0;
+ 	}
+ 
+-      if (lll_trylock (mutex->__data.__lock) == 0)
++      if (atomic_load_relaxed (&(mutex->__data.__lock)) == 0
++	  && lll_trylock (mutex->__data.__lock) == 0)
+ 	{
+ 	  /* Record the ownership.  */
+ 	  mutex->__data.__owner = id;
+@@ -77,7 +80,10 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+       /*FALL THROUGH*/
+     case PTHREAD_MUTEX_ADAPTIVE_NP:
+     case PTHREAD_MUTEX_ERRORCHECK_NP:
+-      if (lll_trylock (mutex->__data.__lock) != 0)
++      /* Mutex type is already loaded, lock check overhead should
++         be minimal.  */
++      if (atomic_load_relaxed (&(mutex->__data.__lock)) != 0
++	  || lll_trylock (mutex->__data.__lock) != 0)
+ 	break;
+ 
+       /* Record the ownership.  */
+@@ -92,6 +98,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
      case PTHREAD_MUTEX_ROBUST_ADAPTIVE_NP:
        THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending,
  		     &mutex->__data.__list.__next);
@@ -6346,7 +6368,7 @@ index 7de61f4f68..8e01113b0f 100644
  
        oldval = mutex->__data.__lock;
        do
-@@ -117,7 +122,12 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -117,7 +126,12 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	      /* But it is inconsistent unless marked otherwise.  */
  	      mutex->__data.__owner = PTHREAD_MUTEX_INCONSISTENT;
  
@@ -6359,7 +6381,7 @@ index 7de61f4f68..8e01113b0f 100644
  	      THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
  	      /* Note that we deliberately exist here.  If we fall
-@@ -133,6 +143,8 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -133,6 +147,8 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	      int kind = PTHREAD_MUTEX_TYPE (mutex);
  	      if (kind == PTHREAD_MUTEX_ROBUST_ERRORCHECK_NP)
  		{
@@ -6368,7 +6390,7 @@ index 7de61f4f68..8e01113b0f 100644
  		  THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending,
  				 NULL);
  		  return EDEADLK;
-@@ -140,6 +152,8 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -140,6 +156,8 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  
  	      if (kind == PTHREAD_MUTEX_ROBUST_RECURSIVE_NP)
  		{
@@ -6377,7 +6399,7 @@ index 7de61f4f68..8e01113b0f 100644
  		  THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending,
  				 NULL);
  
-@@ -158,6 +172,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -158,6 +176,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  							id, 0);
  	  if (oldval != 0 && (oldval & FUTEX_OWNER_DIED) == 0)
  	    {
@@ -6387,7 +6409,7 @@ index 7de61f4f68..8e01113b0f 100644
  	      THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
  	      return EBUSY;
-@@ -171,13 +188,20 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -171,13 +192,20 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	      if (oldval == id)
  		lll_unlock (mutex->__data.__lock,
  			    PTHREAD_ROBUST_MUTEX_PSHARED (mutex));
@@ -6408,7 +6430,7 @@ index 7de61f4f68..8e01113b0f 100644
        THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
        mutex->__data.__owner = id;
-@@ -199,14 +223,25 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -199,14 +227,25 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
      case PTHREAD_MUTEX_PI_ROBUST_NORMAL_NP:
      case PTHREAD_MUTEX_PI_ROBUST_ADAPTIVE_NP:
        {
@@ -6440,7 +6462,7 @@ index 7de61f4f68..8e01113b0f 100644
  
  	oldval = mutex->__data.__lock;
  
-@@ -215,12 +250,16 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -215,12 +254,16 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	  {
  	    if (kind == PTHREAD_MUTEX_ERRORCHECK_NP)
  	      {
@@ -6457,7 +6479,7 @@ index 7de61f4f68..8e01113b0f 100644
  		THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
  		/* Just bump the counter.  */
-@@ -242,6 +281,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -242,6 +285,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	  {
  	    if ((oldval & FUTEX_OWNER_DIED) == 0)
  	      {
@@ -6467,7 +6489,7 @@ index 7de61f4f68..8e01113b0f 100644
  		THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
  		return EBUSY;
-@@ -262,6 +304,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -262,6 +308,9 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	    if (INTERNAL_SYSCALL_ERROR_P (e, __err)
  		&& INTERNAL_SYSCALL_ERRNO (e, __err) == EWOULDBLOCK)
  	      {
@@ -6477,7 +6499,7 @@ index 7de61f4f68..8e01113b0f 100644
  		THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
  		return EBUSY;
-@@ -279,7 +324,12 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -279,7 +328,12 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  	    /* But it is inconsistent unless marked otherwise.  */
  	    mutex->__data.__owner = PTHREAD_MUTEX_INCONSISTENT;
  
@@ -6490,7 +6512,7 @@ index 7de61f4f68..8e01113b0f 100644
  	    THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  
  	    /* Note that we deliberately exit here.  If we fall
-@@ -302,13 +352,20 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -302,13 +356,20 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
  						  PTHREAD_ROBUST_MUTEX_PSHARED (mutex)),
  			      0, 0);
  
@@ -6511,7 +6533,7 @@ index 7de61f4f68..8e01113b0f 100644
  	    THREAD_SETMEM (THREAD_SELF, robust_head.list_op_pending, NULL);
  	  }
  
-@@ -325,7 +382,10 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
+@@ -325,7 +386,10 @@ __pthread_mutex_trylock (pthread_mutex_t *mutex)
      case PTHREAD_MUTEX_PP_NORMAL_NP:
      case PTHREAD_MUTEX_PP_ADAPTIVE_NP:
        {

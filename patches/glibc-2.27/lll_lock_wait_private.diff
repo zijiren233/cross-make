@@ -1,0 +1,63 @@
+diff --git a/nptl/lowlevellock.c b/nptl/lowlevellock.c
+--- a/nptl/lowlevellock.c
++++ b/nptl/lowlevellock.c
+@@ -25,4 +25,7 @@
+ 
+ void
++#ifndef IS_IN_libpthread
++__attribute__((weak))
++#endif
+ __lll_lock_wait_private (int *futex)
+ {
+
+diff --git a/sysdeps/sparc/sparc32/lowlevellock.c b/sysdeps/sparc/sparc32/lowlevellock.c
+--- a/sysdeps/sparc/sparc32/lowlevellock.c
++++ b/sysdeps/sparc/sparc32/lowlevellock.c
+@@ -25,4 +25,7 @@
+ 
+ void
++#ifndef IS_IN_libpthread
++__attribute__((weak))
++#endif
+ __lll_lock_wait_private (int *futex)
+ {
+
+diff --git a/sysdeps/unix/sysv/linux/i386/lowlevellock.S b/sysdeps/unix/sysv/linux/i386/lowlevellock.S
+--- a/sysdeps/unix/sysv/linux/i386/lowlevellock.S
++++ b/sysdeps/unix/sysv/linux/i386/lowlevellock.S
+@@ -40,4 +40,7 @@
+ 	.globl	__lll_lock_wait_private
+ 	.type	__lll_lock_wait_private,@function
++#ifndef NOT_IN_libc
++	.weak   __lll_lock_wait_private
++#endif
+ 	.hidden	__lll_lock_wait_private
+ 	.align	16
+@@ -300,4 +300,7 @@
+ 	.globl	__lll_unlock_wake_private
+ 	.type	__lll_unlock_wake_private,@function
++#ifndef NOT_IN_libc
++	.weak   __lll_unlock_wake_private
++#endif
+ 	.hidden	__lll_unlock_wake_private
+ 	.align	16
+
+diff --git a/sysdeps/unix/sysv/linux/x86_64/lowlevellock.S b/sysdeps/unix/sysv/linux/x86_64/lowlevellock.S
+--- a/sysdeps/unix/sysv/linux/x86_64/lowlevellock.S
++++ b/sysdeps/unix/sysv/linux/x86_64/lowlevellock.S
+@@ -40,4 +40,7 @@
+ 	.globl	__lll_lock_wait_private
+ 	.type	__lll_lock_wait_private,@function
++#ifndef NOT_IN_libc
++	.weak   __lll_lock_wait_private
++#endif
+ 	.hidden	__lll_lock_wait_private
+ 	.align	16
+@@ -300,4 +300,7 @@
+ 	.globl	__lll_unlock_wake_private
+ 	.type	__lll_unlock_wake_private,@function
++#ifndef NOT_IN_libc
++	.weak   __lll_unlock_wake_private
++#endif
+ 	.hidden	__lll_unlock_wake_private
+ 	.align	16
