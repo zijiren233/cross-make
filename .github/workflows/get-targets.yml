@@ -15,6 +15,18 @@ on:
       TARGETS_4:
         description: "Array of targets chunk 4"
         value: ${{ jobs.get_targets.outputs.TARGETS_4 }}
+      TARGETS_5:
+        description: "Array of targets chunk 5"
+        value: ${{ jobs.get_targets.outputs.TARGETS_5 }}
+      TARGETS_6:
+        description: "Array of targets chunk 6"
+        value: ${{ jobs.get_targets.outputs.TARGETS_6 }}
+      TARGETS_7:
+        description: "Array of targets chunk 7"
+        value: ${{ jobs.get_targets.outputs.TARGETS_7 }}
+      TARGETS_8:
+        description: "Array of targets chunk 8"
+        value: ${{ jobs.get_targets.outputs.TARGETS_8 }}
 
 jobs:
   get_targets:
@@ -25,6 +37,10 @@ jobs:
       TARGETS_2: ${{ steps.get_all_targets.outputs.TARGETS_2 }}
       TARGETS_3: ${{ steps.get_all_targets.outputs.TARGETS_3 }}
       TARGETS_4: ${{ steps.get_all_targets.outputs.TARGETS_4 }}
+      TARGETS_5: ${{ steps.get_all_targets.outputs.TARGETS_5 }}
+      TARGETS_6: ${{ steps.get_all_targets.outputs.TARGETS_6 }}
+      TARGETS_7: ${{ steps.get_all_targets.outputs.TARGETS_7 }}
+      TARGETS_8: ${{ steps.get_all_targets.outputs.TARGETS_8 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,18 +56,26 @@ jobs:
           ALL_TARGETS=$(yq -o=json -I=0 '[.targets[] | .ID // .TARGET]' scripts/targets.yaml)
           TOTAL=$(echo "$ALL_TARGETS" | jq 'length')
 
-          # Split into 4 equal chunks
-          CHUNK_SIZE=$(( (TOTAL + 3) / 4 ))
+          # Split into 8 equal chunks
+          CHUNK_SIZE=$(( (TOTAL + 7) / 8 ))
           TARGETS_1=$(echo "$ALL_TARGETS" | jq -c ".[0:$CHUNK_SIZE]")
           TARGETS_2=$(echo "$ALL_TARGETS" | jq -c ".[$CHUNK_SIZE:$((CHUNK_SIZE*2))]")
           TARGETS_3=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*2)):$((CHUNK_SIZE*3))]")
-          TARGETS_4=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*3)):]")
+          TARGETS_4=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*3)):$((CHUNK_SIZE*4))]")
+          TARGETS_5=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*4)):$((CHUNK_SIZE*5))]")
+          TARGETS_6=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*5)):$((CHUNK_SIZE*6))]")
+          TARGETS_7=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*6)):$((CHUNK_SIZE*7))]")
+          TARGETS_8=$(echo "$ALL_TARGETS" | jq -c ".[$((CHUNK_SIZE*7)):]")
 
           # Output each chunk (empty array if no items)
           echo "TARGETS_1=${TARGETS_1:-[]}" >> $GITHUB_OUTPUT
           echo "TARGETS_2=${TARGETS_2:-[]}" >> $GITHUB_OUTPUT
           echo "TARGETS_3=${TARGETS_3:-[]}" >> $GITHUB_OUTPUT
           echo "TARGETS_4=${TARGETS_4:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_5=${TARGETS_5:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_6=${TARGETS_6:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_7=${TARGETS_7:-[]}" >> $GITHUB_OUTPUT
+          echo "TARGETS_8=${TARGETS_8:-[]}" >> $GITHUB_OUTPUT
 
           # Debug output
           echo "Total targets: $TOTAL"
@@ -60,3 +84,7 @@ jobs:
           echo "Chunk 2: $(echo "$TARGETS_2" | jq 'length') targets"
           echo "Chunk 3: $(echo "$TARGETS_3" | jq 'length') targets"
           echo "Chunk 4: $(echo "$TARGETS_4" | jq 'length') targets"
+          echo "Chunk 5: $(echo "$TARGETS_5" | jq 'length') targets"
+          echo "Chunk 6: $(echo "$TARGETS_6" | jq 'length') targets"
+          echo "Chunk 7: $(echo "$TARGETS_7" | jq 'length') targets"
+          echo "Chunk 8: $(echo "$TARGETS_8" | jq 'length') targets"
