@@ -1449,73 +1449,165 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.29"
 
-  - ID: aarch64-linux-gnu-2.17
+  - ID: aarch64-linux-gnu-2.28
     TARGET: aarch64-linux-gnu
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: arm-linux-gnueabi-2.17
+  - ID: arm-linux-gnueabi-2.28
     TARGET: arm-linux-gnueabi
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: arm-linux-gnueabihf-2.17
+  - ID: arm-linux-gnueabihf-2.28
     TARGET: arm-linux-gnueabihf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: armv5-linux-gnueabi-2.17
+  - ID: armv5-linux-gnueabi-2.28
     TARGET: armv5-linux-gnueabi
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: armv6-linux-gnueabi-2.17
+  - ID: armv6-linux-gnueabi-2.28
     TARGET: armv6-linux-gnueabi
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: armv6-linux-gnueabihf-2.17
+  - ID: armv6-linux-gnueabihf-2.28
     TARGET: armv6-linux-gnueabihf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: armv7-linux-gnueabi-2.17
+  - ID: armv7-linux-gnueabi-2.28
     TARGET: armv7-linux-gnueabi
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: armv7-linux-gnueabihf-2.17
+  - ID: armv7-linux-gnueabihf-2.28
     TARGET: armv7-linux-gnueabihf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mips-linux-gnu-2.17
+  - ID: mips-linux-gnu-2.28
     TARGET: mips-linux-gnu
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mips-linux-gnusf-2.17
+  - ID: mips-linux-gnusf-2.28
     TARGET: mips-linux-gnusf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mipsel-linux-gnu-2.17
+  - ID: mipsel-linux-gnu-2.28
     TARGET: mipsel-linux-gnu
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mipsel-linux-gnusf-2.17
+  - ID: mipsel-linux-gnusf-2.28
     TARGET: mipsel-linux-gnusf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mips64-linux-gnu-2.17
+  - ID: mips64-linux-gnu-2.28
     TARGET: mips64-linux-gnu
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mips64-linux-gnusf-2.17
+  - ID: mips64-linux-gnusf-2.28
     TARGET: mips64-linux-gnusf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mips64el-linux-gnu-2.17
+  - ID: mips64el-linux-gnu-2.28
     TARGET: mips64el-linux-gnu
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: mips64el-linux-gnusf-2.17
+  - ID: mips64el-linux-gnusf-2.28
     TARGET: mips64el-linux-gnusf
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
 
-  - ID: s390x-linux-gnu-2.17
+  - ID: s390x-linux-gnu-2.28
     TARGET: s390x-linux-gnu
-    GLIBC_VER: "2.17"
+    GLIBC_VER: "2.28"
+
+  - ID: i586-linux-gnu-2.28
+    TARGET: i586-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - ID: i686-linux-gnu-2.28
+    TARGET: i686-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - ID: x86_64-linux-gnu-2.28
+    TARGET: x86_64-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - ID: aarch64-linux-gnu-2.27
+    TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: arm-linux-gnueabi-2.27
+    TARGET: arm-linux-gnueabi
+    GLIBC_VER: "2.27"
+
+  - ID: arm-linux-gnueabihf-2.27
+    TARGET: arm-linux-gnueabihf
+    GLIBC_VER: "2.27"
+
+  - ID: armv5-linux-gnueabi-2.27
+    TARGET: armv5-linux-gnueabi
+    GLIBC_VER: "2.27"
+
+  - ID: armv6-linux-gnueabi-2.27
+    TARGET: armv6-linux-gnueabi
+    GLIBC_VER: "2.27"
+
+  - ID: armv6-linux-gnueabihf-2.27
+    TARGET: armv6-linux-gnueabihf
+    GLIBC_VER: "2.27"
+
+  - ID: armv7-linux-gnueabi-2.27
+    TARGET: armv7-linux-gnueabi
+    GLIBC_VER: "2.27"
+
+  - ID: armv7-linux-gnueabihf-2.27
+    TARGET: armv7-linux-gnueabihf
+    GLIBC_VER: "2.27"
+
+  - ID: mips-linux-gnu-2.27
+    TARGET: mips-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: mips-linux-gnusf-2.27
+    TARGET: mips-linux-gnusf
+    GLIBC_VER: "2.27"
+
+  - ID: mipsel-linux-gnu-2.27
+    TARGET: mipsel-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: mipsel-linux-gnusf-2.27
+    TARGET: mipsel-linux-gnusf
+    GLIBC_VER: "2.27"
+
+  - ID: mips64-linux-gnu-2.27
+    TARGET: mips64-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: mips64-linux-gnusf-2.27
+    TARGET: mips64-linux-gnusf
+    GLIBC_VER: "2.27"
+
+  - ID: mips64el-linux-gnu-2.27
+    TARGET: mips64el-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: mips64el-linux-gnusf-2.27
+    TARGET: mips64el-linux-gnusf
+    GLIBC_VER: "2.27"
+
+  - ID: s390x-linux-gnu-2.27
+    TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: i586-linux-gnu-2.27
+    TARGET: i586-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: i686-linux-gnu-2.27
+    TARGET: i686-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: x86_64-linux-gnu-2.27
+    TARGET: x86_64-linux-gnu
+    GLIBC_VER: "2.27"
 
   - ID: i586-linux-gnu-2.17
     TARGET: i586-linux-gnu

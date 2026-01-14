@@ -1,0 +1,67 @@
+From: Fix for modern toolchains
+Subject: Fix configure for modern GCC (15.x) and Make (4.x)
+
+This patch fixes two categories of issues:
+
+1. Version check patterns that reject modern GCC and Make:
+   - GCC: [5-9].* only matches single-digit versions, not GCC 15.x
+   - Make: 3.79* | 3.[89]* doesn't accept Make 4.x
+
+2. C23 compatibility: GCC 14+ treats implicit int as error
+   - Test code uses old-style K&R declarations without return types
+   - Add explicit return types to test functions
+
+--- a/configure
++++ b/configure
+@@ -4909,7 +4909,7 @@ else
+   ac_prog_version=`$CC -v 2>&1 | sed -n 's/^.*version \([egcygnustpi-]*[0-9.]*\).*$/\1/p'`
+   case $ac_prog_version in
+     '') ac_prog_version="v. ?.??, bad"; ac_verc_fail=yes;;
+-    4.[3-9].* | 4.[1-9][0-9].* | [5-9].* )
++    4.[3-9].* | 4.[1-9][0-9].* | [5-9].* | [1-9][0-9].* )
+        ac_prog_version="$ac_prog_version, ok"; ac_verc_fail=no;;
+     *) ac_prog_version="$ac_prog_version, bad"; ac_verc_fail=yes;;
+
+@@ -4972,7 +4972,7 @@ else
+   ac_prog_version=`$MAKE --version 2>&1 | sed -n 's/^.*GNU Make[^0-9]*\([0-9][0-9.]*\).*$/\1/p'`
+   case $ac_prog_version in
+     '') ac_prog_version="v. ?.??, bad"; ac_verc_fail=yes;;
+-    3.79* | 3.[89]*)
++    3.79* | 3.[89]* | [4-9].*)
+        ac_prog_version="$ac_prog_version, ok"; ac_verc_fail=no;;
+     *) ac_prog_version="$ac_prog_version, bad"; ac_verc_fail=yes;;
+
+@@ -6748,7 +6748,7 @@ else
+   cat > conftest.c <<EOF
+ int foo;
+ #ifdef __GNUC_GNU_INLINE__
+-main () { return 0;}
++int main (void) { return 0;}
+ #else
+ #error
+ #endif
+@@ -6914,9 +6914,9 @@ if ${libc_cv_ld_no_whole_archive+:} false; then :
+   $as_echo_n "(cached) " >&6
+ else
+   cat > conftest.c <<\EOF
+-_start () {}
++void _start (void) {}
+ int __eh_pc;
+-__throw () {}
++void __throw (void) {}
+ EOF
+ if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS
+ 			    -nostdlib -nostartfiles -Wl,--no-whole-archive
+@@ -6944,9 +6944,9 @@ if ${libc_cv_gcc_exceptions+:} false; then :
+   $as_echo_n "(cached) " >&6
+ else
+   cat > conftest.c <<\EOF
+-_start () {}
++void _start (void) {}
+ int __eh_pc;
+-__throw () {}
++void __throw (void) {}
+ EOF
+ if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS
+ 			    -nostdlib -nostartfiles -fexceptions
+

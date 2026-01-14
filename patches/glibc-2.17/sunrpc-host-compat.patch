@@ -1,0 +1,73 @@
+From: Fix sunrpc build on non-glibc hosts
+Subject: Fix sunrpc rpcgen compilation on non-glibc hosts (macOS, musl, etc.)
+
+This patch fixes two issues when cross-compiling glibc on non-glibc hosts:
+
+1. libintl.h may not be available on the host system. When building host
+   tools (IS_IN_build is defined), provide stub macros for gettext.
+
+2. rpc/types.h uses Linux/glibc-specific types (__u_char, __u_short, etc.)
+   which don't exist on non-glibc systems. Add proper guards to skip these
+   definitions on systems that already define u_char, u_short, etc.
+
+diff --git a/sunrpc/rpc_main.c b/sunrpc/rpc_main.c
+--- a/sunrpc/rpc_main.c
++++ b/sunrpc/rpc_main.c
+@@ -38,7 +38,16 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include <unistd.h>
++#if defined(IS_IN_build) && (defined(__APPLE__) || !defined(__GLIBC__))
++/* When building host tools on non-glibc systems, libintl.h may not exist.
++   Provide stub macros for gettext. */
++#define _(x) (x)
++#define N_(x) (x)
++#define textdomain(x) ((void)0)
++#define bindtextdomain(x, y) ((void)0)
++#else
+ #include <libintl.h>
++#endif
+ #include <ctype.h>
+ #include <sys/types.h>
+ #include <sys/param.h>
+diff --git a/sunrpc/rpc_scan.c b/sunrpc/rpc_scan.c
+--- a/sunrpc/rpc_scan.c
++++ b/sunrpc/rpc_scan.c
+@@ -37,7 +37,16 @@
+ #include <stdio.h>
+ #include <ctype.h>
+ #include <string.h>
++#if defined(IS_IN_build) && (defined(__APPLE__) || !defined(__GLIBC__))
++/* When building host tools on non-glibc systems, libintl.h may not exist.
++   Provide stub macros for gettext. */
++#define _(x) (x)
++#define N_(x) (x)
++#define textdomain(x) ((void)0)
++#define bindtextdomain(x, y) ((void)0)
++#else
+ #include <libintl.h>
++#endif
+ #include "rpc_scan.h"
+ #include "rpc_parse.h"
+ #include "rpc_util.h"
+diff --git a/sunrpc/rpc/types.h b/sunrpc/rpc/types.h
+--- a/sunrpc/rpc/types.h
++++ b/sunrpc/rpc/types.h
+@@ -68,6 +68,17 @@
+ #ifndef makedev /* ie, we haven't already included it */
+ #include <sys/types.h>
+ #endif
++
++#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || (defined(IS_IN_build) && !defined(__GLIBC__))
++/* Non-glibc systems (BSD, macOS, musl, etc.) already define u_char, u_short,
++ * u_int, u_long, quad_t, etc. in sys/types.h, so we don't need to redefine
++ * them. Also, these systems don't have __u_char, __u_short, etc. types.
++ * Define the guard macros to prevent glibc's redefinitions.
++ * This is especially important when building host tools (IS_IN_build).
++ */
++#define __u_char_defined 1
++#define __daddr_t_defined 1
++#endif
+
+ #ifndef __u_char_defined
+ typedef __u_char u_char;

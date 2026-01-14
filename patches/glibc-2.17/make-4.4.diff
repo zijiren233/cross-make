@@ -1,0 +1,43 @@
+--- glibc-2.17-orig/Makerules	2026-01-15 00:16:51
++++ glibc-2.17-test/Makerules	2026-01-15 00:24:13
+@@ -646,27 +646,10 @@
+ +depfiles := $(addprefix $(objpfx),\
+ 			 $(filter-out $(addsuffix .d,$(omit-deps)),\
+ 				      $(+depfiles)))
+-all-dt-files := $(foreach o,$(object-suffixes-for-libc),$(+depfiles:.d=$o.dt))
+-+depfiles := $(patsubst %.dt,%.d,$(wildcard $(all-dt-files))) \
+-	     $(wildcard $(all-dt-files:.dt=.d))
+-
+-# This is a funny rule in that it removes its input file.
+-%.d: %.dt
+-	@sed $(sed-remove-objpfx) $< > $(@:.d=.T) && \
+-	 mv -f $(@:.d=.T) $@ && \
+-	 rm -f $<
+++depfiles :=
+ 
+ # Avoid the .h.d files for any .sym files whose .h files don't exist yet.
+ # They will be generated when they're needed, and trying too early won't work.
+-+gen-as-const := $(gen-as-const-headers:%.sym=$(common-objpfx)%.h)
+-+depfiles += $(addsuffix .d,$(filter $(wildcard $(+gen-as-const)),\
+-						$(+gen-as-const)))
+-
+-ifdef +depfiles
+-ifneq ($(no_deps),t)
+--include $(+depfiles)
+-endif
+-endif
+ 
+ # Maximize efficiency by minimizing the number of rules.
+ .SUFFIXES:	# Clear the suffix list.  We don't use suffix rules.
+--- glibc-2.17-orig/sysdeps/gnu/Makefile	2026-01-15 00:16:52
++++ glibc-2.17-test/sysdeps/gnu/Makefile	2026-01-15 00:17:14
+@@ -53,8 +53,7 @@
+ generated += errlist-compat.c errlist-compat.h
+ 
+ # This will force the generation above to happy if need be.
+-$(foreach o,$(object-suffixes) $(object-suffixes:=.d),\
+-	  $(objpfx)errlist$o): $(objpfx)errlist-compat.h
++$(foreach o,$(object-suffixes),$(objpfx)errlist$o): $(objpfx)errlist-compat.h
+ endif
+ 
+ ifeq ($(subdir),login)
