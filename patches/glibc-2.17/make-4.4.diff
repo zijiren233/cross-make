@@ -1,6 +1,13 @@
---- glibc-2.17-orig/Makerules	2026-01-15 00:16:51
-+++ glibc-2.17-test/Makerules	2026-01-15 00:24:13
-@@ -646,27 +646,10 @@
+Fix glibc-2.17 build with Make 4.4+
+
+Make 4.4 changed how .dt dependency files are handled, causing build hangs.
+This patch disables the .dt mechanism which is not needed for modern builds.
+
+This patch applies AFTER centos7-all.patch.
+
+--- a/Makerules	2026-01-16 00:59:45
++++ b/Makerules	2026-01-16 00:59:45
+@@ -675,27 +675,8 @@
  +depfiles := $(addprefix $(objpfx),\
  			 $(filter-out $(addsuffix .d,$(omit-deps)),\
  				      $(+depfiles)))
@@ -13,8 +20,7 @@
 -	@sed $(sed-remove-objpfx) $< > $(@:.d=.T) && \
 -	 mv -f $(@:.d=.T) $@ && \
 -	 rm -f $<
-++depfiles :=
- 
+-
  # Avoid the .h.d files for any .sym files whose .h files don't exist yet.
  # They will be generated when they're needed, and trying too early won't work.
 -+gen-as-const := $(gen-as-const-headers:%.sym=$(common-objpfx)%.h)
@@ -29,15 +35,3 @@
  
  # Maximize efficiency by minimizing the number of rules.
  .SUFFIXES:	# Clear the suffix list.  We don't use suffix rules.
---- glibc-2.17-orig/sysdeps/gnu/Makefile	2026-01-15 00:16:52
-+++ glibc-2.17-test/sysdeps/gnu/Makefile	2026-01-15 00:17:14
-@@ -53,8 +53,7 @@
- generated += errlist-compat.c errlist-compat.h
- 
- # This will force the generation above to happy if need be.
--$(foreach o,$(object-suffixes) $(object-suffixes:=.d),\
--	  $(objpfx)errlist$o): $(objpfx)errlist-compat.h
-+$(foreach o,$(object-suffixes),$(objpfx)errlist$o): $(objpfx)errlist-compat.h
- endif
- 
- ifeq ($(subdir),login)
