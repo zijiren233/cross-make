@@ -1609,6 +1609,10 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.27"
 
+  - ID: aarch64-linux-gnu-2.17
+    TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.17"
+
   - ID: i586-linux-gnu-2.17
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.17"
