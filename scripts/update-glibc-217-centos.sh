@@ -98,21 +98,13 @@ echo ""
 echo "Generating unified diff..."
 cd "$TMP_DIR"
 
-# Remove .git directory before diff
+# Remove directories not needed for diff
 rm -rf glibc-2.17-c758a686/.git
+rm -rf glibc-2.17-c758a686.orig/{releng,rtkaio,c_stubs}
+rm -rf glibc-2.17-c758a686/{releng,rtkaio,c_stubs}
 
-# Generate diff with a/b prefix for standard patch -p1 usage
-# Exclude CentOS-specific directories (releng, rtkaio, c_stubs, support) for compatibility
-# Use temp file to avoid pipe truncation issues
-TEMP_DIFF="$TMP_DIR/raw.patch"
-diff -ruN \
-    --exclude=releng \
-    --exclude=rtkaio \
-    --exclude=c_stubs \
-    glibc-2.17-c758a686.orig glibc-2.17-c758a686 > "$TEMP_DIFF" || true
-
-LC_ALL=C sed 's|^--- glibc-2.17-c758a686.orig/|--- a/|; s|^+++ glibc-2.17-c758a686/|+++ b/|' \
-    "$TEMP_DIFF" > "$OUTPUT_FILE"
+# Use empty prefix so directory names a/b become the actual prefixes
+git diff --no-index --src-prefix= --dst-prefix= glibc-2.17-c758a686.orig glibc-2.17-c758a686 > "$OUTPUT_FILE"
 
 SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 
