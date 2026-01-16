@@ -1,0 +1,11 @@
+--- a/locale/localeinfo.h
++++ b/locale/localeinfo.h
+@@ -256,7 +256,7 @@
+   __thread struct __locale_data *const *_nl_current_##category \
+     attribute_hidden = &_nl_global_locale.__locales[category]; \
+   asm (".globl " __SYMBOL_PREFIX "_nl_current_" #category "_used\n" \
+-       _NL_CURRENT_DEFINE_ABS (_nl_current_##category##_used, 1));
++       _NL_CURRENT_DEFINE_ABS (_nl_current_##category##_used, 2));
+ #ifdef HAVE_ASM_SET_DIRECTIVE
+ # define _NL_CURRENT_DEFINE_ABS(sym, val) ".set " #sym ", " #val
+ #else

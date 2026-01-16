@@ -1,0 +1,14 @@
+--- a/include/math.h
++++ b/include/math.h
+@@ -21,6 +21,11 @@ hidden_proto (__isnanf)
+ #  ifndef __NO_LONG_DOUBLE_MATH
+ hidden_proto (__finitel)
+ hidden_proto (__isinfl)
+ hidden_proto (__isnanl)
++#  else
++/* When long double == double, these are strong_alias in s_*.c */
++extern int __isnanl (double) __attribute__ ((const));
++extern int __isinfl (double) __attribute__ ((const));
++extern int __finitel (double) __attribute__ ((const));
+ #  endif
+ # endif

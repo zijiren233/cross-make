@@ -413,10 +413,18 @@ override PIE_CONFIG = --disable-default-pie
 endif
 endif
 
+# musl doesn't support GNU IFUNC, so disable it for musl targets
+# glibc supports IFUNC, so leave it enabled (default)
+ifneq ($(MUSL_SRCDIR),)
+IFUNC_CONFIG := --disable-gnu-indirect-function
+else
+IFUNC_CONFIG :=
+endif
+
 GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-checking=release \
 	--disable-libmudflap --disable-libsanitizer \
-	--disable-gnu-indirect-function \
+	$(IFUNC_CONFIG) \
 	--disable-libmpx --disable-fixed-point \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \

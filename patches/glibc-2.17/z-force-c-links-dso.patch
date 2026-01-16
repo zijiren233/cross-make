@@ -1,6 +1,6 @@
 --- a/support/Makefile
 +++ b/support/Makefile
-@@ -171,8 +171,8 @@ ifeq (,$(CXX))
+@@ -171,7 +171,7 @@ ifeq (,$(CXX))
  LINKS_DSO_PROGRAM = links-dso-program-c
  else
 -LINKS_DSO_PROGRAM = links-dso-program
