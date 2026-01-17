@@ -1,0 +1,50 @@
+--- a/configure
++++ b/configure
+@@ -4038,6 +4038,10 @@ esac
+ fi
+
+
++# A preconfigure script for a system that may or may not use fpu
++# sysdeps directories sets this to a preprocessor conditional for
++# whether to use such directories.
++with_fp_cond=1
+ if frags=`ls -d $srcdir/sysdeps/*/preconfigure 2> /dev/null`
+ then
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for sysdeps preconfigure fragments" >&5
+@@ -4050,6 +4054,24 @@ then
+ $as_echo "" >&6; }
+ fi
+
++# Determine whether to use fpu or nofpu sysdeps directories.
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for use of fpu sysdeps directories" >&5
++$as_echo_n "checking for use of fpu sysdeps directories... " >&6; }
++cat > conftest.c <<EOF
++#if $with_fp_cond
++int dummy;
++#else
++# error "no hardware floating point"
++#endif
++EOF
++libc_cv_with_fp=no
++if ${CC-cc} $CFLAGS $CPPFLAGS -S conftest.c -o conftest.s 1>&5 2>&5 ; then
++  libc_cv_with_fp=yes
++fi
++rm -f conftest*
++with_fp=$libc_cv_with_fp
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_fp" >&5
++$as_echo "$with_fp" >&6; }
+ # An add-on can set this when it wants to disable the sanity check below.
+ libc_config_ok=no
+
+--- /dev/null
++++ b/sysdeps/mips/mips64/n64/nofpu/Implies
+@@ -0,0 +1 @@
++ieee754/soft-fp
+--- /dev/null
++++ b/sysdeps/mips/mips64/n32/nofpu/Implies
+@@ -0,0 +1 @@
++ieee754/soft-fp
+--- /dev/null
++++ b/sysdeps/mips/mips32/nofpu/Implies
+@@ -0,0 +1 @@
++ieee754/soft-fp

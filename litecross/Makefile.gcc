@@ -398,10 +398,33 @@ COMMON_CONFIG := --disable-werror \
 obj_gcc/%: export with_debug_prefix_map=$(CURDIR)=
 obj_binutils/%: export with_debug_prefix_map=$(CURDIR)=
 
+# Extract glibc major.minor version (e.g., 2.17 from 2.17 or 2.42)
+GLIBC_VERSION_MAJOR := $(word 1,$(subst ., ,$(GLIBC_VER)))
+GLIBC_VERSION_MINOR := $(word 2,$(subst ., ,$(GLIBC_VER)))
+
+# --enable-static-pie and libc_cv_ld_static_pie are only supported in glibc 2.27+
+# For glibc < 2.27, we must not use these options
+GLIBC_STATIC_PIE := $(shell [ $(GLIBC_VERSION_MAJOR) -gt 2 -o \( $(GLIBC_VERSION_MAJOR) -eq 2 -a $(GLIBC_VERSION_MINOR) -ge 27 \) ] && echo --enable-static-pie)
+GLIBC_LD_STATIC_PIE := $(shell [ $(GLIBC_VERSION_MAJOR) -gt 2 -o \( $(GLIBC_VERSION_MAJOR) -eq 2 -a $(GLIBC_VERSION_MINOR) -ge 27 \) ] && echo yes || echo no)
+
+ifneq ($(GLIBC_VER),)
+ifeq ($(shell [ $(GLIBC_VERSION_MAJOR) -gt 2 -o \( $(GLIBC_VERSION_MAJOR) -eq 2 -a $(GLIBC_VERSION_MINOR) -ge 27 \) ] && echo yes || echo no),no)
+override PIE_CONFIG = --disable-default-pie
+endif
+endif
+
+# musl doesn't support GNU IFUNC, so disable it for musl targets
+# glibc supports IFUNC, so leave it enabled (default)
+ifneq ($(MUSL_SRCDIR),)
+IFUNC_CONFIG := --disable-gnu-indirect-function
+else
+IFUNC_CONFIG :=
+endif
+
 GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-checking=release \
 	--disable-libmudflap --disable-libsanitizer \
-	--disable-gnu-indirect-function \
+	$(IFUNC_CONFIG) \
 	--disable-libmpx --disable-fixed-point \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
@@ -432,7 +455,7 @@ BINUTILS_CONFIG := --disable-gprofng \
 	$(BINUTILS_CONFIG)
 
 GLIBC_CONFIG := --enable-kernel=3.2.0 \
-	--enable-static-pie \
+	$(GLIBC_STATIC_PIE) \
 	--enable-stack-protector=strong \
 	--disable-nscd \
 	--disable-crypt \
@@ -466,7 +489,7 @@ FULL_GLIBC_CONFIG = $(GLIBC_CONFIG) \
 	libc_cv_forced_unwind=yes \
 	libc_cv_c_cleanup=yes \
 	libc_cv_ssp=no libc_cv_ssp_strong=no \
-	libc_cv_ld_static_pie=yes
+	libc_cv_ld_static_pie=$(GLIBC_LD_STATIC_PIE)
 
 FULL_MINGW_HEADERS_CONFIG = $(MINGW_CONFIG) $(MINGW_HEADERS_CONFIG) \
 	--prefix= --host=$(TARGET) --enable-sdk=all \

@@ -1,0 +1,45 @@
+--- a/configure
++++ b/configure
+@@ -4909,7 +4909,7 @@ else
+   ac_prog_version=`$CC -v 2>&1 | sed -n 's/^.*version \([egcygnustpi-]*[0-9.]*\).*$/\1/p'`
+   case $ac_prog_version in
+     '') ac_prog_version="v. ?.??, bad"; ac_verc_fail=yes;;
+-    4.[3-9].* | 4.[1-9][0-9].* | [5-9].* )
++    4.[3-9].* | 4.[1-9][0-9].* | [5-9].* | [1-9][0-9].* )
+        ac_prog_version="$ac_prog_version, ok"; ac_verc_fail=no;;
+     *) ac_prog_version="$ac_prog_version, bad"; ac_verc_fail=yes;;
+
+@@ -6748,7 +6748,7 @@ else
+   cat > conftest.c <<EOF
+ int foo;
+ #ifdef __GNUC_GNU_INLINE__
+-main () { return 0;}
++int main (void) { return 0;}
+ #else
+ #error
+ #endif
+@@ -6914,9 +6914,9 @@ if ${libc_cv_ld_no_whole_archive+:} false; then :
+   $as_echo_n "(cached) " >&6
+ else
+   cat > conftest.c <<\EOF
+-_start () {}
++void _start (void) {}
+ int __eh_pc;
+-__throw () {}
++void __throw (void) {}
+ EOF
+ if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS
+ 			    -nostdlib -nostartfiles -Wl,--no-whole-archive
+@@ -6944,9 +6944,9 @@ if ${libc_cv_gcc_exceptions+:} false; then :
+   $as_echo_n "(cached) " >&6
+ else
+   cat > conftest.c <<\EOF
+-_start () {}
++void _start (void) {}
+ int __eh_pc;
+-__throw () {}
++void __throw (void) {}
+ EOF
+ if { ac_try='${CC-cc} $CFLAGS $CPPFLAGS $LDFLAGS
+ 			    -nostdlib -nostartfiles -fexceptions
+

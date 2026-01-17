@@ -59,6 +59,15 @@ cowp() {
     done
 }
 
+# Check if current directory contains any symlinks
+# This detects if the directory was created with -I (symlink mode)
+# Returns 0 (true) if symlinks found, 1 (false) otherwise
+has_symlinks() {
+    # Check if any files in current directory are symlinks
+    # Use find to check top-level files only (not recursive)
+    find . -maxdepth 1 -type l -print -quit | grep -q .
+}
+
 cowpatch() {
 
     plev=0
@@ -142,8 +151,16 @@ while getopts ":p:i:RNEI:C:S:l:" opt; do
 done
 test "$gotcmd" -eq 0 || exit 0
 
-# Two-pass approach: first COW all files, then run patch
-# This ensures all files are converted before patch accesses them
+# Auto-detect if current directory contains symlinks
+# If no symlinks, use fast path (plain patch without any overhead)
+if ! has_symlinks; then
+    # Fast path: no symlinks, pass stdin directly to patch
+    # No temp file, no parsing - zero overhead!
+    exec patch "$@"
+fi
+
+# COW mode: directory contains symlinks (created by -I mode)
+# Save patch to temp file for two-pass processing
 tmpfile="/tmp/cowpatch.$$.tmp"
 cat >"$tmpfile"
 

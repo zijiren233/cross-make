@@ -1,0 +1,12 @@
+--- a/support/Makefile
++++ b/support/Makefile
+@@ -171,7 +171,7 @@ ifeq (,$(CXX))
+ LINKS_DSO_PROGRAM = links-dso-program-c
+ else
+-LINKS_DSO_PROGRAM = links-dso-program
+-LDLIBS-links-dso-program = -lstdc++ -lgcc -lgcc_s $(libunwind)
++# Force C version - C++ has header conflicts when cross-compiling
++LINKS_DSO_PROGRAM = links-dso-program-c
+ endif
+
+ LDLIBS-test-container = $(libsupport)

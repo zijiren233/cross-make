@@ -1,0 +1,65 @@
+Fix aarch64 relocation issues with modern binutils
+
+The original elf_machine_load_address implementation uses .word which
+generates R_AARCH64_ABS32 relocations that are not allowed in shared
+objects by modern binutils (2.35+).
+
+This patch replaces the implementation with one that uses the __ehdr_start
+symbol provided by the linker, which avoids problematic relocations.
+
+diff --git a/sysdeps/aarch64/dl-machine.h b/sysdeps/aarch64/dl-machine.h
+--- a/sysdeps/aarch64/dl-machine.h
++++ b/sysdeps/aarch64/dl-machine.h
+@@ -32,40 +32,24 @@ elf_machine_matches_host (const ElfW(Ehdr) *ehdr)
+   return ehdr->e_machine == EM_AARCH64;
+ }
+
+-/* Return the link-time address of _DYNAMIC.  Conveniently, this is the
+-   first element of the GOT. */
+-static inline ElfW(Addr) __attribute__ ((unused))
+-elf_machine_dynamic (void)
+-{
+-  ElfW(Addr) addr = (ElfW(Addr)) &_DYNAMIC;
+-  return addr;
+-}
+-
+ /* Return the run-time load address of the shared object.  */
+
+ static inline ElfW(Addr) __attribute__ ((unused))
+ elf_machine_load_address (void)
+ {
+-  /* To figure out the load address we use the definition that for any symbol:
+-     dynamic_addr(symbol) = static_addr(symbol) + load_addr
+-
+-     The choice of symbol is arbitrary. The static address we obtain
+-     by constructing a non GOT reference to the symbol, the dynamic
+-     address of the symbol we compute using adrp/add to compute the
+-     symbol's address relative to the PC. */
+-
+-  ElfW(Addr) static_addr;
+-  ElfW(Addr) dynamic_addr;
++  /* The __ehdr_start symbol is provided by the linker and points to the
++     ELF header of the shared object.  Since we are position-independent,
++     taking its address gives us the load address directly.  */
++  extern const ElfW(Ehdr) __ehdr_start attribute_hidden;
++  return (ElfW(Addr)) &__ehdr_start;
++}
+
+-  asm ("					\n\
+-	adrp	%1, _dl_start;			\n\
+-        add	%1, %1, #:lo12:_dl_start        \n\
+-        ldr	%w0, 1f				\n\
+-	b	2f				\n\
+-1:	.word	_dl_start			\n\
+-2:						\n\
+-       " : "=r" (static_addr),  "=r" (dynamic_addr));
+-  return dynamic_addr - static_addr;
++/* Return the link-time address of _DYNAMIC.  */
++static inline ElfW(Addr) __attribute__ ((unused))
++elf_machine_dynamic (void)
++{
++  extern ElfW(Dyn) _DYNAMIC[] attribute_hidden;
++  return (ElfW(Addr)) _DYNAMIC - elf_machine_load_address ();
+ }
+
+ /* Set up the loaded object described by L so its unrelocated PLT

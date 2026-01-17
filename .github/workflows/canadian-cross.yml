@@ -76,7 +76,7 @@ jobs:
           echo "release_platform=${RELEASE_PLATFORM}" >> $GITHUB_OUTPUT
           echo "Release platform: $RELEASE_PLATFORM"
 
-  # Build jobs - split into 4 chunks to avoid GitHub's 256 job limit
+  # Build jobs - split into 8 chunks to avoid GitHub's 256 job limit
   build_1:
     needs: [get-targets, init]
     if: needs.get-targets.outputs.TARGETS_1 != '[]'
@@ -121,6 +121,54 @@ jobs:
       tag: ${{ needs.init.outputs.tag }}
       host: ${{ inputs.host }}
       targets: ${{ needs.get-targets.outputs.TARGETS_4 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_5:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_5 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ needs.init.outputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_5 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_6:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_6 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ needs.init.outputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_6 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_7:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_7 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ needs.init.outputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_7 }}
+      build-platform: ${{ inputs.platform }}
+      release-platform: ${{ needs.init.outputs.release-platform }}
+    secrets: inherit
+
+  build_8:
+    needs: [get-targets, init]
+    if: needs.get-targets.outputs.TARGETS_8 != '[]'
+    uses: ./.github/workflows/canadian-cross-multi.yml
+    with:
+      tag: ${{ needs.init.outputs.tag }}
+      host: ${{ inputs.host }}
+      targets: ${{ needs.get-targets.outputs.TARGETS_8 }}
       build-platform: ${{ inputs.platform }}
       release-platform: ${{ needs.init.outputs.release-platform }}
     secrets: inherit

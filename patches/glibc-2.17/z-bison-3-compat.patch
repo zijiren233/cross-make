@@ -1,0 +1,73 @@
+Fix glibc-2.17 intl/plural.y for Bison 3.x compatibility
+
+Bison 3.x deprecated YYPARSE_PARAM and YYLEX_PARAM macros.
+This patch updates plural.y to use the modern %define and %param directives.
+
+Changes:
+- Replace deprecated %pure_parser with %define api.pure full
+- Add %parse-param and %lex-param directives
+- Update yylex/yyerror signatures for bison 3.x
+
+This patch applies AFTER centos7-all.patch.
+
+--- a/intl/plural.y
++++ b/intl/plural.y
+@@ -40,10 +40,11 @@ but we want it to be called PLURAL_PARSE.  */
+ # define __gettextparse PLURAL_PARSE
+ #endif
+
+-#define YYLEX_PARAM	&((struct parse_args *) arg)->cp
+-#define YYPARSE_PARAM	arg
+ %}
+-%pure_parser
++%define api.pure full
++%parse-param {void *arg}
++%lex-param {void *arg}
++
+ %expect 7
+
+ %union {
+@@ -66,8 +67,8 @@ static inline struct expression *new_exp_3 PARAMS ((enum operator op,
+ 						   struct expression *bexp,
+ 						   struct expression *tbranch,
+ 						   struct expression *fbranch));
+-static int yylex PARAMS ((YYSTYPE *lval, const char **pexp));
+-static void yyerror PARAMS ((const char *str));
++static int yylex PARAMS ((YYSTYPE *lval, void *arg));
++static void yyerror PARAMS ((void *arg, const char *str));
+
+ /* Allocation of expressions.  */
+
+@@ -244,8 +245,9 @@ FREE_EXPRESSION (struct expression *exp)
+
+
+ static int
+-yylex (YYSTYPE *lval, const char **pexp)
++yylex (YYSTYPE *lval, void *arg)
+ {
++  const char **pexp = &((struct parse_args *) arg)->cp;
+   const char *exp = *pexp;
+   int result;
+
+@@ -387,8 +389,9 @@ yylex (YYSTYPE *lval, const char **pexp)
+
+
+ static void
+-yyerror (const char *str)
++yyerror (void *arg, const char *str)
+ {
++  (void) arg; /* unused */
+   /* Do nothing.  We don't print error messages here.  */
+ }
+
+--- a/intl/plural-exp.h
++++ b/intl/plural-exp.h
+@@ -112,7 +112,7 @@ struct parse_args
+
+ extern void FREE_EXPRESSION PARAMS ((struct expression *exp))
+      internal_function;
+-extern int PLURAL_PARSE PARAMS ((void *arg));
++extern int PLURAL_PARSE (void *arg);
+ extern const struct expression GERMANIC_PLURAL attribute_hidden;
+ extern void EXTRACT_PLURAL_EXPRESSION PARAMS
+   ((const char *nullentry, const struct expression **pluralp,
