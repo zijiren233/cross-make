@@ -85,6 +85,9 @@ targets:
   - TARGET: s390x-linux-musl
     MUSL_VER: "1.2.5"
 
+  - TARGET: m68k-linux-musl
+    MUSL_VER: "1.2.5"
+
   - TARGET: i586-linux-musl
     MUSL_VER: "1.2.5"
 
@@ -163,6 +166,15 @@ targets:
 
   - TARGET: s390x-linux-gnu
     GLIBC_VER: "2.28"
+
+  - TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.29"
+
+  - TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.29"
+
+  - TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.31"
 
   - TARGET: i586-linux-gnu
     GLIBC_VER: "2.28"
@@ -255,6 +267,18 @@ targets:
 
   - ID: s390x-linux-gnu-2.42
     TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.42"
+
+  - ID: csky-linux-gnuabiv2-2.42
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.42"
+
+  - ID: csky-linux-gnuabiv2hf-2.42
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.42"
+
+  - ID: m68k-linux-gnu-2.42
+    TARGET: m68k-linux-gnu
     GLIBC_VER: "2.42"
 
   - ID: i586-linux-gnu-2.42
@@ -353,6 +377,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.41"
 
+  - ID: csky-linux-gnuabiv2-2.41
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.41"
+
+  - ID: csky-linux-gnuabiv2hf-2.41
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.41"
+
+  - ID: m68k-linux-gnu-2.41
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.41"
+
   - ID: i586-linux-gnu-2.41
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.41"
@@ -447,6 +483,18 @@ targets:
 
   - ID: s390x-linux-gnu-2.40
     TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.40"
+
+  - ID: csky-linux-gnuabiv2-2.40
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.40"
+
+  - ID: csky-linux-gnuabiv2hf-2.40
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.40"
+
+  - ID: m68k-linux-gnu-2.40
+    TARGET: m68k-linux-gnu
     GLIBC_VER: "2.40"
 
   - ID: i586-linux-gnu-2.40
@@ -545,6 +593,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.39"
 
+  - ID: csky-linux-gnuabiv2-2.39
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.39"
+
+  - ID: csky-linux-gnuabiv2hf-2.39
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.39"
+
+  - ID: m68k-linux-gnu-2.39
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.39"
+
   - ID: i586-linux-gnu-2.39
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.39"
@@ -639,6 +699,18 @@ targets:
 
   - ID: s390x-linux-gnu-2.38
     TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.38"
+
+  - ID: csky-linux-gnuabiv2-2.38
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.38"
+
+  - ID: csky-linux-gnuabiv2hf-2.38
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.38"
+
+  - ID: m68k-linux-gnu-2.38
+    TARGET: m68k-linux-gnu
     GLIBC_VER: "2.38"
 
   - ID: i586-linux-gnu-2.38
@@ -737,6 +809,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.37"
 
+  - ID: csky-linux-gnuabiv2-2.37
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.37"
+
+  - ID: csky-linux-gnuabiv2hf-2.37
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.37"
+
+  - ID: m68k-linux-gnu-2.37
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.37"
+
   - ID: i586-linux-gnu-2.37
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.37"
@@ -833,6 +917,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.36"
 
+  - ID: csky-linux-gnuabiv2-2.36
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.36"
+
+  - ID: csky-linux-gnuabiv2hf-2.36
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.36"
+
+  - ID: m68k-linux-gnu-2.36
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.36"
+
   - ID: i586-linux-gnu-2.36
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.36"
@@ -925,6 +1021,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.35"
 
+  - ID: csky-linux-gnuabiv2-2.35
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.35"
+
+  - ID: csky-linux-gnuabiv2hf-2.35
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.35"
+
+  - ID: m68k-linux-gnu-2.35
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.35"
+
   - ID: i586-linux-gnu-2.35
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.35"
@@ -1011,6 +1119,18 @@ targets:
 
   - ID: s390x-linux-gnu-2.34
     TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.34"
+
+  - ID: csky-linux-gnuabiv2-2.34
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.34"
+
+  - ID: csky-linux-gnuabiv2hf-2.34
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.34"
+
+  - ID: m68k-linux-gnu-2.34
+    TARGET: m68k-linux-gnu
     GLIBC_VER: "2.34"
 
   - ID: i586-linux-gnu-2.34
@@ -1101,6 +1221,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.33"
 
+  - ID: csky-linux-gnuabiv2-2.33
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.33"
+
+  - ID: csky-linux-gnuabiv2hf-2.33
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.33"
+
+  - ID: m68k-linux-gnu-2.33
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.33"
+
   - ID: i586-linux-gnu-2.33
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.33"
@@ -1187,6 +1319,18 @@ targets:
 
   - ID: s390x-linux-gnu-2.32
     TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.32"
+
+  - ID: csky-linux-gnuabiv2-2.32
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.32"
+
+  - ID: csky-linux-gnuabiv2hf-2.32
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.32"
+
+  - ID: m68k-linux-gnu-2.32
+    TARGET: m68k-linux-gnu
     GLIBC_VER: "2.32"
 
   - ID: i586-linux-gnu-2.32
@@ -1277,6 +1421,18 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.31"
 
+  - ID: csky-linux-gnuabiv2-2.31
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.31"
+
+  - ID: csky-linux-gnuabiv2hf-2.31
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.31"
+
+  - ID: m68k-linux-gnu-2.31
+    TARGET: m68k-linux-gnu
+    GLIBC_VER: "2.31"
+
   - ID: i586-linux-gnu-2.31
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.31"
@@ -1357,6 +1513,14 @@ targets:
     TARGET: s390x-linux-gnu
     GLIBC_VER: "2.30"
 
+  - ID: csky-linux-gnuabiv2-2.30
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.30"
+
+  - ID: csky-linux-gnuabiv2hf-2.30
+    TARGET: csky-linux-gnuabiv2hf
+    GLIBC_VER: "2.30"
+
   - ID: i586-linux-gnu-2.30
     TARGET: i586-linux-gnu
     GLIBC_VER: "2.30"
@@ -1435,6 +1599,14 @@ targets:
 
   - ID: s390x-linux-gnu-2.29
     TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.29"
+
+  - ID: csky-linux-gnuabiv2-2.29
+    TARGET: csky-linux-gnuabiv2
+    GLIBC_VER: "2.29"
+
+  - ID: csky-linux-gnuabiv2hf-2.29
+    TARGET: csky-linux-gnuabiv2hf
     GLIBC_VER: "2.29"
 
   - ID: i586-linux-gnu-2.29

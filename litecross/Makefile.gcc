@@ -20,6 +20,7 @@ COMMON_LDFLAGS = -s
 LDFLAGS_BUILDID = -Wl,--build-id=none
 PIE_CONFIG = --enable-default-pie
 SSP_CONFIG = --enable-default-ssp
+LINKER_HASH_STYLE = gnu
 THREADS_CONFIG = --enable-threads=posix
 
 ifeq ($(OS),Windows_NT)
@@ -31,9 +32,10 @@ endif
 CC = gcc$(EXE_EXT)
 CXX = g++$(EXE_EXT)
 STRIP = strip$(EXE_EXT)
-HOSTCC = gcc$(EXE_EXT)
 
 -include config.mak
+
+HOSTCC ?= $(CC)
 
 ifdef NATIVE
 override HOST := $(TARGET)
@@ -153,21 +155,25 @@ endif
 
 # ARM configurations
 ifneq ($(filter aarch64%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=armv8-a --with-abi=lp64
-endif
-
-ifneq ($(filter arm-%,$(TARGET)),)
-ifneq ($(filter %hf,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=armv6kz --with-tune=arm1176jzf-s --with-fpu=vfpv2 --with-abi=aapcs-linux
+GCC_CONFIG_FOR_TARGET += --with-arch=armv8-a
+ifneq ($(findstring ilp32,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-abi=ilp32
 else
-GCC_CONFIG_FOR_TARGET += --with-arch=armv5te --with-tune=arm926ej-s --with-float=soft --with-abi=aapcs-linux
+GCC_CONFIG_FOR_TARGET += --with-abi=lp64
 endif
 endif
 
+# armv4t (e.g., ARM920T)
+ifneq ($(filter armv4t%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=armv4t --with-tune=arm920t --with-float=soft --with-abi=aapcs-linux
+endif
+
+# armv5te (e.g., ARM926EJ-S)
 ifneq ($(filter armv5%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv5te --with-tune=arm926ej-s --with-float=soft --with-abi=aapcs-linux
 endif
 
+# armv6 (e.g., ARM1176JZF-S, Raspberry Pi 1)
 ifneq ($(filter armv6%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv6kz --with-tune=arm1176jzf-s --with-abi=aapcs-linux
 ifneq ($(filter %hf,$(TARGET)),)
@@ -177,6 +183,7 @@ GCC_CONFIG_FOR_TARGET += --with-float=soft
 endif
 endif
 
+# armv7 (Cortex-A series)
 ifneq ($(filter armv7%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=armv7-a --with-tune=generic-armv7-a --with-abi=aapcs-linux --with-mode=thumb
 ifneq ($(filter %hf,$(TARGET)),)
@@ -186,15 +193,31 @@ GCC_CONFIG_FOR_TARGET += --with-float=soft
 endif
 endif
 
-# PowerPC configurations
+# thumbv7neon (NEON FPU, always hard-float)
+ifneq ($(filter thumbv7neon%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=armv7-a --with-tune=generic-armv7-a --with-fpu=neon-vfpv4 --with-abi=aapcs-linux --with-mode=thumb
+endif
+
+# Generic arm- and armeb (baseline)
+ifneq ($(filter arm-% armeb%,$(TARGET)),)
+ifneq ($(filter %hf,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=armv6kz --with-tune=arm1176jzf-s --with-fpu=vfpv2 --with-abi=aapcs-linux
+else
+GCC_CONFIG_FOR_TARGET += --with-arch=armv5te --with-tune=arm926ej-s --with-float=soft --with-abi=aapcs-linux
+endif
+endif
+
 ifneq ($(filter powerpc%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --enable-secureplt --enable-decimal-float=no
-ifneq ($(findstring 64le,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
+# SPE (Signal Processing Engine) - Freescale e500
+ifneq ($(findstring spe,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --enable-e500-double --with-cpu=e500mc
 endif
-# FreeBSD uses ELFv2 ABI for powerpc64 (big-endian too)
-ifneq ($(findstring freebsd,$(TARGET)),)
+# powerpc64: ELFv1 only for glibc big-endian
 ifneq ($(findstring 64,$(TARGET)),)
+ifneq ($(and $(findstring gnu,$(TARGET)),$(findstring 64-,$(TARGET))),)
+GCC_CONFIG_FOR_TARGET += --with-abi=elfv1
+else
 GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
 endif
 endif
@@ -202,30 +225,53 @@ endif
 
 # MIPS configurations
 ifneq ($(filter mips%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-linker-hash-style=sysv --with-mips-plt
-ifneq ($(findstring 64,$(TARGET)),)
+LINKER_HASH_STYLE = sysv
+GCC_CONFIG_FOR_TARGET += --with-mips-plt
+ifneq ($(filter mipsisa32r6%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=mips32r6 --with-abi=32 --with-nan=2008
+else ifneq ($(filter mipsisa64r6%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=mips64r6 --with-abi=64 --with-nan=2008
+else ifneq ($(findstring 64,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=mips3 --with-tune=mips64 --with-abi=64
 else
 GCC_CONFIG_FOR_TARGET += --with-arch=mips32 --with-abi=32
 endif
 endif
 
-# S390x configurations
-ifneq ($(filter s390x%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=z196 --with-tune=zEC12 --with-zarch --with-long-double-128
+ifneq ($(filter riscv32%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=rv32gc --with-abi=ilp32d
 endif
 
-# RISC-V configurations
 ifneq ($(filter riscv64%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=rv64gc --with-abi=lp64d
 endif
 
-# LoongArch configurations
+ifneq ($(filter s390x%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=z196 --with-tune=zEC12 --with-zarch --with-long-double-128
+endif
+
+ifneq ($(filter sparc64%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-cpu=ultrasparc
+else ifneq ($(filter sparc%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-cpu=v8
+endif
+
 ifneq ($(filter loongarch64%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=la64v1.0 --with-abi=lp64d
 endif
 
-# ABI configurations
+ifneq ($(filter m68k%,$(TARGET)),)
+ifneq ($(findstring coldfire,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-arch=cf --with-cpu=5206
+else
+GCC_CONFIG_FOR_TARGET += --with-arch=m68k --with-cpu=68020
+endif
+endif
+
+ifneq ($(filter sh%,$(TARGET)),)
+GCC_CONFIG_FOR_TARGET += --with-cpu=mj2
+endif
+
 ifneq ($(filter %n32,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-abi=n32
 endif
@@ -234,7 +280,6 @@ ifneq ($(filter %x32,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-abi=x32
 endif
 
-# Floating-point configurations
 ifneq ($(filter %sf,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-float=soft
 endif
@@ -265,10 +310,6 @@ GCC_CONFIG_FOR_TARGET += --disable-gnu-unique-object
 
 # musl doesn't support IFUNC
 obj_gcc/%: export libat_cv_have_ifunc=no
-
-ifneq ($(filter powerpc64%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-abi=elfv2
-endif
 
 else ifneq ($(findstring mingw,$(TARGET)),)
 # build mingw
@@ -408,7 +449,7 @@ GLIBC_STATIC_PIE := $(shell [ $(GLIBC_VERSION_MAJOR) -gt 2 -o \( $(GLIBC_VERSION
 GLIBC_LD_STATIC_PIE := $(shell [ $(GLIBC_VERSION_MAJOR) -gt 2 -o \( $(GLIBC_VERSION_MAJOR) -eq 2 -a $(GLIBC_VERSION_MINOR) -ge 27 \) ] && echo yes || echo no)
 
 ifneq ($(GLIBC_VER),)
-ifeq ($(shell [ $(GLIBC_VERSION_MAJOR) -gt 2 -o \( $(GLIBC_VERSION_MAJOR) -eq 2 -a $(GLIBC_VERSION_MINOR) -ge 27 \) ] && echo yes || echo no),no)
+ifeq ($(GLIBC_LD_STATIC_PIE),no)
 override PIE_CONFIG = --disable-default-pie
 endif
 endif
@@ -425,6 +466,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-checking=release \
 	--disable-libmudflap --disable-libsanitizer \
 	$(IFUNC_CONFIG) \
+	--with-linker-hash-style=$(LINKER_HASH_STYLE) \
 	--disable-libmpx --disable-fixed-point \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
@@ -436,7 +478,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--disable-decimal-float \
 	--disable-cet \
 	--enable-__cxa_atexit \
-	$(if $(GLIBC_SRCDIR),--with-glibc-version=$(GLIBC_VER)) \
+	$(if $(GLIBC_VER),--with-glibc-version=$(GLIBC_VER)) \
 	$(GCC_CONFIG)
 
 # https://github.com/richfelker/musl-cross-make/issues/181
@@ -579,9 +621,13 @@ STRIP_FOR_HOST = $(HOST)-strip$(EXE_EXT)
 FULL_BINUTILS_CONFIG += --host=$(HOST)
 FULL_GCC_CONFIG += --host=$(HOST)
 
-# prevent parallelization of obj_musl/.lc_built and obj_sysroot/.lc_headers
+# prevent parallelization of libc build and obj_sysroot/.lc_headers
+ifneq ($(MUSL_SRCDIR),)
 obj_musl/.lc_built: | obj_sysroot/.lc_headers
+endif
+ifneq ($(GLIBC_SRCDIR),)
 obj_glibc/.lc_built: | obj_sysroot/.lc_headers
+endif
 obj_gcc/gcc/.lc_built: | obj_sysroot/.lc_headers
 
 export CC_FOR_TARGET:=$(CCACHE) $(HOST)-gcc$(EXE_EXT)
@@ -730,13 +776,19 @@ FULL_MINGW_CRT_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	READELF="$(TARGET_READELF_FOR_BUILD)" \
 	STRIP="$(TARGET_STRIP_FOR_BUILD)"
 
+ifneq ($(MINGW_SRCDIR),)
 obj_mingw_headers/.lc_configured: | obj_binutils/.lc_built
 obj_mingw_crt/.lc_configured: | obj_sysroot/.lc_headers obj_gcc/gcc/.lc_built obj_binutils/.lc_built
 obj_mingw_pthreads/.lc_configured: | obj_sysroot/.lc_headers obj_gcc/gcc/.lc_built obj_binutils/.lc_built obj_sysroot/.lc_libs_crt
+endif
+ifneq ($(MUSL_SRCDIR),)
 obj_musl/.lc_configured: | obj_gcc/gcc/.lc_built
 obj_musl/.lc_built: | obj_gcc/$(TARGET)/libgcc/libgcc.a
+endif
+ifneq ($(GLIBC_SRCDIR),)
 obj_glibc/.lc_configured: | obj_gcc/gcc/.lc_built
 obj_glibc/.lc_built: | obj_gcc/$(TARGET)/libgcc/libgcc.a
+endif
 obj_gcc/.lc_configured: obj_binutils/.lc_built
 endif
 
@@ -798,20 +850,30 @@ src_binutils: | $(BINUTILS_SRCDIR)
 src_gcc_base: | $(GCC_SRCDIR)
 	ln -sf $(GCC_SRCDIR) $@
 
+ifneq ($(MUSL_SRCDIR),)
 src_musl: | $(MUSL_SRCDIR)
 	ln -sf $(MUSL_SRCDIR) $@
+endif
 
+ifneq ($(GLIBC_SRCDIR),)
 src_glibc: | $(GLIBC_SRCDIR)
 	ln -sf $(GLIBC_SRCDIR) $@
+endif
 
+ifneq ($(FREEBSD_SRCDIR),)
 src_freebsd: | $(FREEBSD_SRCDIR)
 	ln -sf $(FREEBSD_SRCDIR) $@
+endif
 
+ifneq ($(NETBSD_SRCDIR),)
 src_netbsd: | $(NETBSD_SRCDIR)
 	ln -sf $(NETBSD_SRCDIR) $@
+endif
 
+ifneq ($(MINGW_SRCDIR),)
 src_mingw: | $(MINGW_SRCDIR)
 	ln -sf $(MINGW_SRCDIR) $@
+endif
 
 ifneq ($(MUSL_SRCDIR),)
 src_ssp: | $(SSP_SRCDIR)
@@ -966,10 +1028,13 @@ obj_gcc/gcc/.lc_built: | obj_gcc/.lc_configured
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" all-gcc
 	touch $@
 
+ifneq ($(MUSL_SRCDIR),)
 obj_musl/.lc_configured: | obj_musl src_musl
 	cd obj_musl && sh ../src_musl/configure $(FULL_MUSL_CONFIG) || (cat config.log && exit 1)
 	touch $@
+endif
 
+ifneq ($(GLIBC_SRCDIR),)
 ifneq ($(LINUX_SRCDIR),)
 # glibc needs kernel headers before configuration
 obj_glibc/.lc_configured: | obj_kernel_headers/.lc_headers_installed
@@ -977,9 +1042,12 @@ endif
 obj_glibc/.lc_configured: | obj_glibc src_glibc
 	cd obj_glibc && sh ../src_glibc/configure $(FULL_GLIBC_CONFIG) || (cat config.log && exit 1)
 	touch $@
+endif
 
+ifneq ($(MINGW_SRCDIR),)
 obj_mingw/.lc_configured: | obj_mingw src_mingw obj_mingw_headers/.lc_configured obj_mingw_crt/.lc_configured
 	touch $@
+endif
 
 ifneq ($(MINGW_SRCDIR),)
 # mingw - always install to $(TARGET)/ subdir for GCC's target-specific search path
@@ -1027,21 +1095,29 @@ endif
 obj_gcc/$(TARGET)/libgcc/libgcc.a: | obj_sysroot/.lc_headers
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) enable_shared=no $(TOOLCHAIN_MAKE_ARGS)" all-target-libgcc
 
+ifneq ($(MUSL_SRCDIR),)
 obj_musl/.lc_built: | obj_musl/.lc_configured
 	cd obj_musl && $(MAKE) $(MAKE_ARGS) $(MUSL_MAKE_ARGS)
 	touch $@
+endif
 
+ifneq ($(GLIBC_SRCDIR),)
 obj_glibc/.lc_built: | obj_glibc/.lc_configured
 	cd obj_glibc && $(MAKE) $(MAKE_ARGS) $(GLIBC_MAKE_ARGS)
 	touch $@
+endif
 
+ifneq ($(FREEBSD_SRCDIR),)
 obj_freebsd/.lc_built: | obj_freebsd src_freebsd
 	# FreeBSD uses prebuilt libc, no build needed
 	touch $@
+endif
 
+ifneq ($(NETBSD_SRCDIR),)
 obj_netbsd/.lc_built: | obj_netbsd src_netbsd
 	# NetBSD uses prebuilt libc, already extracted
 	touch $@
+endif
 
 ifneq ($(MINGW_SRCDIR),)
 # mingw
@@ -1141,6 +1217,7 @@ install-binutils: | obj_binutils/.lc_built
 install-gcc: | obj_gcc/.lc_built
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) STRIP="$(STRIP_FOR_HOST)" install-strip
 
+ifneq ($(MINGW_SRCDIR),)
 obj_mingw_headers/.lc_configured: | obj_mingw_headers src_mingw
 	cd obj_mingw_headers && sh ../src_mingw/mingw-w64-headers/configure $(FULL_MINGW_HEADERS_CONFIG) || (cat config.log && exit 1)
 	touch $@
@@ -1183,6 +1260,7 @@ install-mingw-pthreads: | obj_mingw_pthreads/.lc_built
 	cd obj_mingw_pthreads && $(MAKE) $(MAKE_ARGS) $(MINGW_MAKE_ARGS) DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT) install
 
 install-mingw: | install-mingw-headers install-mingw-crt install-mingw-pthreads
+endif
 
 ifneq ($(LINUX_SRCDIR),)
 TARGET_ARCH = $(firstword $(subst -, ,$(TARGET)))
@@ -1197,7 +1275,7 @@ src_kernel_headers: | $(LINUX_SRCDIR)
 	ln -sf "$(LINUX_SRCDIR)" $@
 obj_kernel_headers/.lc_built: | src_kernel_headers
 	mkdir -p $(CURDIR)/obj_kernel_headers/staged
-	cd src_kernel_headers && $(MAKE) $(MAKE_ARGS) ARCH=$(LINUX_ARCH) O=$(CURDIR)/obj_kernel_headers INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/staged HOSTCC="$(CCACHE) $(HOSTCC)" headers_install
+	cd src_kernel_headers && $(MAKE) $(MAKE_ARGS) ARCH=$(LINUX_ARCH) O=$(CURDIR)/obj_kernel_headers INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/staged CC="$(CCACHE) $(CC)" HOSTCC="$(CCACHE) $(HOSTCC)" headers_install
 	find obj_kernel_headers/staged/include '(' -name .install -o -name ..install.cmd ')' -exec rm {} +
 	touch $@
 obj_kernel_headers/.lc_headers_installed: | obj_kernel_headers/.lc_built obj_sysroot

@@ -1,6 +1,5 @@
 
 OUTPUT = $(CURDIR)/output-clang
-HOSTCC = gcc
 CCACHE =
 LLVM_SRCDIR = LLVM_SRCDIR_not_set
 MUSL_SRCDIR = MUSL_SRCDIR_not_set
@@ -54,6 +53,8 @@ TOOLS = \
 	# end
 
 -include config.mak
+
+HOSTCC ?= $(CC)
 
 # llvm 13.0.0 switched to using normalized target triples for runtimes.
 # Convert 3-part triples to 4-part by adding 'unknown' vendor
@@ -346,7 +347,7 @@ obj_sysroot/%/.lc_crt_workaround:
 
 obj_kernel_headers/%/.lc_built: | src_kernel_headers
 	mkdir -p $(CURDIR)/obj_kernel_headers/$*/staged
-	cd src_kernel_headers && $(MAKE) ARCH=$(call fn_linux_arch,$*) O=$(CURDIR)/obj_kernel_headers/$* INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/$*/staged HOSTCC="$(CCACHE) $(HOSTCC)" headers_install
+	cd src_kernel_headers && $(MAKE) ARCH=$(call fn_linux_arch,$*) O=$(CURDIR)/obj_kernel_headers/$* INSTALL_HDR_PATH=$(CURDIR)/obj_kernel_headers/$*/staged CC="$(CCACHE) $(CC)" HOSTCC="$(CCACHE) $(HOSTCC)" headers_install
 	find obj_kernel_headers/$*/staged/include '(' -name .install -o -name ..install.cmd ')' -exec rm {} +
 	touch $@
 

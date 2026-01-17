@@ -1,0 +1,135 @@
+From 374cef32ac36d956f75ccc6416872498bbe66e82 Mon Sep 17 00:00:00 2001
+From: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date: Wed, 20 Jan 2021 12:26:31 +0000
+Subject: [PATCH] configure: Auto-detect static PIE support
+
+Backported and adapted from glibc 2.33 commits 374cef32ac and 23645707f1.
+
+Add SUPPORT_STATIC_PIE that targets can define if they support
+static PIE. Currently defined on x86_64, i386 and aarch64.
+
+If --enable-static-pie is passed but the architecture doesn't support
+it, silently disable static PIE instead of erroring.
+
+---
+ config.h.in                  | 3 +++
+ configure                    | 12 ++++++++++++
+ configure.ac                 | 8 ++++++++
+ sysdeps/aarch64/configure    | 3 +++
+ sysdeps/aarch64/configure.ac | 3 +++
+ sysdeps/i386/configure       | 2 ++
+ sysdeps/i386/configure.ac    | 3 +++
+ sysdeps/x86_64/configure     | 2 ++
+ sysdeps/x86_64/configure.ac  | 3 +++
+ 9 files changed, 39 insertions(+)
+
+--- a/config.h.in
++++ b/config.h.in
+@@ -238,6 +238,9 @@
+ /* Build glibc with tunables support.  */
+ #define HAVE_TUNABLES 0
+
++/* Define if static PIE is supported.  */
++#undef SUPPORT_STATIC_PIE
++
+ /* Define if static PIE is enabled.  */
+ #define ENABLE_STATIC_PIE 0
+
+--- a/configure
++++ b/configure
+@@ -6800,6 +6800,18 @@
+ libc_cv_multidir=`${CC-cc} $CFLAGS $CPPFLAGS -print-multi-directory`
+
+
++# Check if architecture supports static PIE
++if test "$static_pie" = yes; then
++  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++#ifndef SUPPORT_STATIC_PIE
++# error static PIE is not supported
++#endif
++_ACEOF
++  if ! ac_fn_c_try_compile "$LINENO"; then
++    static_pie=no
++  fi
++  rm -f conftest*
++fi
+ if test "$static_pie" = yes; then
+   # The linker must support --no-dynamic-linker.
+   if test "$libc_cv_no_dynamic_linker" != yes; then
+--- a/configure.ac
++++ b/configure.ac
+@@ -1830,6 +1830,14 @@
+ libc_cv_multidir=`${CC-cc} $CFLAGS $CPPFLAGS -print-multi-directory`
+ AC_SUBST(libc_cv_multidir)
+
++# Check if architecture supports static PIE
++if test "$static_pie" = yes; then
++  AC_COMPILE_IFELSE([AC_LANG_SOURCE([[#ifndef SUPPORT_STATIC_PIE
++# error static PIE is not supported
++#endif]])],
++  [], [static_pie=no])
++fi
++
+ if test "$static_pie" = yes; then
+   # The linker must support --no-dynamic-linker.
+   if test "$libc_cv_no_dynamic_linker" != yes; then
+--- a/sysdeps/aarch64/configure
++++ b/sysdeps/aarch64/configure
+@@ -1,5 +1,8 @@
+ # This file is generated from configure.ac by Autoconf.  DO NOT EDIT!
+  # Local configure fragment for sysdeps/aarch64.
+
++# Static PIE is supported.
++$as_echo "#define SUPPORT_STATIC_PIE 1" >>confdefs.h
++
+ # We check to see if the compiler and flags are
+ # selecting the big endian ABI and if they are then
+--- a/sysdeps/aarch64/configure.ac
++++ b/sysdeps/aarch64/configure.ac
+@@ -1,5 +1,8 @@
+ GLIBC_PROVIDES dnl See aclocal.m4 in the top level source directory.
+ # Local configure fragment for sysdeps/aarch64.
+
++# Static PIE is supported.
++AC_DEFINE(SUPPORT_STATIC_PIE)
++
+ # We check to see if the compiler and flags are
+ # selecting the big endian ABI and if they are then
+--- a/sysdeps/i386/configure
++++ b/sysdeps/i386/configure
+@@ -120,3 +120,5 @@
+   $as_echo "#define NO_HIDDEN_EXTERN_FUNC_IN_PIE 1" >>confdefs.h
+
+ fi
++
++$as_echo "#define SUPPORT_STATIC_PIE 1" >>confdefs.h
+--- a/sysdeps/i386/configure.ac
++++ b/sysdeps/i386/configure.ac
+@@ -75,3 +75,6 @@
+ if test x"$multi_arch" != xno; then
+   AC_DEFINE(NO_HIDDEN_EXTERN_FUNC_IN_PIE)
+ fi
++
++dnl Static PIE is supported.
++AC_DEFINE(SUPPORT_STATIC_PIE)
+--- a/sysdeps/x86_64/configure
++++ b/sysdeps/x86_64/configure
+@@ -140,5 +140,7 @@
+ $as_echo "#define PI_STATIC_AND_HIDDEN 1" >>confdefs.h
+
+
++$as_echo "#define SUPPORT_STATIC_PIE 1" >>confdefs.h
++
+ test -n "$critic_missing" && as_fn_error $? "
+ *** $critic_missing" "$LINENO" 5
+--- a/sysdeps/x86_64/configure.ac
++++ b/sysdeps/x86_64/configure.ac
+@@ -70,5 +70,8 @@
+ dnl position independent way.
+ AC_DEFINE(PI_STATIC_AND_HIDDEN)
+
++dnl Static PIE is supported.
++AC_DEFINE(SUPPORT_STATIC_PIE)
++
+ test -n "$critic_missing" && AC_MSG_ERROR([
+ *** $critic_missing])

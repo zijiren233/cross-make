@@ -1,0 +1,127 @@
+From 47618209d05a0e77932038f21c6bba2425bd75c6 Mon Sep 17 00:00:00 2001
+From: Szabolcs Nagy <szabolcs.nagy@arm.com>
+Date: Fri, 15 Jan 2021 12:49:24 +0000
+Subject: [PATCH] Use hidden visibility for early static PIE code
+
+Backported from glibc 2.33 commit 47618209d05a0e77932038f21c6bba2425bd75c6.
+Fixes static PIE on architectures with GOT-relative addressing.
+
+Bug: https://sourceware.org/bugzilla/show_bug.cgi?id=27072
+
+---
+ csu/libc-start.c                             | 4 ++++
+ elf/dl-reloc-static-pie.c                    | 2 ++
+ elf/dl-support.c                             | 6 ++++++
+ elf/dl-tunables.c                            | 4 ++++
+ elf/enbl-secure.c                            | 4 ++++
+ misc/sbrk.c                                  | 4 ++++
+ sysdeps/unix/sysv/linux/aarch64/libc-start.c | 5 +++++
+ sysdeps/x86/libc-start.c                     | 5 +++++
+ 8 files changed, 34 insertions(+)
+
+--- a/csu/libc-start.c
++++ b/csu/libc-start.c
+@@ -15,6 +15,10 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++#if BUILD_PIE_DEFAULT
++# pragma GCC visibility push(hidden)
++#endif
+ #include <assert.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+--- a/elf/dl-reloc-static-pie.c
++++ b/elf/dl-reloc-static-pie.c
+@@ -17,6 +17,8 @@
+    <https://www.gnu.org/licenses/>.  */
+
+ #if ENABLE_STATIC_PIE
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++# pragma GCC visibility push(hidden)
+ #include <unistd.h>
+ #include <ldsodefs.h>
+ #include "dynamic-link.h"
+--- a/elf/dl-support.c
++++ b/elf/dl-support.c
+@@ -19,6 +19,12 @@
+ /* This file defines some things that for the dynamic linker are defined in
+    rtld.c and dl-sysdep.c in ways appropriate to bootstrap dynamic linking.  */
+
++#include <string.h>
++/* Mark symbols hidden in static PIE for early self relocation to work.
++   Note: string.h may have ifuncs which cannot be hidden on i686.  */
++#if BUILD_PIE_DEFAULT
++# pragma GCC visibility push(hidden)
++#endif
+ #include <errno.h>
+ #include <libintl.h>
+ #include <stdlib.h>
+--- a/elf/dl-tunables.c
++++ b/elf/dl-tunables.c
+@@ -18,6 +18,10 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++#if BUILD_PIE_DEFAULT
++# pragma GCC visibility push(hidden)
++#endif
+ #include <startup.h>
+ #include <stdint.h>
+ #include <stdbool.h>
+--- a/elf/enbl-secure.c
++++ b/elf/enbl-secure.c
+@@ -19,6 +19,10 @@
+ /* This file is used in the static libc.  For the shared library,
+    dl-sysdep.c defines and initializes __libc_enable_secure.  */
+
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++#if BUILD_PIE_DEFAULT
++# pragma GCC visibility push(hidden)
++#endif
+ #include <unistd.h>
+ #include <libc-internal.h>
+
+--- a/misc/sbrk.c
++++ b/misc/sbrk.c
+@@ -15,6 +15,10 @@
+    License along with the GNU C Library; if not, see
+    <https://www.gnu.org/licenses/>.  */
+
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++#if BUILD_PIE_DEFAULT
++# pragma GCC visibility push(hidden)
++#endif
+ #include <errno.h>
+ #include <libc-internal.h>
+ #include <stdbool.h>
+--- a/sysdeps/unix/sysv/linux/aarch64/libc-start.c
++++ b/sysdeps/unix/sysv/linux/aarch64/libc-start.c
+@@ -17,6 +17,11 @@
+    <https://www.gnu.org/licenses/>.  */
+
+ #ifndef SHARED
++
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++# if BUILD_PIE_DEFAULT
++#  pragma GCC visibility push(hidden)
++# endif
+ # include <ldsodefs.h>
+ # include <cpu-features.c>
+
+--- a/sysdeps/x86/libc-start.c
++++ b/sysdeps/x86/libc-start.c
+@@ -17,6 +17,11 @@
+    <http://www.gnu.org/licenses/>.  */
+
+ #ifndef SHARED
++
++/* Mark symbols hidden in static PIE for early self relocation to work.  */
++# if BUILD_PIE_DEFAULT
++#  pragma GCC visibility push(hidden)
++# endif
+ # include <ldsodefs.h>
+ # include <cpu-features.h>
+ # include <cpu-features.c>
