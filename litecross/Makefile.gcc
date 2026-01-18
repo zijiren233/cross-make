@@ -193,11 +193,6 @@ GCC_CONFIG_FOR_TARGET += --with-float=soft
 endif
 endif
 
-# thumbv7neon (NEON FPU, always hard-float)
-ifneq ($(filter thumbv7neon%,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=armv7-a --with-tune=generic-armv7-a --with-fpu=neon-vfpv4 --with-abi=aapcs-linux --with-mode=thumb
-endif
-
 # Generic arm- and armeb (baseline)
 ifneq ($(filter arm-% armeb%,$(TARGET)),)
 ifneq ($(filter %hf,$(TARGET)),)
@@ -321,6 +316,8 @@ override NETBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
+LINKER_HASH_STYLE =
+
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
 	--enable-fully-dynamic-string
@@ -350,6 +347,8 @@ override NETBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
 
+LINKER_HASH_STYLE = sysv
+
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--disable-shared
 
@@ -368,6 +367,9 @@ override LINUX_SRCDIR =
 override FREEBSD_SRCDIR =
 
 MAKE += MAKEINFO=false
+
+# NetBSD rtld supports both hash styles, but sysv is more compatible
+LINKER_HASH_STYLE = sysv
 
 GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
 	--disable-shared
@@ -466,7 +468,7 @@ GCC_CONFIG := --enable-languages=c,c++ \
 	--enable-checking=release \
 	--disable-libmudflap --disable-libsanitizer \
 	$(IFUNC_CONFIG) \
-	--with-linker-hash-style=$(LINKER_HASH_STYLE) \
+	$(if $(LINKER_HASH_STYLE),--with-linker-hash-style=$(LINKER_HASH_STYLE)) \
 	--disable-libmpx --disable-fixed-point \
 	--enable-libstdcxx-time=yes --disable-libstdcxx-pch \
 	--disable-libquadmath --disable-libquadmath-support \
@@ -486,7 +488,7 @@ BINUTILS_CONFIG := --disable-gprofng \
 	--enable-64-bit-bfd \
 	--enable-colored-disassembly \
 	--enable-default-execstack=no \
-	--enable-default-hash-style=gnu \
+	$(if $(LINKER_HASH_STYLE),--enable-default-hash-style=$(LINKER_HASH_STYLE)) \
 	--enable-deterministic-archives \
 	--enable-install-libiberty \
 	--enable-ld=default \

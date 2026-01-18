@@ -25,6 +25,9 @@ targets:
   - TARGET: aarch64-linux-musl
     MUSL_VER: "1.2.5"
 
+  - TARGET: aarch64_be-linux-musl
+    MUSL_VER: "1.2.5"
+
   - TARGET: arm-linux-musleabi
     MUSL_VER: "1.2.5"
 
@@ -73,10 +76,25 @@ targets:
   - TARGET: mips64el-linux-muslsf
     MUSL_VER: "1.2.5"
 
+  - TARGET: mipsisa32r6-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mipsisa32r6el-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mipsisa64r6-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: mipsisa64r6el-linux-musl
+    MUSL_VER: "1.2.5"
+
   - TARGET: powerpc64-linux-musl
     MUSL_VER: "1.2.5"
 
   - TARGET: powerpc64le-linux-musl
+    MUSL_VER: "1.2.5"
+
+  - TARGET: riscv32-linux-musl
     MUSL_VER: "1.2.5"
 
   - TARGET: riscv64-linux-musl
@@ -97,10 +115,16 @@ targets:
   - TARGET: x86_64-linux-musl
     MUSL_VER: "1.2.5"
 
+  - TARGET: x86_64-linux-muslx32
+    MUSL_VER: "1.2.5"
+
   # ============================================================================
   # Linux glibc (gnu) targets
   # ============================================================================
   - TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.28"
 
   - TARGET: arm-linux-gnueabi
@@ -140,6 +164,13 @@ targets:
   - TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.28"
 
+  # MIPS Release 6 requires glibc >= 2.32 (hi/lo register removal)
+  - TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.32"
+
+  - TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.32"
+
   - TARGET: mips64-linux-gnu
     GLIBC_VER: "2.28"
 
@@ -152,6 +183,12 @@ targets:
   - TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.28"
 
+  - TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.32"
+
+  - TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.32"
+
   # powerpc64 requires glibc >= 2.31
   # https://github.com/bminor/glibc/commit/18363b4f010da9ba459b13310b113ac0647c2fcc.patch
   - TARGET: powerpc64-linux-gnu
@@ -159,6 +196,10 @@ targets:
 
   - TARGET: powerpc64le-linux-gnu
     GLIBC_VER: "2.31"
+
+  # riscv32 requires glibc >= 2.33
+  - TARGET: riscv32-linux-gnu
+    GLIBC_VER: "2.33"
 
   # riscv64 static pie requires glibc >= 2.35
   - TARGET: riscv64-linux-gnu
@@ -185,8 +226,15 @@ targets:
   - TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.28"
 
+  - TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.28"
+
   - ID: aarch64-linux-gnu-2.42
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.42"
+
+  - ID: aarch64_be-linux-gnu-2.42
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.42"
 
   - ID: arm-linux-gnueabi-2.42
@@ -237,6 +285,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.42"
 
+  - ID: mipsisa32r6-linux-gnu-2.42
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.42"
+
+  - ID: mipsisa32r6el-linux-gnu-2.42
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.42"
+
   - ID: mips64-linux-gnu-2.42
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.42"
@@ -253,12 +309,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.42"
 
+  - ID: mipsisa64r6-linux-gnu-2.42
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.42"
+
+  - ID: mipsisa64r6el-linux-gnu-2.42
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.42"
+
   - ID: powerpc64-linux-gnu-2.42
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.42"
 
   - ID: powerpc64le-linux-gnu-2.42
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.42"
+
+  - ID: riscv32-linux-gnu-2.42
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.42"
 
   - ID: riscv64-linux-gnu-2.42
@@ -293,8 +361,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.42"
 
+  - ID: x86_64-linux-gnux32-2.42
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.42"
+
   - ID: aarch64-linux-gnu-2.41
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.41"
+
+  - ID: aarch64_be-linux-gnu-2.41
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.41"
 
   - ID: arm-linux-gnueabi-2.41
@@ -345,6 +421,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.41"
 
+  - ID: mipsisa32r6-linux-gnu-2.41
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.41"
+
+  - ID: mipsisa32r6el-linux-gnu-2.41
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.41"
+
   - ID: mips64-linux-gnu-2.41
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.41"
@@ -361,12 +445,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.41"
 
+  - ID: mipsisa64r6-linux-gnu-2.41
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.41"
+
+  - ID: mipsisa64r6el-linux-gnu-2.41
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.41"
+
   - ID: powerpc64-linux-gnu-2.41
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.41"
 
   - ID: powerpc64le-linux-gnu-2.41
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.41"
+
+  - ID: riscv32-linux-gnu-2.41
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.41"
 
   - ID: riscv64-linux-gnu-2.41
@@ -401,8 +497,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.41"
 
+  - ID: x86_64-linux-gnux32-2.41
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.41"
+
   - ID: aarch64-linux-gnu-2.40
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.40"
+
+  - ID: aarch64_be-linux-gnu-2.40
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.40"
 
   - ID: arm-linux-gnueabi-2.40
@@ -453,6 +557,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.40"
 
+  - ID: mipsisa32r6-linux-gnu-2.40
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.40"
+
+  - ID: mipsisa32r6el-linux-gnu-2.40
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.40"
+
   - ID: mips64-linux-gnu-2.40
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.40"
@@ -469,12 +581,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.40"
 
+  - ID: mipsisa64r6-linux-gnu-2.40
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.40"
+
+  - ID: mipsisa64r6el-linux-gnu-2.40
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.40"
+
   - ID: powerpc64-linux-gnu-2.40
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.40"
 
   - ID: powerpc64le-linux-gnu-2.40
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.40"
+
+  - ID: riscv32-linux-gnu-2.40
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.40"
 
   - ID: riscv64-linux-gnu-2.40
@@ -509,8 +633,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.40"
 
+  - ID: x86_64-linux-gnux32-2.40
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.40"
+
   - ID: aarch64-linux-gnu-2.39
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.39"
+
+  - ID: aarch64_be-linux-gnu-2.39
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.39"
 
   - ID: arm-linux-gnueabi-2.39
@@ -561,6 +693,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.39"
 
+  - ID: mipsisa32r6-linux-gnu-2.39
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.39"
+
+  - ID: mipsisa32r6el-linux-gnu-2.39
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.39"
+
   - ID: mips64-linux-gnu-2.39
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.39"
@@ -577,12 +717,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.39"
 
+  - ID: mipsisa64r6-linux-gnu-2.39
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.39"
+
+  - ID: mipsisa64r6el-linux-gnu-2.39
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.39"
+
   - ID: powerpc64-linux-gnu-2.39
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.39"
 
   - ID: powerpc64le-linux-gnu-2.39
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.39"
+
+  - ID: riscv32-linux-gnu-2.39
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.39"
 
   - ID: riscv64-linux-gnu-2.39
@@ -617,8 +769,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.39"
 
+  - ID: x86_64-linux-gnux32-2.39
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.39"
+
   - ID: aarch64-linux-gnu-2.38
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.38"
+
+  - ID: aarch64_be-linux-gnu-2.38
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.38"
 
   - ID: arm-linux-gnueabi-2.38
@@ -669,6 +829,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.38"
 
+  - ID: mipsisa32r6-linux-gnu-2.38
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.38"
+
+  - ID: mipsisa32r6el-linux-gnu-2.38
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.38"
+
   - ID: mips64-linux-gnu-2.38
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.38"
@@ -685,12 +853,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.38"
 
+  - ID: mipsisa64r6-linux-gnu-2.38
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.38"
+
+  - ID: mipsisa64r6el-linux-gnu-2.38
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.38"
+
   - ID: powerpc64-linux-gnu-2.38
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.38"
 
   - ID: powerpc64le-linux-gnu-2.38
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.38"
+
+  - ID: riscv32-linux-gnu-2.38
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.38"
 
   - ID: riscv64-linux-gnu-2.38
@@ -725,8 +905,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.38"
 
+  - ID: x86_64-linux-gnux32-2.38
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.38"
+
   - ID: aarch64-linux-gnu-2.37
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.37"
+
+  - ID: aarch64_be-linux-gnu-2.37
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.37"
 
   - ID: arm-linux-gnueabi-2.37
@@ -777,6 +965,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.37"
 
+  - ID: mipsisa32r6-linux-gnu-2.37
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.37"
+
+  - ID: mipsisa32r6el-linux-gnu-2.37
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.37"
+
   - ID: mips64-linux-gnu-2.37
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.37"
@@ -793,12 +989,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.37"
 
+  - ID: mipsisa64r6-linux-gnu-2.37
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.37"
+
+  - ID: mipsisa64r6el-linux-gnu-2.37
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.37"
+
   - ID: powerpc64-linux-gnu-2.37
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.37"
 
   - ID: powerpc64le-linux-gnu-2.37
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.37"
+
+  - ID: riscv32-linux-gnu-2.37
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.37"
 
   - ID: riscv64-linux-gnu-2.37
@@ -833,8 +1041,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.37"
 
+  - ID: x86_64-linux-gnux32-2.37
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.37"
+
   - ID: aarch64-linux-gnu-2.36
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.36"
+
+  - ID: aarch64_be-linux-gnu-2.36
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.36"
 
   - ID: arm-linux-gnueabi-2.36
@@ -885,6 +1101,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.36"
 
+  - ID: mipsisa32r6-linux-gnu-2.36
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.36"
+
+  - ID: mipsisa32r6el-linux-gnu-2.36
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.36"
+
   - ID: mips64-linux-gnu-2.36
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.36"
@@ -901,12 +1125,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.36"
 
+  - ID: mipsisa64r6-linux-gnu-2.36
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.36"
+
+  - ID: mipsisa64r6el-linux-gnu-2.36
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.36"
+
   - ID: powerpc64-linux-gnu-2.36
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.36"
 
   - ID: powerpc64le-linux-gnu-2.36
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.36"
+
+  - ID: riscv32-linux-gnu-2.36
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.36"
 
   - ID: riscv64-linux-gnu-2.36
@@ -941,8 +1177,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.36"
 
+  - ID: x86_64-linux-gnux32-2.36
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.36"
+
   - ID: aarch64-linux-gnu-2.35
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.35"
+
+  - ID: aarch64_be-linux-gnu-2.35
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.35"
 
   - ID: arm-linux-gnueabi-2.35
@@ -989,6 +1233,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.35"
 
+  - ID: mipsisa32r6-linux-gnu-2.35
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.35"
+
+  - ID: mipsisa32r6el-linux-gnu-2.35
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.35"
+
   - ID: mips64-linux-gnu-2.35
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.35"
@@ -1005,12 +1257,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.35"
 
+  - ID: mipsisa64r6-linux-gnu-2.35
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.35"
+
+  - ID: mipsisa64r6el-linux-gnu-2.35
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.35"
+
   - ID: powerpc64-linux-gnu-2.35
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.35"
 
   - ID: powerpc64le-linux-gnu-2.35
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.35"
+
+  - ID: riscv32-linux-gnu-2.35
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.35"
 
   - ID: riscv64-linux-gnu-2.35
@@ -1045,8 +1309,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.35"
 
+  - ID: x86_64-linux-gnux32-2.35
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.35"
+
   - ID: aarch64-linux-gnu-2.34
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.34"
+
+  - ID: aarch64_be-linux-gnu-2.34
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.34"
 
   - ID: arm-linux-gnueabi-2.34
@@ -1093,6 +1365,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.34"
 
+  - ID: mipsisa32r6-linux-gnu-2.34
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.34"
+
+  - ID: mipsisa32r6el-linux-gnu-2.34
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.34"
+
   - ID: mips64-linux-gnu-2.34
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.34"
@@ -1109,12 +1389,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.34"
 
+  - ID: mipsisa64r6-linux-gnu-2.34
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.34"
+
+  - ID: mipsisa64r6el-linux-gnu-2.34
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.34"
+
   - ID: powerpc64-linux-gnu-2.34
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.34"
 
   - ID: powerpc64le-linux-gnu-2.34
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.34"
+
+  - ID: riscv32-linux-gnu-2.34
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.34"
 
   - ID: s390x-linux-gnu-2.34
@@ -1145,8 +1437,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.34"
 
+  - ID: x86_64-linux-gnux32-2.34
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.34"
+
   - ID: aarch64-linux-gnu-2.33
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.33"
+
+  - ID: aarch64_be-linux-gnu-2.33
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.33"
 
   - ID: arm-linux-gnueabi-2.33
@@ -1193,6 +1493,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.33"
 
+  - ID: mipsisa32r6-linux-gnu-2.33
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.33"
+
+  - ID: mipsisa32r6el-linux-gnu-2.33
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.33"
+
   - ID: mips64-linux-gnu-2.33
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.33"
@@ -1209,12 +1517,24 @@ targets:
     TARGET: mips64el-linux-gnusf
     GLIBC_VER: "2.33"
 
+  - ID: mipsisa64r6-linux-gnu-2.33
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.33"
+
+  - ID: mipsisa64r6el-linux-gnu-2.33
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.33"
+
   - ID: powerpc64-linux-gnu-2.33
     TARGET: powerpc64-linux-gnu
     GLIBC_VER: "2.33"
 
   - ID: powerpc64le-linux-gnu-2.33
     TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.33"
+
+  - ID: riscv32-linux-gnu-2.33
+    TARGET: riscv32-linux-gnu
     GLIBC_VER: "2.33"
 
   - ID: s390x-linux-gnu-2.33
@@ -1245,8 +1565,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.33"
 
+  - ID: x86_64-linux-gnux32-2.33
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.33"
+
   - ID: aarch64-linux-gnu-2.32
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.32"
+
+  - ID: aarch64_be-linux-gnu-2.32
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.32"
 
   - ID: arm-linux-gnueabi-2.32
@@ -1293,6 +1621,14 @@ targets:
     TARGET: mipsel-linux-gnusf
     GLIBC_VER: "2.32"
 
+  - ID: mipsisa32r6-linux-gnu-2.32
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.32"
+
+  - ID: mipsisa32r6el-linux-gnu-2.32
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.32"
+
   - ID: mips64-linux-gnu-2.32
     TARGET: mips64-linux-gnu
     GLIBC_VER: "2.32"
@@ -1307,6 +1643,14 @@ targets:
 
   - ID: mips64el-linux-gnusf-2.32
     TARGET: mips64el-linux-gnusf
+    GLIBC_VER: "2.32"
+
+  - ID: mipsisa64r6-linux-gnu-2.32
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.32"
+
+  - ID: mipsisa64r6el-linux-gnu-2.32
+    TARGET: mipsisa64r6el-linux-gnu
     GLIBC_VER: "2.32"
 
   - ID: powerpc64-linux-gnu-2.32
@@ -1345,8 +1689,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.32"
 
+  - ID: x86_64-linux-gnux32-2.32
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.32"
+
   - ID: aarch64-linux-gnu-2.31
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.31"
+
+  - ID: aarch64_be-linux-gnu-2.31
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.31"
 
   - ID: arm-linux-gnueabi-2.31
@@ -1445,8 +1797,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.31"
 
+  - ID: x86_64-linux-gnux32-2.31
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.31"
+
   - ID: aarch64-linux-gnu-2.30
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.30"
+
+  - ID: aarch64_be-linux-gnu-2.30
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.30"
 
   - ID: arm-linux-gnueabi-2.30
@@ -1533,8 +1893,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.30"
 
+  - ID: x86_64-linux-gnux32-2.30
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.30"
+
   - ID: aarch64-linux-gnu-2.29
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.29"
+
+  - ID: aarch64_be-linux-gnu-2.29
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.29"
 
   - ID: arm-linux-gnueabi-2.29
@@ -1621,8 +1989,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.29"
 
+  - ID: x86_64-linux-gnux32-2.29
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.29"
+
   - ID: aarch64-linux-gnu-2.28
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.28"
+
+  - ID: aarch64_be-linux-gnu-2.28
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.28"
 
   - ID: arm-linux-gnueabi-2.28
@@ -1701,8 +2077,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.28"
 
+  - ID: x86_64-linux-gnux32-2.28
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.28"
+
   - ID: aarch64-linux-gnu-2.27
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.27"
+
+  - ID: aarch64_be-linux-gnu-2.27
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.27"
 
   - ID: arm-linux-gnueabi-2.27
@@ -1781,8 +2165,16 @@ targets:
     TARGET: x86_64-linux-gnu
     GLIBC_VER: "2.27"
 
+  - ID: x86_64-linux-gnux32-2.27
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.27"
+
   - ID: aarch64-linux-gnu-2.17
     TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.17"
+
+  - ID: aarch64_be-linux-gnu-2.17
+    TARGET: aarch64_be-linux-gnu
     GLIBC_VER: "2.17"
 
   - ID: arm-linux-gnueabi-2.17
@@ -1867,6 +2259,10 @@ targets:
 
   - ID: x86_64-linux-gnu-2.17
     TARGET: x86_64-linux-gnu
+    GLIBC_VER: "2.17"
+
+  - ID: x86_64-linux-gnux32-2.17
+    TARGET: x86_64-linux-gnux32
     GLIBC_VER: "2.17"
 
   # ============================================================================
