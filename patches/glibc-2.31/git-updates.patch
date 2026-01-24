@@ -94,10 +94,10 @@ index 1e9c18f0d8..e07a42e20c 100644
  else	   					# -s
  verbose	:=
 diff --git a/NEWS b/NEWS
-index 292fbc595a..8a20d3c4e3 100644
+index 292fbc595a..54ab1a5d51 100644
 --- a/NEWS
 +++ b/NEWS
-@@ -5,6 +5,94 @@ See the end for copying conditions.
+@@ -5,6 +5,99 @@ See the end for copying conditions.
  Please send GNU C library bug reports via <https://sourceware.org/bugzilla/>
  using `glibc' in the "product" field.
  
@@ -147,6 +147,8 @@ index 292fbc595a..8a20d3c4e3 100644
 +  [28896] strncmp-avx2-rtm and wcsncmp-avx2-rtm fallback on non-rtm
 +    variants when avoiding overflow
 +  [29530] segfault in printf handling thousands separator
++  [33814] glob: wordexp with WRDE_REUSE and WRDE_APPEND may return
++    uninitialized memory
 +
 +Security related changes:
 +
@@ -188,11 +190,14 @@ index 292fbc595a..8a20d3c4e3 100644
 +
 +  CVE-2022-23218: Passing an overlong file name to the svcunix_create
 +  legacy function could result in a stack-based buffer overflow.
++
++  CVE-2025-15281: wordexp with WRDE_REUSE and WRDE_APPEND may return
++  uninitialized memory.
 +
  Version 2.31
  
  Major new features:
-@@ -141,6 +229,18 @@ Changes to build and runtime requirements:
+@@ -141,6 +234,18 @@ Changes to build and runtime requirements:
    source tree.  ChangeLog files are located in the ChangeLog.old directory as
    ChangeLog.N where the highest N has the latest entries.
  
@@ -3334,6 +3339,67 @@ index 984045b5b9..8edeb3d621 100644
 +$(objpfx)tst-malloc-tcache-leak-mcheck: $(shared-thread-library)
 +$(objpfx)tst-malloc_info-mcheck: $(shared-thread-library)
 +$(objpfx)tst-mallocfork2-mcheck: $(shared-thread-library)
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index f7cd29bc2f..1475182901 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -4668,7 +4668,7 @@ _int_memalign (mstate av, size_t alignment, size_t bytes)
+ 
+ 
+ 
+-  if (!checked_request2size (bytes, &nb))
++  if (!checked_request2size (bytes, &nb) || alignment > PTRDIFF_MAX)
+     {
+       __set_errno (ENOMEM);
+       return NULL;
+@@ -4679,8 +4679,10 @@ _int_memalign (mstate av, size_t alignment, size_t bytes)
+      request, and then possibly free the leading and trailing space.
+    */
+ 
+-  /* Call malloc with worst case padding to hit alignment. */
+-
++  /* Call malloc with worst case padding to hit alignment.  ALIGNMENT is a
++     power of 2, so it tops out at (PTRDIFF_MAX >> 1) + 1, leaving plenty of
++     space to add MINSIZE and whatever checked_request2size adds to BYTES to
++     get NB.  Consequently, total below also does not overflow.  */
+   m = (char *) (_int_malloc (av, nb + alignment + MINSIZE));
+ 
+   if (m == 0)
+diff --git a/malloc/tst-malloc-too-large.c b/malloc/tst-malloc-too-large.c
+index b5ad7eb7e7..03502e4295 100644
+--- a/malloc/tst-malloc-too-large.c
++++ b/malloc/tst-malloc-too-large.c
+@@ -127,7 +127,6 @@ test_large_allocations (size_t size)
+ }
+ 
+ 
+-static long pagesize;
+ 
+ /* This function tests the following aligned memory allocation functions
+    using several valid alignments and precedes each allocation test with a
+@@ -146,8 +145,8 @@ test_large_aligned_allocations (size_t size)
+ 
+   /* All aligned memory allocation functions expect an alignment that is a
+      power of 2.  Given this, we test each of them with every valid
+-     alignment from 1 thru PAGESIZE.  */
+-  for (align = 1; align <= pagesize; align *= 2)
++     alignment for the type of ALIGN, i.e. until it wraps to 0.  */
++  for (align = 1; align > 0; align <<= 1)
+     {
+       test_setup ();
+ #if __GNUC_PREREQ (7, 0)
+@@ -240,11 +239,6 @@ do_test (void)
+   DIAG_IGNORE_NEEDS_COMMENT (7, "-Walloc-size-larger-than=");
+ #endif
+ 
+-  /* Aligned memory allocation functions need to be tested up to alignment
+-     size equivalent to page size, which should be a power of 2.  */
+-  pagesize = sysconf (_SC_PAGESIZE);
+-  TEST_VERIFY_EXIT (powerof2 (pagesize));
+-
+   /* Loop 1: Ensure that all allocations with SIZE close to SIZE_MAX, i.e.
+      in the range (SIZE_MAX - 2^14, SIZE_MAX], fail.
+ 
 diff --git a/malloc/tst-mallocfork2.c b/malloc/tst-mallocfork2.c
 index 0602a94895..fc1fd64b21 100644
 --- a/malloc/tst-mallocfork2.c
@@ -4642,6 +4708,55 @@ index f6b7a1ef15..d0e3c51b45 100644
  
    return result;
  }
+diff --git a/posix/Makefile b/posix/Makefile
+index 4507d84bf1..16c5111df1 100644
+--- a/posix/Makefile
++++ b/posix/Makefile
+@@ -101,7 +101,8 @@ tests		:= test-errno tstgetopt testfnm runtests runptests \
+ 		   tst-sysconf-empty-chroot tst-glob_symlinks tst-fexecve \
+ 		   tst-glob-tilde test-ssize-max tst-spawn4 bug-regex37 \
+ 		   bug-regex38 tst-regcomp-truncated tst-spawn-chdir \
+-		   tst-wordexp-nocmd
++		   tst-wordexp-nocmd tst-wordexp-reuse
++
+ tests-internal	:= bug-regex5 bug-regex20 bug-regex33 \
+ 		   tst-rfc3484 tst-rfc3484-2 tst-rfc3484-3 \
+ 		   tst-glob_lstat_compat tst-spawn4-compat
+@@ -134,11 +135,13 @@ generated += $(addprefix wordexp-test-result, 1 2 3 4 5 6 7 8 9 10) \
+ 	     bug-glob2.mtrace bug-glob2-mem.out tst-vfork3-mem.out \
+ 	     tst-vfork3.mtrace getconf.speclist tst-fnmatch-mem.out \
+ 	     tst-fnmatch.mtrace bug-regex36.mtrace \
+-	     testcases.h ptestcases.h
++	     testcases.h ptestcases.h tst-wordexp-reuse-mem.out \
++	     tst-wordexp-reuse.mtrace
+ 
+ ifeq ($(run-built-tests),yes)
+ ifeq (yes,$(build-shared))
+-tests-special += $(objpfx)globtest.out $(objpfx)wordexp-tst.out
++tests-special += $(objpfx)globtest.out $(objpfx)wordexp-tst.out \
++		 $(objpfx)wordexp-tst.out
+ endif
+ endif
+ 
+@@ -152,7 +155,7 @@ tests-special += $(objpfx)bug-regex2-mem.out $(objpfx)bug-regex14-mem.out \
+ 		 $(objpfx)tst-boost-mem.out $(objpfx)tst-getconf.out \
+ 		 $(objpfx)bug-glob2-mem.out $(objpfx)tst-vfork3-mem.out \
+ 		 $(objpfx)tst-fnmatch-mem.out $(objpfx)bug-regex36-mem.out \
+-		 $(objpfx)tst-glob-tilde-mem.out
++		 $(objpfx)tst-glob-tilde-mem.out $(objpfx)tst-wordexp-reuse.out
+ xtests-special += $(objpfx)bug-ga2-mem.out
+ endif
+ 
+@@ -397,3 +400,9 @@ $(objpfx)posix-conf-vars-def.h: $(..)scripts/gen-posix-conf-vars.awk \
+ 	$(make-target-directory)
+ 	$(AWK) -f $(filter-out Makefile, $^) > $@.tmp
+ 	mv -f $@.tmp $@
++
++tst-wordexp-reuse-ENV += MALLOC_TRACE=$(objpfx)tst-wordexp-reuse.mtrace
++
++$(objpfx)tst-wordexp-reuse-mem.out: $(objpfx)tst-wordexp-reuse.out
++	$(common-objpfx)malloc/mtrace $(objpfx)tst-wordexp-reuse.mtrace > $@; \
++	$(evaluate-test)
 diff --git a/posix/glob.c b/posix/glob.c
 index cba9cd1819..4580cefb9f 100644
 --- a/posix/glob.c
@@ -4691,6 +4806,101 @@ index cba9cd1819..4580cefb9f 100644
  		dirlen = home_len + rest_len;
  		dirname_modified = 1;
  	      }
+diff --git a/posix/tst-wordexp-reuse.c b/posix/tst-wordexp-reuse.c
+new file mode 100644
+index 0000000000..3926b9f557
+--- /dev/null
++++ b/posix/tst-wordexp-reuse.c
+@@ -0,0 +1,89 @@
++/* Test for wordexp with WRDE_REUSE flag.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <wordexp.h>
++#include <mcheck.h>
++
++#include <support/check.h>
++
++static int
++do_test (void)
++{
++  mtrace ();
++
++  {
++    wordexp_t p = { 0 };
++    TEST_COMPARE (wordexp ("one", &p, 0), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { .we_offs = 2 };
++    TEST_COMPARE (wordexp ("one", &p, 0), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE | WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { 0 };
++    TEST_COMPARE (wordexp ("one", &p, 0), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE | WRDE_APPEND), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { .we_offs = 2 };
++    TEST_COMPARE (wordexp ("one", &p, WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE
++				      | WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { .we_offs = 2 };
++    TEST_COMPARE (wordexp ("one", &p, WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE
++				      | WRDE_DOOFFS | WRDE_APPEND), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "two");
++    wordfree (&p);
++  }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
 diff --git a/posix/wordexp-test.c b/posix/wordexp-test.c
 index ed1b22308e..cb3f989cba 100644
 --- a/posix/wordexp-test.c
@@ -4704,7 +4914,7 @@ index ed1b22308e..cb3f989cba 100644
      /* Flags not already covered (testit() has special handling for these) */
      { 0, NULL, "one two", WRDE_DOOFFS, 2, { "one", "two", }, IFS },
 diff --git a/posix/wordexp.c b/posix/wordexp.c
-index e082d94895..56289503a1 100644
+index e082d94895..866603b1ed 100644
 --- a/posix/wordexp.c
 +++ b/posix/wordexp.c
 @@ -1399,7 +1399,7 @@ envsubst:
@@ -4716,6 +4926,16 @@ index e082d94895..56289503a1 100644
  
        if (n >= __libc_argc)
  	/* Substitute NULL. */
+@@ -2220,7 +2220,9 @@ wordexp (const char *words, wordexp_t *pwordexp, int flags)
+     {
+       /* Minimal implementation of WRDE_REUSE for now */
+       wordfree (pwordexp);
++      old_word.we_wordc = 0;
+       old_word.we_wordv = NULL;
++      pwordexp->we_wordc = 0;
+     }
+ 
+   if ((flags & WRDE_APPEND) == 0)
 diff --git a/socket/Makefile b/socket/Makefile
 index 125c042cab..19fc6ab41d 100644
 --- a/socket/Makefile

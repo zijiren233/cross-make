@@ -7,10 +7,10 @@ index 0000000000..d4e33f2df3
 +For the GNU C Library Security Advisories, see the git master branch:
 +https://sourceware.org/git/?p=glibc.git;a=tree;f=advisories;hb=HEAD
 diff --git a/NEWS b/NEWS
-index 31281ac408..595998fc6e 100644
+index 31281ac408..dd7673282a 100644
 --- a/NEWS
 +++ b/NEWS
-@@ -5,6 +5,33 @@ See the end for copying conditions.
+@@ -5,6 +5,35 @@ See the end for copying conditions.
  Please send GNU C library bug reports via <https://sourceware.org/bugzilla/>
  using `glibc' in the "product" field.
  
@@ -40,6 +40,8 @@ index 31281ac408..595998fc6e 100644
 +  [33234] Use TLS initial-exec model for __libc_tsd_CTYPE_* thread variables
 +  [33361] nss: Group merge does not react to ERANGE during merge
 +  [33601] aarch64: Do not link conform tests with -Wl,-z,force-bti
++  [33814] glob: wordexp with WRDE_REUSE and WRDE_APPEND may return
++    uninitialized memory
 +
  Version 2.40
  
@@ -5505,6 +5507,31 @@ index 02aff1bd1d..98d507a6eb 100644
 +tst-aligned-alloc-random-thread-ENV = LD_PRELOAD=$(objpfx)tst-aligned_alloc-lib.so
 +tst-aligned-alloc-random-thread-cross-ENV = LD_PRELOAD=$(objpfx)tst-aligned_alloc-lib.so
  tst-malloc-random-ENV = LD_PRELOAD=$(objpfx)tst-aligned_alloc-lib.so
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index bcb6e5b83c..e39354595e 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -5049,7 +5049,7 @@ _int_memalign (mstate av, size_t alignment, size_t bytes)
+   INTERNAL_SIZE_T size;
+ 
+   nb = checked_request2size (bytes);
+-  if (nb == 0)
++  if (nb == 0 || alignment > PTRDIFF_MAX)
+     {
+       __set_errno (ENOMEM);
+       return NULL;
+@@ -5065,7 +5065,10 @@ _int_memalign (mstate av, size_t alignment, size_t bytes)
+      we don't find anything in those bins, the common malloc code will
+      scan starting at 2x.  */
+ 
+-  /* Call malloc with worst case padding to hit alignment. */
++  /* Call malloc with worst case padding to hit alignment.  ALIGNMENT is a
++     power of 2, so it tops out at (PTRDIFF_MAX >> 1) + 1, leaving plenty of
++     space to add MINSIZE and whatever checked_request2size adds to BYTES to
++     get NB.  Consequently, total below also does not overflow.  */
+   m = (char *) (_int_malloc (av, nb + alignment + MINSIZE));
+ 
+   if (m == 0)
 diff --git a/malloc/tst-aligned-alloc-random-thread-cross.c b/malloc/tst-aligned-alloc-random-thread-cross.c
 new file mode 100644
 index 0000000000..360ecc56ee
@@ -5921,7 +5948,7 @@ index fde8863ad7..cc88bff3b3 100644
  
  static void
 diff --git a/malloc/tst-malloc-too-large.c b/malloc/tst-malloc-too-large.c
-index 8e9e0d5fa2..2b91377e54 100644
+index 8e9e0d5fa2..15b25cf01d 100644
 --- a/malloc/tst-malloc-too-large.c
 +++ b/malloc/tst-malloc-too-large.c
 @@ -43,6 +43,7 @@
@@ -5932,6 +5959,37 @@ index 8e9e0d5fa2..2b91377e54 100644
  
  /* This function prepares for each 'too-large memory allocation' test by
     performing a small successful malloc/free and resetting errno prior to
+@@ -151,7 +152,6 @@ test_large_allocations (size_t size)
+ }
+ 
+ 
+-static long pagesize;
+ 
+ /* This function tests the following aligned memory allocation functions
+    using several valid alignments and precedes each allocation test with a
+@@ -170,8 +170,8 @@ test_large_aligned_allocations (size_t size)
+ 
+   /* All aligned memory allocation functions expect an alignment that is a
+      power of 2.  Given this, we test each of them with every valid
+-     alignment from 1 thru PAGESIZE.  */
+-  for (align = 1; align <= pagesize; align *= 2)
++     alignment for the type of ALIGN, i.e. until it wraps to 0.  */
++  for (align = 1; align > 0; align <<= 1)
+     {
+       test_setup ();
+ #if __GNUC_PREREQ (7, 0)
+@@ -264,11 +264,6 @@ do_test (void)
+   DIAG_IGNORE_NEEDS_COMMENT (7, "-Walloc-size-larger-than=");
+ #endif
+ 
+-  /* Aligned memory allocation functions need to be tested up to alignment
+-     size equivalent to page size, which should be a power of 2.  */
+-  pagesize = sysconf (_SC_PAGESIZE);
+-  TEST_VERIFY_EXIT (powerof2 (pagesize));
+-
+   /* Loop 1: Ensure that all allocations with SIZE close to SIZE_MAX, i.e.
+      in the range (SIZE_MAX - 2^14, SIZE_MAX], fail.
+ 
 diff --git a/malloc/tst-malloc.c b/malloc/tst-malloc.c
 index f7a6e4654c..68af399022 100644
 --- a/malloc/tst-malloc.c
@@ -7961,7 +8019,7 @@ index 3ccd3905fa..542b362af3 100644
  		{
  		  if (!add_scopelist (&scopelist, &nscopelist,
 diff --git a/posix/Makefile b/posix/Makefile
-index 2c598cd20a..830278a423 100644
+index 2c598cd20a..0cd5572297 100644
 --- a/posix/Makefile
 +++ b/posix/Makefile
 @@ -303,6 +303,7 @@ tests := \
@@ -7972,6 +8030,42 @@ index 2c598cd20a..830278a423 100644
    tst-regcomp-truncated \
    tst-regex \
    tst-regex2 \
+@@ -325,6 +326,7 @@ tests := \
+   tst-wait4 \
+   tst-waitid \
+   tst-wordexp-nocmd \
++  tst-wordexp-reuse \
+   tstgetopt \
+   # tests
+ 
+@@ -453,6 +455,8 @@ generated += \
+   tst-rxspencer-no-utf8.mtrace \
+   tst-vfork3-mem.out \
+   tst-vfork3.mtrace \
++  tst-wordexp-reuse-mem.out \
++  tst-wordexp-reuse.mtrace \
+   # generated
+ endif
+ endif
+@@ -488,6 +492,7 @@ tests-special += \
+   $(objpfx)tst-pcre-mem.out \
+   $(objpfx)tst-rxspencer-no-utf8-mem.out \
+   $(objpfx)tst-vfork3-mem.out \
++  $(objpfx)tst-wordexp-reuse.out \
+   # tests-special
+ endif
+ endif
+@@ -771,3 +776,10 @@ $(objpfx)posix-conf-vars-def.h: $(..)scripts/gen-posix-conf-vars.awk \
+ 	$(make-target-directory)
+ 	$(AWK) -f $(filter-out Makefile, $^) > $@.tmp
+ 	mv -f $@.tmp $@
++
++tst-wordexp-reuse-ENV += MALLOC_TRACE=$(objpfx)tst-wordexp-reuse.mtrace \
++			 LD_PRELOAD=$(common-objpfx)/malloc/libc_malloc_debug.so
++
++$(objpfx)tst-wordexp-reuse-mem.out: $(objpfx)tst-wordexp-reuse.out
++	$(common-objpfx)malloc/mtrace $(objpfx)tst-wordexp-reuse.mtrace > $@; \
++	$(evaluate-test)
 diff --git a/posix/fork.c b/posix/fork.c
 index 298765a1ff..cf9b80e7c0 100644
 --- a/posix/fork.c
@@ -8273,6 +8367,115 @@ index b774fa46b8..b8c561ffdb 100644
  
    return 0;
  }
+diff --git a/posix/tst-wordexp-reuse.c b/posix/tst-wordexp-reuse.c
+new file mode 100644
+index 0000000000..3926b9f557
+--- /dev/null
++++ b/posix/tst-wordexp-reuse.c
+@@ -0,0 +1,89 @@
++/* Test for wordexp with WRDE_REUSE flag.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <wordexp.h>
++#include <mcheck.h>
++
++#include <support/check.h>
++
++static int
++do_test (void)
++{
++  mtrace ();
++
++  {
++    wordexp_t p = { 0 };
++    TEST_COMPARE (wordexp ("one", &p, 0), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { .we_offs = 2 };
++    TEST_COMPARE (wordexp ("one", &p, 0), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE | WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { 0 };
++    TEST_COMPARE (wordexp ("one", &p, 0), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE | WRDE_APPEND), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { .we_offs = 2 };
++    TEST_COMPARE (wordexp ("one", &p, WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE
++				      | WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "two");
++    wordfree (&p);
++  }
++
++  {
++    wordexp_t p = { .we_offs = 2 };
++    TEST_COMPARE (wordexp ("one", &p, WRDE_DOOFFS), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "one");
++    TEST_COMPARE (wordexp ("two", &p, WRDE_REUSE
++				      | WRDE_DOOFFS | WRDE_APPEND), 0);
++    TEST_COMPARE (p.we_wordc, 1);
++    TEST_COMPARE_STRING (p.we_wordv[p.we_offs + 0], "two");
++    wordfree (&p);
++  }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/posix/wordexp.c b/posix/wordexp.c
+index a7362ef31b..4cd2364519 100644
+--- a/posix/wordexp.c
++++ b/posix/wordexp.c
+@@ -2216,7 +2216,9 @@ wordexp (const char *words, wordexp_t *pwordexp, int flags)
+     {
+       /* Minimal implementation of WRDE_REUSE for now */
+       wordfree (pwordexp);
++      old_word.we_wordc = 0;
+       old_word.we_wordv = NULL;
++      pwordexp->we_wordc = 0;
+     }
+ 
+   if ((flags & WRDE_APPEND) == 0)
 diff --git a/resolv/Makefile b/resolv/Makefile
 index 5f44f5896b..abff7fc007 100644
 --- a/resolv/Makefile
@@ -8297,6 +8500,21 @@ index 5f44f5896b..abff7fc007 100644
  $(objpfx)tst-resolv-trailing: $(objpfx)libresolv.so $(shared-thread-library)
  $(objpfx)tst-resolv-threads: $(objpfx)libresolv.so $(shared-thread-library)
  $(objpfx)tst-resolv-txnid-collision: $(objpfx)libresolv.a \
+diff --git a/resolv/nss_dns/dns-network.c b/resolv/nss_dns/dns-network.c
+index b32fd0fcab..71d67aa6f8 100644
+--- a/resolv/nss_dns/dns-network.c
++++ b/resolv/nss_dns/dns-network.c
+@@ -207,6 +207,10 @@ _nss_dns_getnetbyaddr_r (uint32_t net, int type, struct netent *result,
+       sprintf (qbuf, "%u.%u.%u.%u.in-addr.arpa", net_bytes[3], net_bytes[2],
+ 	       net_bytes[1], net_bytes[0]);
+       break;
++    default:
++      /* Default network (net is originally zero).  */
++      strcpy (qbuf, "0.0.0.0.in-addr.arpa");
++      break;
+     }
+ 
+   net_buffer.buf = orig_net_buffer = (querybuf *) alloca (1024);
 diff --git a/resolv/res_send.c b/resolv/res_send.c
 index ea7cf192b2..9c77613f37 100644
 --- a/resolv/res_send.c
@@ -8357,6 +8575,30 @@ index ea7cf192b2..9c77613f37 100644
  			  {
  			    /* No data from the first reply.  */
  			    resplen = 0;
+diff --git a/resolv/tst-resolv-network.c b/resolv/tst-resolv-network.c
+index f40e6f926c..8d4f8badf3 100644
+--- a/resolv/tst-resolv-network.c
++++ b/resolv/tst-resolv-network.c
+@@ -46,6 +46,9 @@ handle_code (const struct resolv_response_context *ctx,
+ {
+   switch (code)
+     {
++    case 0:
++      send_ptr (b, qname, qclass, qtype, "0.in-addr.arpa");
++      break;
+     case 1:
+       send_ptr (b, qname, qclass, qtype, "1.in-addr.arpa");
+       break;
+@@ -265,6 +268,9 @@ do_test (void)
+                 "error: TRY_AGAIN\n");
+ 
+   /* Lookup by address, success cases.  */
++  check_reverse (0,
++                 "name: 0.in-addr.arpa\n"
++                 "net: 0x00000000\n");
+   check_reverse (1,
+                  "name: 1.in-addr.arpa\n"
+                  "net: 0x00000001\n");
 diff --git a/resolv/tst-resolv-semi-failure.c b/resolv/tst-resolv-semi-failure.c
 new file mode 100644
 index 0000000000..aa9798b5a7

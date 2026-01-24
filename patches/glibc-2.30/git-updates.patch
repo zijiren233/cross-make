@@ -3415,7 +3415,7 @@ index 8309c1334c..a32eb403ec 100644
    const char *s = NULL;
    if (__glibc_likely (_environ != NULL))
 diff --git a/malloc/malloc.c b/malloc/malloc.c
-index 00ce48cf58..8c68b21b2b 100644
+index 00ce48cf58..a46edf87af 100644
 --- a/malloc/malloc.c
 +++ b/malloc/malloc.c
 @@ -1621,7 +1621,7 @@ static INTERNAL_SIZE_T global_max_fast;
@@ -3427,7 +3427,29 @@ index 00ce48cf58..8c68b21b2b 100644
  
  static inline INTERNAL_SIZE_T
  get_max_fast (void)
-@@ -5115,6 +5115,19 @@ do_set_tcache_unsorted_limit (size_t value)
+@@ -4668,7 +4668,7 @@ _int_memalign (mstate av, size_t alignment, size_t bytes)
+ 
+ 
+ 
+-  if (!checked_request2size (bytes, &nb))
++  if (!checked_request2size (bytes, &nb) || alignment > PTRDIFF_MAX)
+     {
+       __set_errno (ENOMEM);
+       return NULL;
+@@ -4679,8 +4679,10 @@ _int_memalign (mstate av, size_t alignment, size_t bytes)
+      request, and then possibly free the leading and trailing space.
+    */
+ 
+-  /* Call malloc with worst case padding to hit alignment. */
+-
++  /* Call malloc with worst case padding to hit alignment.  ALIGNMENT is a
++     power of 2, so it tops out at (PTRDIFF_MAX >> 1) + 1, leaving plenty of
++     space to add MINSIZE and whatever checked_request2size adds to BYTES to
++     get NB.  Consequently, total below also does not overflow.  */
+   m = (char *) (_int_malloc (av, nb + alignment + MINSIZE));
+ 
+   if (m == 0)
+@@ -5115,6 +5117,19 @@ do_set_tcache_unsorted_limit (size_t value)
  }
  #endif
  
@@ -3447,7 +3469,7 @@ index 00ce48cf58..8c68b21b2b 100644
  int
  __libc_mallopt (int param_number, int value)
  {
-@@ -5134,13 +5147,7 @@ __libc_mallopt (int param_number, int value)
+@@ -5134,13 +5149,7 @@ __libc_mallopt (int param_number, int value)
    switch (param_number)
      {
      case M_MXFAST:
@@ -3462,7 +3484,7 @@ index 00ce48cf58..8c68b21b2b 100644
        break;
  
      case M_TRIM_THRESHOLD:
-@@ -5406,6 +5413,12 @@ __malloc_info (int options, FILE *fp)
+@@ -5406,6 +5415,12 @@ __malloc_info (int options, FILE *fp)
  
        __libc_lock_lock (ar_ptr->mutex);
  
@@ -3475,7 +3497,7 @@ index 00ce48cf58..8c68b21b2b 100644
        for (size_t i = 0; i < NFASTBINS; ++i)
  	{
  	  mchunkptr p = fastbin (ar_ptr, i);
-@@ -5491,7 +5504,7 @@ __malloc_info (int options, FILE *fp)
+@@ -5491,7 +5506,7 @@ __malloc_info (int options, FILE *fp)
  
        for (size_t i = 0; i < nsizes; ++i)
  	if (sizes[i].count != 0 && i != NFASTBINS)
@@ -3498,6 +3520,41 @@ index 70d8282bdc..f62c6c594c 100644
  
  /* Underlying allocation function; successive calls should return
     contiguous pieces of memory.  */
+diff --git a/malloc/tst-malloc-too-large.c b/malloc/tst-malloc-too-large.c
+index c1c8cb88cc..34bdb839a1 100644
+--- a/malloc/tst-malloc-too-large.c
++++ b/malloc/tst-malloc-too-large.c
+@@ -127,7 +127,6 @@ test_large_allocations (size_t size)
+ }
+ 
+ 
+-static long pagesize;
+ 
+ /* This function tests the following aligned memory allocation functions
+    using several valid alignments and precedes each allocation test with a
+@@ -146,8 +145,8 @@ test_large_aligned_allocations (size_t size)
+ 
+   /* All aligned memory allocation functions expect an alignment that is a
+      power of 2.  Given this, we test each of them with every valid
+-     alignment from 1 thru PAGESIZE.  */
+-  for (align = 1; align <= pagesize; align *= 2)
++     alignment for the type of ALIGN, i.e. until it wraps to 0.  */
++  for (align = 1; align > 0; align <<= 1)
+     {
+       test_setup ();
+ #if __GNUC_PREREQ (7, 0)
+@@ -240,11 +239,6 @@ do_test (void)
+   DIAG_IGNORE_NEEDS_COMMENT (7, "-Walloc-size-larger-than=");
+ #endif
+ 
+-  /* Aligned memory allocation functions need to be tested up to alignment
+-     size equivalent to page size, which should be a power of 2.  */
+-  pagesize = sysconf (_SC_PAGESIZE);
+-  TEST_VERIFY_EXIT (powerof2 (pagesize));
+-
+   /* Loop 1: Ensure that all allocations with SIZE close to SIZE_MAX, i.e.
+      in the range (SIZE_MAX - 2^14, SIZE_MAX], fail.
+ 
 diff --git a/malloc/tst-mallocfork2.c b/malloc/tst-mallocfork2.c
 index 30e7abe6fd..c21e4d779a 100644
 --- a/malloc/tst-mallocfork2.c
