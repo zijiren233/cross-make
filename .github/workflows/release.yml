@@ -88,6 +88,12 @@ jobs:
 
           for file in dist/*; do
             if [ -f "$file" ]; then
+              # For Windows platforms, only upload .zip files
+              if [[ "$PLATFORM" == windows-* ]] && [[ "$file" != *.zip ]]; then
+                echo "Skipping non-zip file for Windows platform: $file"
+                continue
+              fi
+
               echo "Uploading: $file"
               if [[ "$file" == *"native"* ]]; then
                 # Native builds go to base release
