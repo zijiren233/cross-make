@@ -1,0 +1,52 @@
+From ea2798892de373b14f9fc7ae8a0d820eaddca98c Mon Sep 17 00:00:00 2001
+From: Jonathan Wakely <jwakely@redhat.com>
+Date: Tue, 19 Aug 2025 17:08:07 +0100
+Subject: [PATCH] fixincludes: Skip pthread_incomplete_struct_argument for
+ modern glibc [PR118009]
+
+The pthread_incomplete_struct_argument fix was intended for ancient
+versions of Glibc (only 2.3.3 and 2.3.4, I believe). From Glibc 2.3.5
+the pthread.h header already included the change to use a pointer
+instead of an array, so the fixinclude was no longer used.
+
+However, the https://sourceware.org/bugzilla/show_bug.cgi?id=26647 fix
+changed the __setjmpbuf declaration to use struct __jmp_buf_tag __env[1]
+again, which caused this fixinclude to start matching again. This means
+that GCC now installs a "fixed" pthread.h with a change to a declaration
+that guarded by #if ! __GNUC_PREREQ (11, 0), i.e. it's not even relevant
+for modern versions of GCC. The "fixed" pthread.h causes problems for
+users because of changes to internal implementation details of the
+pthread_cond_t type, which require the "fixed" pthread.h to be updated
+with mkheaders if Glibc is updated.
+
+This change adds a bypass to the fixinclude, so that it no longer
+matches modern Glibc versions, and only applies to glibc versions 2.3.3
+and 2.3.4 as originally intended.
+
+fixincludes/ChangeLog:
+
+    PR bootstrap/118009
+    PR bootstrap/119089
+    * inclhack.def (pthread_incomplete_struct_argument): Add bypass.
+
+Reviewed-by: Jason Merrill <jason@redhat.com>
+
+(cherry picked from commit 59db4ce2df1db33ad361eca06a7aec99b24d0d2f)
+---
+ fixincludes/inclhack.def | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/fixincludes/inclhack.def b/fixincludes/inclhack.def
+index 1ac8e335419e..51163a9deb0c 100644
+--- a/fixincludes/inclhack.def
++++ b/fixincludes/inclhack.def
+@@ -3803,6 +3803,7 @@ fix = {
+     hackname  = pthread_incomplete_struct_argument;
+     files     = pthread.h;
+     select    = "struct __jmp_buf_tag";
++    bypass    = "bits/types/struct___jmp_buf_tag.h";
+     c_fix     = format;
+     c_fix_arg = "%1 *%2%3";
+     c_fix_arg = "^(extern int __sigsetjmp \\(struct __jmp_buf_tag) "
+--
+2.43.0
