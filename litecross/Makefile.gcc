@@ -425,7 +425,7 @@ COMMON_CONFIG := --disable-werror \
 	--enable-plugins \
 	$(COMMON_CONFIG) \
 	--prefix= \
-	--program-prefix=$(TARGET)- \
+	$(if $(NATIVE),,--program-prefix=$(TARGET)-) \
 	--with-sysroot=$(SYSROOT) \
 	--libdir=/lib \
 	--build=$(BUILD) --target=$(TARGET)
