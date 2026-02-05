@@ -341,8 +341,7 @@ MAKE += MAKEINFO=false
 
 LINKER_HASH_STYLE = sysv
 
-GCC_CONFIG_FOR_TARGET += --enable-initfini-array \
-	--disable-shared
+GCC_CONFIG_FOR_TARGET += --enable-initfini-array
 
 PIE_CONFIG = --disable-default-pie
 
