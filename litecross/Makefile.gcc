@@ -255,14 +255,6 @@ ifneq ($(filter loongarch64%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-arch=la64v1.0 --with-abi=lp64d
 endif
 
-ifneq ($(filter m68k%,$(TARGET)),)
-ifneq ($(findstring coldfire,$(TARGET)),)
-GCC_CONFIG_FOR_TARGET += --with-arch=cf --with-cpu=5206
-else
-GCC_CONFIG_FOR_TARGET += --with-arch=m68k --with-cpu=68020
-endif
-endif
-
 ifneq ($(filter sh%,$(TARGET)),)
 GCC_CONFIG_FOR_TARGET += --with-cpu=mj2
 endif
