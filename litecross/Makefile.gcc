@@ -413,16 +413,6 @@ SYSROOT_INCLUDEDIR = $(OBJ_SYSROOT)/include
 SYSROOT_LIBDIR = $(OBJ_SYSROOT)/lib
 endif
 
-# Binutils plugin configuration
-# Disable plugins when HOST is Windows (mingw) due to DLL loading issues
-# Check if HOST contains mingw, or if NATIVE is set and TARGET contains mingw
-BINUTILS_HOST_IS_MINGW := $(or $(findstring mingw,$(HOST)),$(if $(NATIVE),$(findstring mingw,$(TARGET))))
-ifneq ($(BINUTILS_HOST_IS_MINGW),)
-BINUTILS_PLUGIN_CONFIG := --disable-plugins
-else
-BINUTILS_PLUGIN_CONFIG := --enable-plugins
-endif
-
 COMMON_CONFIG := --disable-werror \
 	--disable-multilib \
 	--disable-bootstrap \
@@ -431,7 +421,8 @@ COMMON_CONFIG := --disable-werror \
 	--enable-libgomp \
 	--enable-deterministic-archives \
 	--enable-compressed-debug-sections=none \
-	$(BINUTILS_PLUGIN_CONFIG) \
+	--enable-host-shared \
+	--enable-plugins \
 	$(COMMON_CONFIG) \
 	--prefix= \
 	$(if $(NATIVE),,--program-prefix=$(TARGET)-) \
@@ -1216,6 +1207,10 @@ install-netbsd: | obj_sysroot/.lc_libs
 
 install-binutils: | obj_binutils/.lc_built
 	cd obj_binutils && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(BINUTILS_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) STRIP="$(STRIP_FOR_HOST)" install-strip
+	# https://github.com/msys2/MINGW-packages/blob/c5ca7ce574bf320caf3b988497e9c309e008993b/mingw-w64-binutils/PKGBUILD#L151C56-L152C60
+ifneq ($(or $(findstring mingw,$(HOST)),$(if $(NATIVE),$(findstring mingw,$(TARGET)))),)
+	rm -f $(DESTDIR)$(OUTPUT)/lib/bfd-plugins/libdep.a
+endif
 
 install-gcc: | obj_gcc/.lc_built
 	cd obj_gcc && $(MAKE) $(MAKE_ARGS) $(COMMON_MAKE_ARGS) $(GCC_MAKE_ARGS) MAKE="$(MAKE) $(TOOLCHAIN_MAKE_ARGS)" DESTDIR=$(DESTDIR)$(OUTPUT) STRIP="$(STRIP_FOR_HOST)" install-strip
