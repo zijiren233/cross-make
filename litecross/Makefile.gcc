@@ -413,6 +413,16 @@ SYSROOT_INCLUDEDIR = $(OBJ_SYSROOT)/include
 SYSROOT_LIBDIR = $(OBJ_SYSROOT)/lib
 endif
 
+# Binutils plugin configuration
+# Disable plugins when HOST is Windows (mingw) due to DLL loading issues
+# Check if HOST contains mingw, or if NATIVE is set and TARGET contains mingw
+BINUTILS_HOST_IS_MINGW := $(or $(findstring mingw,$(HOST)),$(if $(NATIVE),$(findstring mingw,$(TARGET))))
+ifneq ($(BINUTILS_HOST_IS_MINGW),)
+BINUTILS_PLUGIN_CONFIG := --disable-plugins
+else
+BINUTILS_PLUGIN_CONFIG := --enable-plugins
+endif
+
 COMMON_CONFIG := --disable-werror \
 	--disable-multilib \
 	--disable-bootstrap \
@@ -421,7 +431,7 @@ COMMON_CONFIG := --disable-werror \
 	--enable-libgomp \
 	--enable-deterministic-archives \
 	--enable-compressed-debug-sections=none \
-	--enable-plugins \
+	$(BINUTILS_PLUGIN_CONFIG) \
 	$(COMMON_CONFIG) \
 	--prefix= \
 	$(if $(NATIVE),,--program-prefix=$(TARGET)-) \
