@@ -63,11 +63,7 @@ LINUX_SITE ?= https://mirrors.ustc.edu.cn/kernel.org/linux/kernel
 LIBXML2_SITE ?= https://mirrors.ustc.edu.cn/gnome/sources/libxml2
 else
 # GNU_SITE ?= https://ftp.gnu.org/gnu
-ifeq ($(GLIBC_VER),2.43)
-GNU_SITE ?= https://ftp.gnu.org/gnu
-else
 GNU_SITE ?= https://ftpmirror.gnu.org/gnu
-endif
 
 GCC_SNAP ?= https://sourceware.org/pub/gcc/snapshots
 
