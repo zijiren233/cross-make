@@ -1315,6 +1315,21 @@ index d042b36618..e0e70945fa 100644
  
  /* Rename file OLD relative to OLDFD to NEW relative to NEWFD, with
     additional flags.  */
+diff --git a/localedata/locales/bg_BG b/localedata/locales/bg_BG
+index 159a6c3334..eda2a8d01b 100644
+--- a/localedata/locales/bg_BG
++++ b/localedata/locales/bg_BG
+@@ -248,8 +248,8 @@ reorder-end
+ END LC_COLLATE
+ 
+ LC_MONETARY
+-int_curr_symbol           "BGN "
+-currency_symbol           "лв."
++int_curr_symbol           "EUR "
++currency_symbol           "€"
+ mon_decimal_point         ","
+ mon_thousands_sep         " "
+ mon_grouping              3
 diff --git a/malloc/malloc.c b/malloc/malloc.c
 index 5ca390cc22..1d5aa304d3 100644
 --- a/malloc/malloc.c

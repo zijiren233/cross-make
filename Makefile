@@ -8,7 +8,7 @@ LLVM_VER = 21.1.7
 GCC_VER = 14.3.0
 MUSL_VER = 1.2.5
 GLIBC_VER = 2.42
-BINUTILS_VER = 2.45.1
+BINUTILS_VER = 2.46.0
 GMP_VER = 6.3.0
 MPC_VER = 1.3.1
 MPFR_VER = 4.2.2
@@ -179,10 +179,10 @@ clean:
 	-exec chmod -R u+rwX {} \; \
 	-exec rm -rf {} \; )
 
-cleanorig:
+cleanorig: | clean
 	( cd $(CURDIR) && find . -maxdepth 1 -name "*.orig" \( -type d -o -type l \) -exec rm -rf {} \; )
 	if [ "$(ORIG_DIR)" != "$(CURDIR)" ] && [ -d "$(ORIG_DIR)" ]; then \
-		( cd $(ORIG_DIR) && find . -maxdepth 1 -name "*.orig" -type d -exec rm -rf {} \; ); \
+		( cd $(ORIG_DIR) && find . -maxdepth 1 -name "*.orig" -type d -exec echo rm -rf {} \; -exec rm -rf {} \; ); \
 	fi
 
 srcclean:
