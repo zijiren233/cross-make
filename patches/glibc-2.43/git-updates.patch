@@ -7,10 +7,10 @@ index 0000000000..d4e33f2df3
 +For the GNU C Library Security Advisories, see the git master branch:
 +https://sourceware.org/git/?p=glibc.git;a=tree;f=advisories;hb=HEAD
 diff --git a/NEWS b/NEWS
-index e271fb2e4d..1f07633e57 100644
+index e271fb2e4d..cec8b61f55 100644
 --- a/NEWS
 +++ b/NEWS
-@@ -5,6 +5,15 @@ See the end for copying conditions.
+@@ -5,6 +5,16 @@ See the end for copying conditions.
  Please send GNU C library bug reports via <https://sourceware.org/bugzilla/>
  using `glibc' in the "product" field.
  
@@ -22,6 +22,7 @@ index e271fb2e4d..1f07633e57 100644
 +   results
 + [33848] build: Build fails at openat2.h, redefinition of 'struct
 +    open_how'
++ [33904] build: error: '__vasprintf_chk' undeclared here
 +
  Version 2.43
  
@@ -741,6 +742,19 @@ index b8f8a829ca..0000000000
 -  scripts/process-advisories.sh news
 -
 -and copy the content into the NEWS file.
+diff --git a/include/bits/stdio2-decl.h b/include/bits/stdio2-decl.h
+index 9758bf4b55..97c2236f24 100644
+--- a/include/bits/stdio2-decl.h
++++ b/include/bits/stdio2-decl.h
+@@ -3,6 +3,8 @@
+ #ifndef _ISOMAC
+ libc_hidden_proto (__fgets_unlocked_chk)
+ libc_hidden_ldbl_proto (vfprintf)
++extern int __vasprintf_chk (char **, int, const char *, __gnuc_va_list) __THROW;
+ libc_hidden_ldbl_proto (__vasprintf_chk)
++extern int __vfprintf_chk (FILE *, int, const char *, __gnuc_va_list);
+ libc_hidden_ldbl_proto (__vfprintf_chk)
+ #endif
 diff --git a/math/libm-test-ceil.inc b/math/libm-test-ceil.inc
 index a471b43932..48be68cf91 100644
 --- a/math/libm-test-ceil.inc
@@ -799,6 +813,478 @@ index 7df741f3ba..5d69cd4b5b 100644
      /* The result can only be represented in long double.  */
      TEST_f_f (trunc, 4503599627370495.5L, 4503599627370495.0L, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
      TEST_f_f (trunc, 4503599627370496.25L, 4503599627370496.0L, NO_INEXACT_EXCEPTION|ERRNO_UNCHANGED),
+diff --git a/nss/Makefile b/nss/Makefile
+index b0d80bd642..1c48bd0876 100644
+--- a/nss/Makefile
++++ b/nss/Makefile
+@@ -326,6 +326,7 @@ tests := \
+   tst-gshadow \
+   tst-nss-getpwent \
+   tst-nss-hash \
++  tst-nss-malloc-failure-getlogin_r \
+   tst-nss-test1 \
+   tst-nss-test2 \
+   tst-nss-test4 \
+diff --git a/nss/nss_database.c b/nss/nss_database.c
+index 6997b5bb04..076d5a63fe 100644
+--- a/nss/nss_database.c
++++ b/nss/nss_database.c
+@@ -56,7 +56,6 @@ global_state_allocate (void *closure)
+     {
+       result->data.nsswitch_conf.size = -1; /* Force reload.  */
+       memset (result->data.services, 0, sizeof (result->data.services));
+-      result->data.initialized = true;
+       result->data.reload_disabled = false;
+       __libc_lock_init (result->lock);
+       result->root_ino = 0;
+@@ -242,9 +241,12 @@ __nss_configure_lookup (const char *dbname, const char *service_line)
+ 
+   /* Force any load/cache/read whatever to happen, so we can override
+      it.  */
+-  __nss_database_get (db, &result);
++  if (!__nss_database_get (db, &result))
++    return -1;
+ 
+   local = nss_database_state_get ();
++  if (local == NULL)
++    return -1;
+ 
+   result = __nss_action_parse (service_line);
+   if (result == NULL)
+@@ -439,8 +441,8 @@ nss_database_check_reload_and_get (struct nss_database_state *local,
+   /* Avoid overwriting the global configuration until we have loaded
+      everything successfully.  Otherwise, if the file change
+      information changes back to what is in the global configuration,
+-     the lookups would use the partially-written  configuration.  */
+-  struct nss_database_data staging = { .initialized = true, };
++     the lookups would use the partially-written configuration.  */
++  struct nss_database_data staging = { };
+ 
+   bool ok = nss_database_reload (&staging, &initial);
+ 
+@@ -466,6 +468,8 @@ bool
+ __nss_database_get (enum nss_database db, nss_action_list *actions)
+ {
+   struct nss_database_state *local = nss_database_state_get ();
++  if (local == NULL)
++    return false;
+   return nss_database_check_reload_and_get (local, actions, db);
+ }
+ libc_hidden_def (__nss_database_get)
+@@ -491,7 +495,7 @@ __nss_database_freeres (void)
+ }
+ 
+ void
+-__nss_database_fork_prepare_parent (struct nss_database_data *data)
++__nss_database_fork_prepare_parent (struct nss_database_for_fork *data)
+ {
+   /* Do not use allocate_once to trigger loading unnecessarily.  */
+   struct nss_database_state *local = atomic_load_acquire (&global_database_state);
+@@ -503,20 +507,21 @@ __nss_database_fork_prepare_parent (struct nss_database_data *data)
+          because it avoids acquiring the lock during the actual
+          fork.  */
+       __libc_lock_lock (local->lock);
+-      *data = local->data;
++      data->data = local->data;
+       __libc_lock_unlock (local->lock);
++      data->initialized = true;
+     }
+ }
+ 
+ void
+-__nss_database_fork_subprocess (struct nss_database_data *data)
++__nss_database_fork_subprocess (struct nss_database_for_fork *data)
+ {
+   struct nss_database_state *local = atomic_load_acquire (&global_database_state);
+   if (data->initialized)
+     {
+       /* Restore the state at the point of the fork.  */
+       assert (local != NULL);
+-      local->data = *data;
++      local->data = data->data;
+       __libc_lock_init (local->lock);
+     }
+   else if (local != NULL)
+diff --git a/nss/nss_database.h b/nss/nss_database.h
+index 1f2ff1639a..a4f3369eb0 100644
+--- a/nss/nss_database.h
++++ b/nss/nss_database.h
+@@ -70,15 +70,21 @@ struct nss_database_data
+   struct file_change_detection nsswitch_conf;
+   nss_action_list services[NSS_DATABASE_COUNT];
+   int reload_disabled;          /* Actually bool; int for atomic access.  */
+-  bool initialized;
++};
++
++/* Use to store a consistent state snapshot across fork.  */
++struct nss_database_for_fork
++{
++  bool initialized;  /* Set to true if the data field below is initialized.  */
++  struct nss_database_data data;
+ };
+ 
+ /* Called by fork in the parent process, before forking.  */
+-void __nss_database_fork_prepare_parent (struct nss_database_data *data)
++void __nss_database_fork_prepare_parent (struct nss_database_for_fork *)
+   attribute_hidden;
+ 
+ /* Called by fork in the new subprocess, after forking.  */
+-void __nss_database_fork_subprocess (struct nss_database_data *data)
++void __nss_database_fork_subprocess (struct nss_database_for_fork *)
+   attribute_hidden;
+ 
+ #endif /* _NSS_DATABASE_H */
+diff --git a/nss/tst-nss-malloc-failure-getlogin_r.c b/nss/tst-nss-malloc-failure-getlogin_r.c
+new file mode 100644
+index 0000000000..0e2985ad57
+--- /dev/null
++++ b/nss/tst-nss-malloc-failure-getlogin_r.c
+@@ -0,0 +1,345 @@
++/* Test NSS/getlogin_r with injected allocation failures (bug 28940).
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <errno.h>
++#include <getopt.h>
++#include <malloc.h>
++#include <netdb.h>
++#include <nss.h>
++#include <stdbool.h>
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/namespace.h>
++#include <support/support.h>
++#include <support/xstdio.h>
++#include <unistd.h>
++
++/* This test calls getpwuid_r via getlogin_r (on Linux).
++
++   This test uses the NSS system configuration to exercise that code
++   path.  It means that it can fail (crash) if malloc failure is not
++   handled by NSS modules for the passwd database.  */
++
++/* Data structure allocated via MAP_SHARED, so that writes from the
++   subprocess are visible.  */
++struct shared_data
++{
++  /* Number of tracked allocations performed so far.  */
++  volatile unsigned int allocation_count;
++
++  /* If this number is reached, one allocation fails.  */
++  volatile unsigned int failing_allocation;
++
++  /* The number of allocations performed during initialization
++     (before the actual getlogin_r call).  */
++  volatile unsigned int init_allocation_count;
++
++  /* Error code of an expected getlogin_r failure.  */
++  volatile int expected_failure;
++
++  /* The subprocess stores the expected name here.  */
++  char name[100];
++};
++
++/* Allocation count in shared mapping.  */
++static struct shared_data *shared;
++
++/* Returns true if a failure should be injected for this allocation.  */
++static bool
++fail_this_allocation (void)
++{
++  if (shared != NULL)
++    {
++      unsigned int count = shared->allocation_count;
++      shared->allocation_count = count + 1;
++      return count == shared->failing_allocation;
++    }
++  else
++    return false;
++}
++
++/* Failure-injecting wrappers for allocation functions used by glibc.  */
++
++void *
++malloc (size_t size)
++{
++  if (fail_this_allocation ())
++    {
++      errno = ENOMEM;
++      return NULL;
++    }
++  extern __typeof (malloc) __libc_malloc;
++  return __libc_malloc (size);
++}
++
++void *
++calloc (size_t a, size_t b)
++{
++  if (fail_this_allocation ())
++    {
++      errno = ENOMEM;
++      return NULL;
++    }
++  extern __typeof (calloc) __libc_calloc;
++  return __libc_calloc (a, b);
++}
++
++void *
++realloc (void *ptr, size_t size)
++{
++  if (fail_this_allocation ())
++    {
++      errno = ENOMEM;
++      return NULL;
++    }
++  extern __typeof (realloc) __libc_realloc;
++  return __libc_realloc (ptr, size);
++}
++
++/* No-op subprocess to verify that support_isolate_in_subprocess does
++   not perform any heap allocations.  */
++static void
++no_op (void *ignored)
++{
++}
++
++/* Perform a getlogin_r call in a subprocess, to obtain the number of
++   allocations used and the expected result of a successful call.  */
++static void
++initialize (void *configure_lookup)
++{
++  shared->init_allocation_count = 0;
++  if (configure_lookup != NULL)
++    {
++      TEST_COMPARE (__nss_configure_lookup ("passwd", configure_lookup), 0);
++      shared->init_allocation_count = shared->allocation_count;
++    }
++
++  shared->name[0] = '\0';
++  int ret = getlogin_r (shared->name, sizeof (shared->name));
++  if (ret != 0)
++    {
++      printf ("info: getlogin_r failed: %s (%d)\n",
++              strerrorname_np (ret), ret);
++      shared->expected_failure = ret;
++    }
++  else
++    {
++      shared->expected_failure = 0;
++      if (shared->name[0] == '\0')
++        FAIL ("error: getlogin_r succeeded without result\n");
++      else
++        printf ("info: getlogin_r: \"%s\"\n", shared->name);
++    }
++}
++
++/* Perform getlogin_r in a subprocess with fault injection.  */
++static void
++test_in_subprocess (void *configure_lookup)
++{
++  if (configure_lookup != NULL
++      && __nss_configure_lookup ("passwd", configure_lookup) < 0)
++    {
++      printf ("info: __nss_configure_lookup failed: %s (%d)\n",
++              strerrorname_np (errno), errno);
++      TEST_COMPARE (errno, ENOMEM);
++      TEST_VERIFY (shared->allocation_count <= shared->init_allocation_count);
++      return;
++    }
++
++  unsigned int inject_at = shared->failing_allocation;
++  char name[sizeof (shared->name)] = "name not set";
++  int ret = getlogin_r (name, sizeof (name));
++  shared->failing_allocation = ~0U;
++
++  if (ret == 0)
++    {
++      TEST_COMPARE (shared->expected_failure, 0);
++      TEST_COMPARE_STRING (name, shared->name);
++    }
++  else
++    {
++      printf ("info: allocation %u failure results in error %s (%d)\n",
++              inject_at, strerrorname_np (ret), ret);
++
++      if (ret != ENOMEM)
++        {
++          if (shared->expected_failure != 0)
++            TEST_COMPARE (ret, shared->expected_failure);
++          else if (configure_lookup == NULL)
++            /* The ENOENT failure can happen due to an issue related
++               to bug 22041: dlopen failure does not result in ENOMEM.  */
++            TEST_COMPARE (ret, ENOENT);
++          else
++            FAIL ("unexpected getlogin_r error");
++        }
++    }
++
++  if (shared->expected_failure == 0)
++    {
++      /* The second call should succeed.  */
++      puts ("info: about to perform second getlogin_r call");
++      ret = getlogin_r (name, sizeof (name));
++      if (configure_lookup == NULL)
++        {
++          /* This check can fail due to bug 22041 if the malloc error
++             injection causes a failure internally in dlopen.  */
++          if (ret != 0)
++            {
++              printf ("warning: second getlogin_r call failed with %s (%d)\n",
++                      strerrorname_np (ret), ret);
++              TEST_COMPARE (ret, ENOENT);
++            }
++        }
++      else
++        /* If __nss_configure_lookup has been called, the error caching
++           bug does not happen because nss_files is built-in, and the
++           second getlogin_r is expected to succeed.  */
++        TEST_COMPARE (ret, 0);
++      if (ret == 0)
++        TEST_COMPARE_STRING (name, shared->name);
++    }
++}
++
++/* Set by the --failing-allocation command line option.  Together with
++   --direct, this can be used to trigger an allocation failure in the
++   original process, which may help with debugging.  */
++static int option_failing_allocation = -1;
++
++/* Set by --override, to be used with --failing-allocation.  Turns on
++   the __nss_configure_lookup call for passwd/files, which is disabled
++   by default.  */
++static int option_override = 0;
++
++static int
++do_test (void)
++{
++  char files[] = "files";
++
++  if (option_failing_allocation >= 0)
++    {
++      /* The test was invoked with --failing-allocation.  Perform just
++         one test, using the original nsswitch.conf.  This is a
++         condensed version of the probing/testing loop below.  */
++      printf ("info: testing with failing allocation %d\n",
++              option_failing_allocation);
++      shared = support_shared_allocate (sizeof (*shared));
++      shared->failing_allocation = ~0U;
++      char *configure_lookup = option_override ? files : NULL;
++      support_isolate_in_subprocess (initialize, configure_lookup);
++      shared->allocation_count = 0;
++      shared->failing_allocation = option_failing_allocation;
++      test_in_subprocess (configure_lookup); /* No subprocess.  */
++      support_shared_free (shared);
++      shared = NULL;
++      return 0;
++    }
++
++  bool any_success = false;
++
++  for (int do_configure_lookup = 0; do_configure_lookup < 2;
++       ++do_configure_lookup)
++    {
++      if (do_configure_lookup)
++        puts ("info: testing with nsswitch.conf override");
++      else
++        puts ("info: testing with original nsswitch.conf");
++
++      char *configure_lookup = do_configure_lookup ? files : NULL;
++
++      shared = support_shared_allocate (sizeof (*shared));
++
++      /* Disable fault injection.  */
++      shared->failing_allocation = ~0U;
++
++      support_isolate_in_subprocess (no_op, NULL);
++      TEST_COMPARE (shared->allocation_count, 0);
++
++      support_isolate_in_subprocess (initialize, configure_lookup);
++
++      if (shared->name[0] != '\0')
++        any_success = true;
++
++      /* The number of allocations in the successful case.  Once the
++         number of expected allocations is exceeded, injecting further
++         failures does not make a difference (assuming that the number
++         of malloc calls is deterministic).  */
++      unsigned int maximum_allocation_count = shared->allocation_count;
++      printf ("info: initial getlogin_r performed %u allocations\n",
++              maximum_allocation_count);
++
++      for (unsigned int inject_at = 0; inject_at <= maximum_allocation_count;
++           ++inject_at)
++        {
++          printf ("info: running fault injection at allocation %u\n",
++                  inject_at);
++          shared->allocation_count = 0;
++          shared->failing_allocation = inject_at;
++          support_isolate_in_subprocess (test_in_subprocess, configure_lookup);
++        }
++
++      support_shared_free (shared);
++      shared = NULL;
++    }
++
++  {
++    FILE *fp = fopen (_PATH_NSSWITCH_CONF, "r");
++    if (fp == NULL)
++      printf ("info: no %s file\n", _PATH_NSSWITCH_CONF);
++    else
++      {
++        printf ("info: %s contents follows\n", _PATH_NSSWITCH_CONF);
++        int last_ch = '\n';
++        while (true)
++          {
++            int ch = fgetc (fp);
++            if (ch == EOF)
++              break;
++            putchar (ch);
++            last_ch = ch;
++          }
++        if (last_ch != '\n')
++          putchar ('\n');
++        printf ("(end of %s contents)\n", _PATH_NSSWITCH_CONF);
++        xfclose (fp);
++      }
++  }
++
++  support_record_failure_barrier ();
++
++  if (!any_success)
++    FAIL_UNSUPPORTED ("no successful getlogin_r calls");
++
++  return 0;
++}
++
++static void
++cmdline_process (int c)
++{
++  if (c == 'F')
++    option_failing_allocation = atoi (optarg);
++}
++
++#define CMDLINE_OPTIONS                                                 \
++  { "failing-allocation", required_argument, NULL, 'F' },               \
++  { "override", no_argument, &option_override, 1 },
++
++#define CMDLINE_PROCESS cmdline_process
++
++#include <support/test-driver.c>
 diff --git a/po/ar.po b/po/ar.po
 new file mode 100644
 index 0000000000..ba596d51b9
@@ -8123,6 +8609,19 @@ index 4bec5f448e..4d2a856496 100644
  #: timezone/zic.c:3186
  #, c-format
  msgid "%s: pre-%d clients may mishandle distant timestamps"
+diff --git a/posix/fork.c b/posix/fork.c
+index 8e541ff985..933ac6fee7 100644
+--- a/posix/fork.c
++++ b/posix/fork.c
+@@ -50,7 +50,7 @@ __libc_fork (void)
+ 
+   lastrun = __run_prefork_handlers (multiple_threads);
+ 
+-  struct nss_database_data nss_database_data;
++  struct nss_database_for_fork nss_database_data;
+ 
+   /* If we are not running multiple threads, we do not have to
+      preserve lock state.  If fork runs from a signal handler, only
 diff --git a/sysdeps/ieee754/ldbl-128ibm/s_ceill.c b/sysdeps/ieee754/ldbl-128ibm/s_ceill.c
 index 8038cf9fda..88bc364db5 100644
 --- a/sysdeps/ieee754/ldbl-128ibm/s_ceill.c
@@ -8179,6 +8678,65 @@ index 7f0b77cd3f..21ecbd0c85 100644
  	}
      }
    else
+diff --git a/sysdeps/unix/sysv/linux/getlogin_r.c b/sysdeps/unix/sysv/linux/getlogin_r.c
+index 3b85e91be6..200c96860f 100644
+--- a/sysdeps/unix/sysv/linux/getlogin_r.c
++++ b/sysdeps/unix/sysv/linux/getlogin_r.c
+@@ -37,7 +37,12 @@ __getlogin_r_loginuid (char *name, size_t namesize)
+ {
+   int fd = __open_nocancel ("/proc/self/loginuid", O_RDONLY);
+   if (fd == -1)
+-    return -1;
++    {
++      if (errno == ENOENT)
++	/* Trigger utmp fallback.  */
++	return -1;
++      return errno;
++    }
+ 
+   /* We are reading a 32-bit number.  12 bytes are enough for the text
+      representation.  If not, something is wrong.  */
+@@ -45,6 +50,8 @@ __getlogin_r_loginuid (char *name, size_t namesize)
+   ssize_t n = TEMP_FAILURE_RETRY (__read_nocancel (fd, uidbuf,
+ 						   sizeof (uidbuf)));
+   __close_nocancel_nostatus (fd);
++  if (n < 0)
++    return errno;
+ 
+   uid_t uid;
+   char *endp;
+@@ -53,12 +60,13 @@ __getlogin_r_loginuid (char *name, size_t namesize)
+       || (uidbuf[n] = '\0',
+ 	  uid = strtoul (uidbuf, &endp, 10),
+ 	  endp == uidbuf || *endp != '\0'))
+-    return -1;
++    return EINVAL;
+ 
+   /* If there is no login uid, linux sets /proc/self/loginid to the sentinel
+      value of, (uid_t) -1, so check if that value is set and return early to
+      avoid making unneeded nss lookups. */
+   if (uid == (uid_t) -1)
++    /* Trigger utmp fallback.  */
+     return -1;
+ 
+   struct passwd pwd;
+@@ -78,9 +86,14 @@ __getlogin_r_loginuid (char *name, size_t namesize)
+ 	}
+     }
+ 
+-  if (res != 0 || tpwd == NULL)
++  if (res != 0)
++    {
++      result = res;
++      goto out;
++    }
++  if (tpwd == NULL)
+     {
+-      result = -1;
++      result = ENOENT;
+       goto out;
+     }
+ 
 diff --git a/sysdeps/unix/sysv/linux/openat2.c b/sysdeps/unix/sysv/linux/openat2.c
 index 7587dd577a..ac7b70584e 100644
 --- a/sysdeps/unix/sysv/linux/openat2.c

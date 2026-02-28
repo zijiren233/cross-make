@@ -124,10 +124,10 @@ jobs:
               echo "use-qemu=true" >> $GITHUB_OUTPUT
               ;;
             darwin-aarch64)
-              echo "runs-on=macos-15" >> $GITHUB_OUTPUT
+              echo "runs-on=macos-26" >> $GITHUB_OUTPUT
               ;;
             darwin-x86_64)
-              echo "runs-on=macos-15-intel" >> $GITHUB_OUTPUT
+              echo "runs-on=macos-26-intel" >> $GITHUB_OUTPUT
               ;;
           esac
 
