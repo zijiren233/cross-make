@@ -14,7 +14,7 @@ defaults:
   LINUX_VER: "6.12.59"
   MUSL_VER: "1.2.5"
   GLIBC_VER: "2.42"
-  MINGW_VER: "v13.0.0"
+  MINGW_VER: "v14.0.0"
   FREEBSD_VER: "14.3"
   NETBSD_VER: "10.1"
 
@@ -2221,13 +2221,13 @@ targets:
   # Windows mingw targets
   # ============================================================================
   - TARGET: i586-w64-mingw32
-    MINGW_VER: "v13.0.0"
+    MINGW_VER: "v14.0.0"
 
   - TARGET: i686-w64-mingw32
-    MINGW_VER: "v13.0.0"
+    MINGW_VER: "v14.0.0"
 
   - TARGET: x86_64-w64-mingw32
-    MINGW_VER: "v13.0.0"
+    MINGW_VER: "v14.0.0"
 
   # ============================================================================
   # FreeBSD 13 targets (FREEBSD_VER: 13.5)
