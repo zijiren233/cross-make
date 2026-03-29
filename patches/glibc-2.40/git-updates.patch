@@ -4737,6 +4737,19 @@ index 0000000000..66a0db4f51
 +}
 +
 +#include <support/test-driver.c>
+diff --git a/iconvdata/ansi_x3.110.c b/iconvdata/ansi_x3.110.c
+index 869cdf6540..44bd12a863 100644
+--- a/iconvdata/ansi_x3.110.c
++++ b/iconvdata/ansi_x3.110.c
+@@ -407,7 +407,7 @@ static const char from_ucs4[][2] =
+ 	   is also available.  */					      \
+ 	uint32_t ch2;							      \
+ 									      \
+-	if (inptr + 1 >= inend)						      \
++	if (inend - inptr <= 1)						      \
+ 	  {								      \
+ 	    /* The second character is not available.  */		      \
+ 	    result = __GCONV_INCOMPLETE_INPUT;				      \
 diff --git a/include/ctype.h b/include/ctype.h
 index 493a6f80ce..a15e5b6678 100644
 --- a/include/ctype.h
@@ -7206,6 +7219,22 @@ index 0000000000..45be7f0369
 +}
 +
 +#include <support/test-driver.c>
+diff --git a/misc/tst-preadvwritev2-common.c b/misc/tst-preadvwritev2-common.c
+index 8e04ff7282..23ddf2e8b9 100644
+--- a/misc/tst-preadvwritev2-common.c
++++ b/misc/tst-preadvwritev2-common.c
+@@ -106,9 +106,8 @@ do_test_with_invalid_iov (void)
+ static void
+ do_test_with_invalid_flags (void)
+ {
+-  /* Set the next bit from the mask of all supported flags.  */
+-  int invalid_flag = RWF_SUPPORTED != 0 ? __builtin_clz (RWF_SUPPORTED) : 2;
+-  invalid_flag = 0x1 << ((sizeof (int) * CHAR_BIT) - invalid_flag);
++  /* Set all the bits that are not used by the supported flags.  */
++  int invalid_flag = ~RWF_SUPPORTED;
+ 
+   char buf[32];
+   const struct iovec vec = { .iov_base = buf, .iov_len = sizeof (buf) };
 diff --git a/nptl/allocatestack.c b/nptl/allocatestack.c
 index f35a8369bd..2cb562f8ea 100644
 --- a/nptl/allocatestack.c
@@ -8019,7 +8048,7 @@ index 3ccd3905fa..542b362af3 100644
  		{
  		  if (!add_scopelist (&scopelist, &nscopelist,
 diff --git a/posix/Makefile b/posix/Makefile
-index 2c598cd20a..0cd5572297 100644
+index 2c598cd20a..1a0e150d99 100644
 --- a/posix/Makefile
 +++ b/posix/Makefile
 @@ -303,6 +303,7 @@ tests := \
@@ -8051,7 +8080,7 @@ index 2c598cd20a..0cd5572297 100644
    $(objpfx)tst-pcre-mem.out \
    $(objpfx)tst-rxspencer-no-utf8-mem.out \
    $(objpfx)tst-vfork3-mem.out \
-+  $(objpfx)tst-wordexp-reuse.out \
++  $(objpfx)tst-wordexp-reuse-mem.out \
    # tests-special
  endif
  endif

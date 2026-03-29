@@ -14,7 +14,7 @@ BRANCH="c7"
 OUTPUT_FILE="$PATCHES_DIR/centos7-all.patch"
 
 cleanup() {
-    [ -d "$TMP_DIR" ] && rm -rf "$TMP_DIR"
+  [ -d "$TMP_DIR" ] && rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
 
@@ -43,17 +43,17 @@ cp "$TMP_DIR/centos/SPECS/glibc.spec" "$TMP_DIR/" 2>/dev/null || true
 echo "[4/5] Extracting patch order from spec..."
 
 # Create patch number -> filename mapping file
-grep -E "^Patch[0-9]+:" "$TMP_DIR/glibc.spec" | \
-    sed -E 's/^Patch0*([0-9]+):[[:space:]]*/\1 /' > "$TMP_DIR/patch-map.txt"
+grep -E "^Patch[0-9]+:" "$TMP_DIR/glibc.spec" |
+  sed -E 's/^Patch0*([0-9]+):[[:space:]]*/\1 /' >"$TMP_DIR/patch-map.txt"
 
 # Extract %patch order and convert to filenames using awk
-grep -E "^%patch[0-9]+" "$TMP_DIR/glibc.spec" | \
-    sed -E 's/^%patch0*([0-9]+).*/\1/' | \
-    while read -r num; do
-        awk -v n="$num" '$1 == n {print $2}' "$TMP_DIR/patch-map.txt"
-    done > "$TMP_DIR/patch-list.txt"
+grep -E "^%patch[0-9]+" "$TMP_DIR/glibc.spec" |
+  sed -E 's/^%patch0*([0-9]+).*/\1/' |
+  while read -r num; do
+    awk -v n="$num" '$1 == n {print $2}' "$TMP_DIR/patch-map.txt"
+  done >"$TMP_DIR/patch-list.txt"
 
-PATCH_COUNT=$(wc -l < "$TMP_DIR/patch-list.txt" | tr -d ' ')
+PATCH_COUNT=$(wc -l <"$TMP_DIR/patch-list.txt" | tr -d ' ')
 echo "Found $PATCH_COUNT patches (in application order)"
 
 # Extract CentOS source (main + releng which includes rtkaio)
@@ -74,23 +74,23 @@ FAILED=0
 FAILED_LIST=""
 
 while read -r patch_file; do
-    patch_path="$TMP_DIR/$patch_file"
-    if [ -f "$patch_path" ]; then
-        # Try git apply first (handles renames), then fall back to patch
-        if git apply --whitespace=nowarn "$patch_path" 2>/dev/null; then
-            APPLIED=$((APPLIED + 1))
-        elif LC_ALL=C patch -p1 --no-backup-if-mismatch -s -f < "$patch_path" 2>/dev/null; then
-            APPLIED=$((APPLIED + 1))
-        else
-            FAILED=$((FAILED + 1))
-            FAILED_LIST="$FAILED_LIST $patch_file"
-        fi
+  patch_path="$TMP_DIR/$patch_file"
+  if [ -f "$patch_path" ]; then
+    # Try git apply first (handles renames), then fall back to patch
+    if git apply --whitespace=nowarn "$patch_path" 2>/dev/null; then
+      APPLIED=$((APPLIED + 1))
+    elif LC_ALL=C patch -p1 --no-backup-if-mismatch -s -f <"$patch_path" 2>/dev/null; then
+      APPLIED=$((APPLIED + 1))
+    else
+      FAILED=$((FAILED + 1))
+      FAILED_LIST="$FAILED_LIST $patch_file"
     fi
-done < "$TMP_DIR/patch-list.txt"
+  fi
+done <"$TMP_DIR/patch-list.txt"
 
 echo "Applied: $APPLIED, Failed: $FAILED"
 if [ -n "$FAILED_LIST" ]; then
-    echo "Failed patches:$FAILED_LIST"
+  echo "Failed patches:$FAILED_LIST"
 fi
 
 # Generate unified diff
@@ -104,7 +104,7 @@ rm -rf glibc-2.17-c758a686.orig/{releng,rtkaio,c_stubs}
 rm -rf glibc-2.17-c758a686/{releng,rtkaio,c_stubs}
 
 # Use empty prefix so directory names a/b become the actual prefixes
-git diff --no-index --src-prefix= --dst-prefix= glibc-2.17-c758a686.orig glibc-2.17-c758a686 > "$OUTPUT_FILE"
+git diff --no-index --src-prefix= --dst-prefix= glibc-2.17-c758a686.orig glibc-2.17-c758a686 >"$OUTPUT_FILE"
 
 SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 

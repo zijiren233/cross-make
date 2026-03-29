@@ -5,7 +5,7 @@ COMPILER = gcc
 CONFIG_SUB_REV = a2287c3041a3
 CONFIG_GUESS_REV = a2287c3041a3
 LLVM_VER = 21.1.7
-GCC_VER = 14.3.0
+GCC_VER = 15.2.0
 MUSL_VER = 1.2.5
 GLIBC_VER = 2.42
 BINUTILS_VER = 2.45.1
@@ -20,7 +20,7 @@ NETBSD_VER = 10.1
 ZLIB_VER = 1.3.1
 ZSTD_VER = 1.5.7
 LIBXML2_VER = 2.15.1
-CHINA = 
+CHINA =
 
 # curl --progress-bar -Lo <file> <url>
 DL_CMD = curl --retry 30 --retry-delay 3 --retry-max-time 600 --connect-timeout 10 --max-time 600 --progress-bar -Lo
@@ -97,14 +97,14 @@ override LIBXML2_VER =
 
 else
 
-override TARGET = 
-override GCC_VER = 
-override GMP_VER = 
+override TARGET =
+override GCC_VER =
+override GMP_VER =
 override MPC_VER =
 override MPFR_VER =
 override ISL_VER =
 override BINUTILS_VER =
-override MINGW_VER = 
+override MINGW_VER =
 
 endif
 

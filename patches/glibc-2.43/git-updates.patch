@@ -742,6 +742,167 @@ index b8f8a829ca..0000000000
 -  scripts/process-advisories.sh news
 -
 -and copy the content into the NEWS file.
+diff --git a/elf/Makefile b/elf/Makefile
+index 01cc51636e..11029be0ae 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -97,12 +97,6 @@ ifeq (yesyes,$(build-shared)$(run-built-tests))
+ tests-special += $(objpfx)list-tunables.out
+ endif
+ 
+-# Make sure that the compiler does not insert any library calls in tunables
+-# code paths.
+-ifeq (yes,$(have-loop-to-function))
+-CFLAGS-dl-tunables.c += -fno-tree-loop-distribute-patterns
+-endif
+-
+ all-dl-routines = $(dl-routines) $(sysdep-dl-routines)
+ # But they are absent from the shared libc, because that code is in ld.so.
+ elide-routines.os = \
+diff --git a/elf/dl-reloc-static-pie.c b/elf/dl-reloc-static-pie.c
+index bdff2b5ee2..63ce609024 100644
+--- a/elf/dl-reloc-static-pie.c
++++ b/elf/dl-reloc-static-pie.c
+@@ -25,6 +25,7 @@
+ 
+ #include <dl-machine.h>
+ #include <dl-debug.h>
++#include <dl-symbol-redir-ifunc.h>
+ 
+ #define RESOLVE_MAP(map, scope, sym, version, flags) map
+ #include "dynamic-link.h"
+diff --git a/elf/dl-tunables.c b/elf/dl-tunables.c
+index 37ade374c6..bdb1de4ceb 100644
+--- a/elf/dl-tunables.c
++++ b/elf/dl-tunables.c
+@@ -37,16 +37,6 @@
+ #define TUNABLES_INTERNAL 1
+ #include "dl-tunables.h"
+ 
+-/* The function might be called before the process is self-relocated.  */
+-static size_t
+-__attribute_optimization_barrier__
+-_dl_strlen (const char *s)
+-{
+-  const char *p = s;
+-  for (; *s != '\0'; s++);
+-  return s - p;
+-}
+-
+ static char **
+ get_next_env (char **envp, char **name, char **val, char ***prev_envp)
+ {
+@@ -335,10 +325,8 @@ __tunables_init (char **envp)
+ 	  if (tunable_is_name (name, envname))
+ 	    {
+ 	      /* The environment variable is always null-terminated.  */
+-	      size_t envvallen = _dl_strlen (envval);
+-
+ 	      tunables_env_alias[i] =
+-		(struct tunable_toset_t) { cur, envval, envvallen };
++		(struct tunable_toset_t) { cur, envval, strlen (envval) };
+ 	      break;
+ 	    }
+ 	}
+diff --git a/elf/tst-link-map-contiguous-ldso.c b/elf/tst-link-map-contiguous-ldso.c
+index 9f97b8b95a..4d04d37581 100644
+--- a/elf/tst-link-map-contiguous-ldso.c
++++ b/elf/tst-link-map-contiguous-ldso.c
+@@ -18,15 +18,73 @@
+ 
+ #include <dlfcn.h>
+ #include <gnu/lib-names.h>
++#include <inttypes.h>
+ #include <link.h>
+ #include <stdbool.h>
+ #include <stdio.h>
+ #include <support/check.h>
++#include <support/support.h>
+ #include <support/xdlfcn.h>
+ #include <support/xunistd.h>
++#include <support/xstdio.h>
+ #include <sys/mman.h>
+ #include <unistd.h>
+ 
++/* Slow path in case we cannot find a gap with mmap (when the runtime has
++   mapped all the pages in the gap for some reason).  */
++static bool
++find_gap_with_proc_self_map (const struct link_map *l)
++{
++  int pagesize = getpagesize ();
++
++  support_need_proc ("Reads /proc/self/maps to find gap in ld.so mapping");
++
++  /* Parse /proc/self/maps and find all the mappings in the ld.so range
++     but not from ld.so.  */
++  FILE *f = xfopen ("/proc/self/maps", "r");
++  char *line = NULL, *path_ldso = NULL;
++  size_t len;
++  bool found = false;
++  while (xgetline (&line, &len, f))
++    {
++      uintptr_t from, to;
++      char *path = NULL;
++      int r = sscanf (line, "%" SCNxPTR "-%" SCNxPTR "%*s%*s%*s%*s%ms",
++                      &from, &to, &path);
++
++      TEST_VERIFY (r == 2 || r == 3);
++      TEST_COMPARE (from % pagesize, 0);
++      TEST_COMPARE (to % pagesize, 0);
++
++      if (path_ldso == NULL && l->l_map_start == from)
++        {
++          TEST_COMPARE (r, 3);
++          path_ldso = path;
++          continue;
++        }
++
++      if (from > l->l_map_start && to < l->l_map_end
++          && (r == 2 || (path_ldso != NULL && strcmp (path, path_ldso))))
++        {
++          if (r == 2)
++            printf ("info: anonymous mapping found at 0x%" PRIxPTR " - 0x%"
++                    PRIxPTR "\n", from, to);
++          else
++            printf ("info: object \"%s\" found at 0x%" PRIxPTR " - 0x%"
++                    PRIxPTR "\n", path, from, to);
++
++          found = true;
++        }
++
++      free (path);
++    }
++
++  free (path_ldso);
++  free (line);
++  xfclose (f);
++  return found;
++}
++
+ static int
+ do_test (void)
+ {
+@@ -64,16 +122,18 @@ do_test (void)
+               if ((void *) dlfo.dlfo_link_map != (void *) l)
+                 {
+                   printf ("info: object \"%s\" found at %p\n",
+-                          dlfo.dlfo_link_map->l_name, ptr);
++                          dlfo.dlfo_link_map->l_name, expected);
+                   gap_found = true;
+                 }
+             }
+           else
+             TEST_COMPARE (dlfo_ret, -1);
++
+           xmunmap (ptr, 1);
+           addr += pagesize;
+         }
+-      if (!gap_found)
++
++      if (!gap_found && !find_gap_with_proc_self_map (l))
+         FAIL ("no ld.so gap found");
+     }
+   else
 diff --git a/include/bits/stdio2-decl.h b/include/bits/stdio2-decl.h
 index 9758bf4b55..97c2236f24 100644
 --- a/include/bits/stdio2-decl.h
@@ -755,6 +916,147 @@ index 9758bf4b55..97c2236f24 100644
 +extern int __vfprintf_chk (FILE *, int, const char *, __gnuc_va_list);
  libc_hidden_ldbl_proto (__vfprintf_chk)
  #endif
+diff --git a/malloc/arena.c b/malloc/arena.c
+index 5bfcd7f972..d83b4db068 100644
+--- a/malloc/arena.c
++++ b/malloc/arena.c
+@@ -276,6 +276,15 @@ __ptmalloc_init (void)
+     __always_fail_morecore = true;
+ #endif
+ 
++  /* Enable THP if DEFAULT_THP_PAGESIZE is non-zero.  Avoid quering the THP
++     page size or mode since accessing /sys/kernel/mm is relatively slow and
++     might not be accessible in containers.  */
++  if (DEFAULT_THP_PAGESIZE > 0)
++    {
++      mp_.thp_mode = malloc_thp_mode_madvise;
++      mp_.thp_pagesize = DEFAULT_THP_PAGESIZE;
++    }
++
+   thread_arena = &main_arena;
+ 
+   malloc_init_state (&main_arena);
+diff --git a/malloc/malloc.c b/malloc/malloc.c
+index a49e211925..771e7d40b7 100644
+--- a/malloc/malloc.c
++++ b/malloc/malloc.c
+@@ -1902,26 +1902,11 @@ free_perturb (char *p, size_t n)
+ 
+ /* ----------- Routines dealing with transparent huge pages ----------- */
+ 
+-static __always_inline void
+-thp_init (void)
+-{
+-  /* Initialize only once if DEFAULT_THP_PAGESIZE is defined.  */
+-  if (DEFAULT_THP_PAGESIZE == 0 || mp_.thp_mode != malloc_thp_mode_not_supported)
+-    return;
+-
+-  /* Set thp_pagesize even if thp_mode is never.  This reduces frequency
+-     of MORECORE () invocation.  */
+-  mp_.thp_mode = __malloc_thp_mode ();
+-  mp_.thp_pagesize = DEFAULT_THP_PAGESIZE;
+-}
+-
+ static inline void
+ madvise_thp (void *p, INTERNAL_SIZE_T size)
+ {
+ #ifdef MADV_HUGEPAGE
+ 
+-  thp_init ();
+-
+   /* Only use __madvise if the system is using 'madvise' mode and the size
+      is at least a huge page, otherwise the call is wasteful. */
+   if (mp_.thp_mode != malloc_thp_mode_madvise || size < mp_.thp_pagesize)
+@@ -2472,9 +2457,6 @@ sysmalloc (INTERNAL_SIZE_T nb, mstate av)
+          previous calls. Otherwise, we correct to page-align below.
+        */
+ 
+-      /* Ensure thp_pagesize is initialized.  */
+-      thp_init ();
+-
+       if (__glibc_unlikely (mp_.thp_pagesize != 0))
+ 	{
+ 	  uintptr_t lastbrk = (uintptr_t) MORECORE (0);
+diff --git a/manual/tunables.texi b/manual/tunables.texi
+index 7956df919b..29f2ba000f 100644
+--- a/manual/tunables.texi
++++ b/manual/tunables.texi
+@@ -620,42 +620,54 @@ This tunable controls Guarded Control Stack (GCS) for the process.
+ 
+ Accepted values are:
+ 
+-0 = disabled: do not enable GCS.
+-
+-1 = enforced: check markings and fail if any binary is not marked.
+-
+-2 = optional: check markings but keep GCS off if any binary is unmarked.
+-
+-3 = override: enable GCS, markings are ignored.
++@itemize @bullet
++@item @code{0} = disabled: do not enable GCS.
++@item @code{1} = enforced: check markings and abort if any binary is not
++marked, otherwise enable GCS and lock all GCS features.
++@item @code{2} = optional: check markings but keep GCS off if any binary
++is unmarked, otherwise enable GCS but do not lock any GCS features.
++@item @code{3} = override: enable GCS and lock all GCS features, markings
++are ignored.
++@end itemize
+ 
+ If unmarked binary is loaded via @code{dlopen} when GCS is enabled and
+-markings are not ignored (@code{aarch64_gcs == 1} or @code{2}), then
+-the process will be aborted.
++markings are not ignored (i.e. @code{aarch64_gcs == 1} or @code{2}), then
++@code{dlopen} will return an error.
+ 
+ Default is @code{0}, so GCS is disabled by default.
+ 
+-This tunable is specific to AArch64. On systems that do not support
++This tunable is specific to AArch64.  On systems that do not support
+ Guarded Control Stack this tunable has no effect.
+ 
++GCS features (or operations on shadow stack) such as @code{STATUS} (i.e.
++enabling and disabling GCS), @code{WRITE}, and @code{PUSH}, will be locked
++for the @code{enforced} and @code{override} tunable values.
++
+ Before enabling GCS for the process the value of this tunable is checked
+ and depending on it the following outcomes are possible.
+ 
+-@code{aarch64_gcs == 0}: GCS will not be enabled and GCS markings will not be
++@itemize @bullet
++@item
++@code{aarch64_gcs == 0}: GCS will remain disabled and GCS markings will not be
+ checked for any binaries.
+-
++@item
+ @code{aarch64_gcs == 1}: GCS markings will be checked for all binaries loaded
+-at startup and, only if all binaries are GCS-marked, GCS will be enabled. If
+-any of the binaries are not GCS-marked, the process will abort. Subsequent call
+-to @code{dlopen} for an unmarked binary will also result in abort.
+-
++at startup and, only if all binaries are GCS-marked, GCS will be enabled and
++all GCS features will be locked.  If any of the binaries are not GCS-marked,
++the process will abort.  Subsequent call to @code{dlopen} for an unmarked binary
++will result in @code{dlopen} returning an error.
++@item
+ @code{aarch64_gcs == 2}: GCS markings will be checked for all binaries loaded
+ at startup and, if any of such binaries are not GCS-marked, GCS will not be
+-enabled and there will be no more checks for GCS marking. If all binaries
+-loaded at startup are GCS-marked, then GCS will be enabled, in which case a
+-call to @code{dlopen} for an unmarked binary will also result in abort.
++enabled and there will be no more checks for GCS marking.  If all binaries
++loaded at startup are GCS-marked, then GCS will be enabled but GCS features
++will not be locked.  In this case a call to @code{dlopen} for an unmarked binary
++will result in @code{dlopen} returning an error.
++@item
++@code{aarch64_gcs == 3}: GCS will be enabled and all GCS features will be
++locked.  GCS markings will not be checked for any binaries.
++@end itemize
+ 
+-@code{aarch64_gcs == 3}: GCS will be enabled and GCS markings will not be
+-checked for any binaries.
+ @end deftp
+ 
+ @node Memory Related Tunables
 diff --git a/math/libm-test-ceil.inc b/math/libm-test-ceil.inc
 index a471b43932..48be68cf91 100644
 --- a/math/libm-test-ceil.inc
@@ -8609,6 +8911,19 @@ index 4bec5f448e..4d2a856496 100644
  #: timezone/zic.c:3186
  #, c-format
  msgid "%s: pre-%d clients may mishandle distant timestamps"
+diff --git a/posix/Makefile b/posix/Makefile
+index 71a1906168..f377948462 100644
+--- a/posix/Makefile
++++ b/posix/Makefile
+@@ -499,7 +499,7 @@ tests-special += \
+   $(objpfx)tst-pcre-mem.out \
+   $(objpfx)tst-rxspencer-no-utf8-mem.out \
+   $(objpfx)tst-vfork3-mem.out \
+-  $(objpfx)tst-wordexp-reuse.out \
++  $(objpfx)tst-wordexp-reuse-mem.out \
+   # tests-special
+ endif
+ endif
 diff --git a/posix/fork.c b/posix/fork.c
 index 8e541ff985..933ac6fee7 100644
 --- a/posix/fork.c
@@ -8622,6 +8937,612 @@ index 8e541ff985..933ac6fee7 100644
  
    /* If we are not running multiple threads, we do not have to
       preserve lock state.  If fork runs from a signal handler, only
+diff --git a/resolv/Makefile b/resolv/Makefile
+index b74c8f325e..79a1b9647f 100644
+--- a/resolv/Makefile
++++ b/resolv/Makefile
+@@ -107,8 +107,10 @@ tests += \
+   tst-resolv-basic \
+   tst-resolv-binary \
+   tst-resolv-byaddr \
++  tst-resolv-dns-section \
+   tst-resolv-edns \
+   tst-resolv-invalid-cname \
++  tst-resolv-invalid-ptr \
+   tst-resolv-network \
+   tst-resolv-noaaaa \
+   tst-resolv-noaaaa-vc \
+@@ -118,6 +120,7 @@ tests += \
+   tst-resolv-semi-failure \
+   tst-resolv-short-response \
+   tst-resolv-trailing \
++  # tests
+ 
+ # This test calls __res_context_send directly, which is not exported
+ # from libresolv.
+@@ -301,6 +304,8 @@ $(objpfx)tst-resolv-aliases: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-basic: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-binary: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-byaddr: $(objpfx)libresolv.so $(shared-thread-library)
++$(objpfx)tst-resolv-dns-section: $(objpfx)libresolv.so \
++  $(shared-thread-library)
+ $(objpfx)tst-resolv-edns: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-network: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-res_init: $(objpfx)libresolv.so
+@@ -310,6 +315,8 @@ $(objpfx)tst-resolv-res_init-thread: $(objpfx)libresolv.so \
+   $(shared-thread-library)
+ $(objpfx)tst-resolv-invalid-cname: $(objpfx)libresolv.so \
+   $(shared-thread-library)
++$(objpfx)tst-resolv-invalid-ptr: $(objpfx)libresolv.so \
++  $(shared-thread-library)
+ $(objpfx)tst-resolv-noaaaa: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-noaaaa-vc: $(objpfx)libresolv.so $(shared-thread-library)
+ $(objpfx)tst-resolv-nondecimal: $(objpfx)libresolv.so $(shared-thread-library)
+diff --git a/resolv/nss_dns/dns-host.c b/resolv/nss_dns/dns-host.c
+index 6a60c87532..728dae615d 100644
+--- a/resolv/nss_dns/dns-host.c
++++ b/resolv/nss_dns/dns-host.c
+@@ -820,7 +820,7 @@ getanswer_ptr (unsigned char *packet, size_t packetlen,
+   /* expected_name may be updated to point into this buffer.  */
+   unsigned char name_buffer[NS_MAXCDNAME];
+ 
+-  while (ancount > 0)
++  for (; ancount > 0; --ancount)
+     {
+       struct ns_rr_wire rr;
+       if (!__ns_rr_cursor_next (&c, &rr))
+@@ -866,7 +866,7 @@ getanswer_ptr (unsigned char *packet, size_t packetlen,
+ 	  char hname[MAXHOSTNAMELEN + 1];
+ 	  if (__ns_name_unpack (c.begin, c.end, rr.rdata,
+ 				name_buffer, sizeof (name_buffer)) < 0
+-	      || !__res_binary_hnok (expected_name)
++	      || !__res_binary_hnok (name_buffer)
+ 	      || __ns_name_ntop (name_buffer, hname, sizeof (hname)) < 0)
+ 	    {
+ 	      *h_errnop = NO_RECOVERY;
+diff --git a/resolv/tst-resolv-dns-section.c b/resolv/tst-resolv-dns-section.c
+new file mode 100644
+index 0000000000..1171baef51
+--- /dev/null
++++ b/resolv/tst-resolv-dns-section.c
+@@ -0,0 +1,162 @@
++/* Test handling of invalid section transitions (bug 34014).
++   Copyright (C) 2022-2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <errno.h>
++#include <netdb.h>
++#include <resolv.h>
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/format_nss.h>
++#include <support/resolv_test.h>
++#include <support/support.h>
++
++/* Name of test, and the second section type.  */
++struct item {
++  const char *test;
++  int ns_section;
++};
++
++static const struct item test_items[] =
++  {
++    { "Test crossing from ns_s_an to ns_s_ar.", ns_s_ar },
++    { "Test crossing from ns_s_an to ns_s_an.", ns_s_ns },
++
++    { NULL, 0 },
++  };
++
++/* The response is designed to contain the following:
++   - An Answer section with one T_PTR record that is skipped.
++   - A second section with a semantically invalid T_PTR record.
++   The original defect is that the response parsing would cross
++   section boundaries and handle the additional section T_PTR
++   as if it were an answer.  A conforming implementation would
++   stop as soon as it reaches the end of the section.  */
++static void
++response (const struct resolv_response_context *ctx,
++          struct resolv_response_builder *b,
++          const char *qname, uint16_t qclass, uint16_t qtype)
++{
++  TEST_COMPARE (qclass, C_IN);
++
++  /* We only test PTR.  */
++  TEST_COMPARE (qtype, T_PTR);
++
++  unsigned int count;
++  char *tail = NULL;
++
++  if (strstr (qname, "in-addr.arpa") != NULL
++      && sscanf (qname, "%u.%ms", &count, &tail) == 2)
++    TEST_COMPARE_STRING (tail, "0.168.192.in-addr.arpa");
++  else if (sscanf (qname, "%x.%ms", &count, &tail) == 2)
++    {
++    TEST_COMPARE_STRING (tail, "\
++0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa");
++    }
++  else
++    FAIL_EXIT1 ("invalid QNAME: %s\n", qname);
++  free (tail);
++
++  /* We have a bounded number of possible tests.  */
++  TEST_VERIFY (count >= 0);
++  TEST_VERIFY (count <= 15);
++
++  struct resolv_response_flags flags = {};
++  resolv_response_init (b, flags);
++  resolv_response_add_question (b, qname, qclass, qtype);
++  resolv_response_section (b, ns_s_an);
++
++  /* Actual answer record, but the wrong name (skipped).  */
++  resolv_response_open_record (b, "1.0.0.10.in-addr.arpa", qclass, qtype, 60);
++
++  /* Record the answer.  */
++  resolv_response_add_name (b, "test.ptr.example.net");
++  resolv_response_close_record (b);
++
++  /* Add a second section to test section boundary crossing.  */
++  resolv_response_section (b, test_items[count].ns_section);
++  /* Semantically incorrect, but hide a T_PTR entry.  */
++  resolv_response_open_record (b, qname, qclass, qtype, 60);
++  resolv_response_add_name (b, "wrong.ptr.example.net");
++  resolv_response_close_record (b);
++}
++
++
++/* Perform one check using a reverse lookup.  */
++static void
++check_reverse (int af, int count)
++{
++  TEST_VERIFY (af == AF_INET || af == AF_INET6);
++  TEST_VERIFY (count < array_length (test_items));
++
++  char addr[sizeof (struct in6_addr)] = { 0 };
++  socklen_t addrlen;
++  if (af == AF_INET)
++    {
++      addr[0] = (char) 192;
++      addr[1] = (char) 168;
++      addr[2] = (char) 0;
++      addr[3] = (char) count;
++      addrlen = 4;
++    }
++  else
++    {
++      addr[0] = 0x20;
++      addr[1] = 0x01;
++      addr[2] = 0x0d;
++      addr[3] = 0xb8;
++      addr[4] = addr[5] = addr[6] = addr[7] = 0x0;
++      addr[8] = addr[9] = addr[10] = addr[11] = 0x0;
++      addr[12] = 0x0;
++      addr[13] = 0x0;
++      addr[14] = 0x0;
++      addr[15] = count;
++      addrlen = 16;
++    }
++
++  h_errno = 0;
++  struct hostent *answer = gethostbyaddr (addr, addrlen, af);
++  TEST_VERIFY (answer == NULL);
++  TEST_VERIFY (h_errno == NO_RECOVERY);
++  if (answer != NULL)
++    printf ("error: unexpected success: %s\n",
++	    support_format_hostent (answer));
++}
++
++static int
++do_test (void)
++{
++  struct resolv_test *obj = resolv_test_start
++    ((struct resolv_redirect_config)
++     {
++       .response_callback = response
++     });
++
++  for (int i = 0; test_items[i].test != NULL; i++)
++    {
++      check_reverse (AF_INET, i);
++      check_reverse (AF_INET6, i);
++    }
++
++  resolv_test_end (obj);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/resolv/tst-resolv-invalid-ptr.c b/resolv/tst-resolv-invalid-ptr.c
+new file mode 100644
+index 0000000000..0c802ab967
+--- /dev/null
++++ b/resolv/tst-resolv-invalid-ptr.c
+@@ -0,0 +1,255 @@
++/* Test handling of invalid T_PTR results (bug 34015).
++   Copyright (C) 2022-2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <array_length.h>
++#include <errno.h>
++#include <netdb.h>
++#include <resolv.h>
++#include <stdlib.h>
++#include <string.h>
++#include <support/check.h>
++#include <support/format_nss.h>
++#include <support/resolv_test.h>
++#include <support/support.h>
++
++/* Name of test, the answer, the expected error return, and if we
++   expect the call to fail.  */
++struct item {
++  const char *test;
++  const char *answer;
++  int expected;
++  bool fail;
++};
++
++static const struct item test_items[] =
++  {
++    /* Test for invalid characters.  */
++    { "Invalid use of \"|\"",
++      "test.|.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"&\"",
++      "test.&.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \";\"",
++      "test.;.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"<\"",
++      "test.<.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \">\"",
++      "test.>.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"(\"",
++      "test.(.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \")\"",
++      "test.).ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"$\"",
++      "test.$.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"`\"",
++      "test.`.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"\\\"",
++      "test.\\.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"\'\"",
++      "test.'.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"\"\"",
++      "test.\".ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \" \"",
++      "test. .ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"\\t\"",
++      "test.\t.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"\\n\"",
++      "test.\n.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"\\r\"",
++      "test.\r.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"*\"",
++      "test.*.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"?\"",
++      "test.?.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"[\"",
++      "test.[.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"]\"",
++      "test.].ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \",\"",
++      "test.,.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"~\"",
++      "test.~.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \":\"",
++      "test.:.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"!\"",
++      "test.!.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"@\"",
++      "test.@.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"#\"",
++      "test.#.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"%\"",
++      "test.%%.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of \"^\"",
++      "test.^.ptr.example", NO_RECOVERY, true },
++
++    /* Test for invalid UTF-8 characters (2-byte, 4-byte, 6-byte).  */
++    { "Invalid use of UTF-8 (2-byte, U+00C0-U+00C2)",
++      "ÁÂÃ.test.ptr.example", NO_RECOVERY, true },
++    { "Invalid use of UTF-8 (4-byte, U+0750-U+0752)",
++      "ݐݑݒ.test.ptr.example", NO_RECOVERY, true },
++     { "Invalid use of UTF-8 (6-byte, U+0904-U+0906)",
++      "ऄअआ.test.ptr.example", NO_RECOVERY, true },
++
++    /* Test for "-" which may be valid depending on position.  */
++    { "Invalid leading \"-\"",
++      "-test.ptr.example", NO_RECOVERY, true },
++    { "Valid trailing \"-\"",
++      "test-.ptr.example", 0, false },
++    { "Valid mid-label use of \"-\"",
++      "te-st.ptr.example", 0, false },
++
++    /* Test for "_" which is always valid in any position.  */
++    { "Valid leading use of \"_\"",
++      "_test.ptr.example", 0, false },
++    { "Valid mid-label use of \"_\"",
++      "te_st.ptr.example", 0, false },
++    { "Valid trailing use of \"_\"",
++      "test_.ptr.example", 0, false },
++
++    /* Sanity test the broader set [A-Za-z0-9_-] of valid characters.  */
++    { "Valid \"[A-Z]\"",
++      "test.ABCDEFGHIJKLMNOPQRSTUVWXYZ.ptr.example", 0, false },
++    { "Valid \"[a-z]\"",
++      "test.abcdefghijklmnopqrstuvwxyz.ptr.example", 0, false },
++    { "Valid \"[0-9]\"",
++      "test.0123456789.ptr.example", 0, false },
++    { "Valid mixed use of \"[A-Za-z0-9_-]\"",
++      "test.012abcABZ_-.ptr.example", 0, false },
++  };
++
++static void
++response (const struct resolv_response_context *ctx,
++          struct resolv_response_builder *b,
++          const char *qname, uint16_t qclass, uint16_t qtype)
++{
++  TEST_COMPARE (qclass, C_IN);
++
++  /* We only test PTR.  */
++  TEST_COMPARE (qtype, T_PTR);
++
++  unsigned int count, count1;
++  char *tail = NULL;
++
++  /* The test implementation can handle up to 255 tests.  */
++  if (strstr (qname, "in-addr.arpa") != NULL
++      && sscanf (qname, "%u.%ms", &count, &tail) == 2)
++    TEST_COMPARE_STRING (tail, "0.168.192.in-addr.arpa");
++  else if (sscanf (qname, "%x.%x.%ms", &count, &count1, &tail) == 3)
++    {
++      TEST_COMPARE_STRING (tail, "\
++0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.ip6.arpa");
++      count |= count1 << 4;
++    }
++  else
++    FAIL_EXIT1 ("invalid QNAME: %s\n", qname);
++  free (tail);
++
++  /* Cross check. Count has a fixed bound (soft limit).  */
++  TEST_VERIFY (count >= 0 && count <= 255);
++
++  /* We have a fixed number of tests (hard limit).  */
++  TEST_VERIFY_EXIT (count < array_length (test_items));
++
++  struct resolv_response_flags flags = {};
++  resolv_response_init (b, flags);
++  resolv_response_add_question (b, qname, qclass, qtype);
++  resolv_response_section (b, ns_s_an);
++
++  /* Actual answer record.  */
++  resolv_response_open_record (b, qname, qclass, qtype, 60);
++
++  /* Record the answer.  */
++  resolv_response_add_name (b, test_items[count].answer);
++  resolv_response_close_record (b);
++}
++
++/* Perform one check using a reverse lookup.  */
++static void
++check_reverse (int af, int count)
++{
++  TEST_VERIFY (af == AF_INET || af == AF_INET6);
++  TEST_VERIFY_EXIT (count < array_length (test_items));
++
++  /* Generate an address to query for each test.  */
++  char addr[sizeof (struct in6_addr)] = { 0 };
++  socklen_t addrlen;
++  if (af == AF_INET)
++    {
++      addr[0] = (char) 192;
++      addr[1] = (char) 168;
++      addr[2] = (char) 0;
++      addr[3] = (char) count;
++      addrlen = 4;
++    }
++  else
++    {
++      addr[0] = 0x20;
++      addr[1] = 0x01;
++      addr[2] = 0x0d;
++      addr[3] = 0xb8;
++      addr[4] = addr[5] = addr[6] = addr[7] = 0x0;
++      addr[8] = addr[9] = addr[10] = addr[11] = 0x0;
++      addr[12] = 0x0;
++      addr[13] = 0x0;
++      addr[14] = 0x0;
++      addr[15] = (char) count;
++      addrlen = 16;
++    }
++
++  h_errno = 0;
++  struct hostent *answer = gethostbyaddr (addr, addrlen, af);
++
++  /* Verify h_errno is as expected.  */
++  TEST_COMPARE (h_errno, test_items[count].expected);
++  if (h_errno != test_items[count].expected)
++    /* And print more information if it's not.  */
++    printf ("INFO: %s\n", test_items[count].test);
++
++  if (test_items[count].fail)
++    {
++      /* We expected a failure so verify answer is NULL.  */
++      TEST_VERIFY (answer == NULL);
++      /* If it's not NULL we should print out what we received.  */
++      if (answer != NULL)
++        printf ("error: unexpected success: %s\n",
++		support_format_hostent (answer));
++    }
++  else
++    /* We don't expect a failure so answer must be valid.  */
++    TEST_COMPARE_STRING (answer->h_name, test_items[count].answer);
++}
++
++static int
++do_test (void)
++{
++  struct resolv_test *obj = resolv_test_start
++    ((struct resolv_redirect_config)
++     {
++       .response_callback = response
++     });
++
++  for (int i = 0; i < array_length (test_items); i++)
++    {
++      check_reverse (AF_INET, i);
++      check_reverse (AF_INET6, i);
++    }
++  resolv_test_end (obj);
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/string/Makefile b/string/Makefile
+index c4423c0437..aa0b0c2f57 100644
+--- a/string/Makefile
++++ b/string/Makefile
+@@ -286,6 +286,7 @@ CFLAGS-wordcopy.c += $(no-stack-protector)
+ # Called during static initialization
+ CFLAGS-strncmp.c += $(no-stack-protector)
+ CFLAGS-memset.c += $(no-stack-protector)
++CFLAGS-strlen.c += $(no-stack-protector)
+ 
+ ifeq ($(run-built-tests),yes)
+ $(objpfx)tst-svc-cmp.out: tst-svc.expect $(objpfx)tst-svc.out
+diff --git a/sysdeps/aarch64/Makefile b/sysdeps/aarch64/Makefile
+index 0d32eddf36..ff4f72c45e 100644
+--- a/sysdeps/aarch64/Makefile
++++ b/sysdeps/aarch64/Makefile
+@@ -132,6 +132,12 @@ $(objpfx)tst-bti-permissive-transitive: $(objpfx)tst-bti-mod.so
+ $(objpfx)tst-bti-ld-debug-shared: $(objpfx)tst-bti-mod.so
+ $(objpfx)tst-bti-ld-debug-both: $(objpfx)tst-bti-mod-unprot.so
+ 
++$(objpfx)tst-bti-dlopen-imm.out: $(objpfx)tst-bti-mod-unprot.so
++$(objpfx)tst-bti-dlopen-prot.out: $(objpfx)tst-bti-mod-prot.so
++$(objpfx)tst-bti-dlopen-transitive.out: $(objpfx)tst-bti-mod.so
++$(objpfx)tst-bti-ld-debug-dlopen.out: $(objpfx)tst-bti-mod-unprot.so
++$(objpfx)tst-bti-permissive-dlopen.out: $(objpfx)tst-bti-mod-unprot.so
++
+ $(objpfx)tst-bti-abort-unprot-preload.out: $(objpfx)tst-bti-mod-unprot-preload.so
+ tst-bti-abort-unprot-preload-ENV = \
+   GLIBC_TUNABLES=glibc.cpu.aarch64_bti=1 \
+diff --git a/sysdeps/aarch64/dl-gcs.c b/sysdeps/aarch64/dl-gcs.c
+index e1d1db4852..841d6428d6 100644
+--- a/sysdeps/aarch64/dl-gcs.c
++++ b/sysdeps/aarch64/dl-gcs.c
+@@ -147,3 +147,9 @@ void _dl_gcs_enable_failed (int code)
+ {
+   _dl_fatal_printf ("failed to enable GCS: %d\n", -code);
+ }
++
++/* Used to report error when prctl system call to lock GCS fails.  */
++void _dl_gcs_lock_failed (int code)
++{
++  _dl_fatal_printf ("failed to lock GCS: %d\n", -code);
++}
+diff --git a/sysdeps/aarch64/dl-start.S b/sysdeps/aarch64/dl-start.S
+index 3b5ff2cccb..c278485cd3 100644
+--- a/sysdeps/aarch64/dl-start.S
++++ b/sysdeps/aarch64/dl-start.S
+@@ -35,12 +35,13 @@ ENTRY (_start)
+ 	/* Use GL(dl_aarch64_gcs) to set the shadow stack status.  */
+ 	adrp	x16, _rtld_local
+ 	add	x16, x16, :lo12:_rtld_local
+-	ldr	x1, [x16, GL_DL_AARCH64_GCS_OFFSET]
+-	cbz	x1, L(skip_gcs_enable)
++	ldr	x22, [x16, GL_DL_AARCH64_GCS_OFFSET]
++	cbz	x22, L(skip_gcs_enable)
+ 
+ 	/* Enable GCS before user code runs.  Note that IFUNC resolvers and
+ 	   LD_AUDIT hooks may run before, but should not create threads.  */
+ #define PR_SET_SHADOW_STACK_STATUS  75
++#define PR_LOCK_SHADOW_STACK_STATUS 76
+ #define PR_SHADOW_STACK_ENABLE      (1UL << 0)
+ 	mov	x0, PR_SET_SHADOW_STACK_STATUS
+ 	mov	x1, PR_SHADOW_STACK_ENABLE
+@@ -50,6 +51,19 @@ ENTRY (_start)
+ 	mov	x8, #SYS_ify(prctl)
+ 	svc	0x0
+ 	cbnz	w0, L(failed_gcs_enable)
++	/* Check if we need to lock GCS features.  */
++	/* If the aarch64_gcs tunable is either 0 or 2 do not lock GCS.  */
++	tst	x22, #-3
++	beq	L(skip_gcs_enable)
++	mov	x0, PR_LOCK_SHADOW_STACK_STATUS
++	/* Lock everything including future operations.  */
++	mov	x1, ~0
++	mov	x2, 0
++	mov	x3, 0
++	mov	x4, 0
++	mov	x8, #SYS_ify(prctl)
++	svc	0x0
++	cbnz	w0, L(failed_gcs_lock)
+ L(skip_gcs_enable):
+ 
+ .globl _dl_start_user
+@@ -75,4 +89,7 @@ _dl_start_user:
+ L(failed_gcs_enable):
+ 	b	_dl_gcs_enable_failed
+ 
++L(failed_gcs_lock):
++	b	_dl_gcs_lock_failed
++
+ END (_start)
+diff --git a/sysdeps/aarch64/multiarch/dl-symbol-redir-ifunc.h b/sysdeps/aarch64/multiarch/dl-symbol-redir-ifunc.h
+index 647bdd66dd..9f772614bf 100644
+--- a/sysdeps/aarch64/multiarch/dl-symbol-redir-ifunc.h
++++ b/sysdeps/aarch64/multiarch/dl-symbol-redir-ifunc.h
+@@ -20,5 +20,6 @@
+ #define _DL_IFUNC_GENERIC_H
+ 
+ asm ("memset = __memset_generic");
++asm ("strlen = __strlen_generic");
+ 
+ #endif
+diff --git a/sysdeps/aarch64/multiarch/strlen_generic.S b/sysdeps/aarch64/multiarch/strlen_generic.S
+index cb9d5759ac..a362328142 100644
+--- a/sysdeps/aarch64/multiarch/strlen_generic.S
++++ b/sysdeps/aarch64/multiarch/strlen_generic.S
+@@ -40,3 +40,7 @@
+ #endif
+ 
+ #include "../strlen.S"
++
++#if IS_IN (rtld)
++strong_alias (strlen, __strlen_generic)
++#endif
 diff --git a/sysdeps/ieee754/ldbl-128ibm/s_ceill.c b/sysdeps/ieee754/ldbl-128ibm/s_ceill.c
 index 8038cf9fda..88bc364db5 100644
 --- a/sysdeps/ieee754/ldbl-128ibm/s_ceill.c
@@ -8678,6 +9599,600 @@ index 7f0b77cd3f..21ecbd0c85 100644
  	}
      }
    else
+diff --git a/sysdeps/loongarch/lp64/multiarch/dl-symbol-redir-ifunc.h b/sysdeps/loongarch/lp64/multiarch/dl-symbol-redir-ifunc.h
+index 9fdd039da0..8af00d2846 100644
+--- a/sysdeps/loongarch/lp64/multiarch/dl-symbol-redir-ifunc.h
++++ b/sysdeps/loongarch/lp64/multiarch/dl-symbol-redir-ifunc.h
+@@ -22,6 +22,7 @@
+ #ifndef SHARED
+ asm ("memset = __memset_aligned");
+ asm ("memcmp = __memcmp_aligned");
++asm ("strlen = __strlen_aligned");
+ #endif
+ 
+ #endif
+diff --git a/sysdeps/riscv/multiarch/dl-symbol-redir-ifunc.h b/sysdeps/riscv/multiarch/dl-symbol-redir-ifunc.h
+index 24b78711e3..69a0790838 100644
+--- a/sysdeps/riscv/multiarch/dl-symbol-redir-ifunc.h
++++ b/sysdeps/riscv/multiarch/dl-symbol-redir-ifunc.h
+@@ -21,6 +21,7 @@
+ 
+ #ifndef SHARED
+ asm ("memset = __memset_generic");
++asm ("memcpy = __memcpy_generic");
+ #endif
+ 
+ #endif
+diff --git a/sysdeps/unix/sysv/linux/aarch64/Makefile b/sysdeps/unix/sysv/linux/aarch64/Makefile
+index b8eb9c0752..89a02faed1 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/Makefile
++++ b/sysdeps/unix/sysv/linux/aarch64/Makefile
+@@ -32,10 +32,14 @@ gcs-tests-dynamic = \
+   tst-gcs-dlopen-override \
+   tst-gcs-enforced \
+   tst-gcs-enforced-abort \
++  tst-gcs-execv \
++  tst-gcs-fork \
+   tst-gcs-ld-debug-both \
+   tst-gcs-ld-debug-dlopen \
+   tst-gcs-ld-debug-exe \
+   tst-gcs-ld-debug-shared \
++  tst-gcs-lock \
++  tst-gcs-lock-ptrace \
+   tst-gcs-noreturn \
+   tst-gcs-optional-off \
+   tst-gcs-optional-on \
+@@ -48,15 +52,18 @@ gcs-tests-dynamic = \
+   tst-gcs-shared-enforced-abort \
+   tst-gcs-shared-optional \
+   tst-gcs-shared-override \
++  tst-gcs-unlock \
+   # gcs-tests-dynamic
+ 
+ gcs-tests-static = \
+   tst-gcs-disabled-static \
+   tst-gcs-enforced-static \
+   tst-gcs-enforced-static-abort \
++  tst-gcs-lock-static \
+   tst-gcs-optional-static-off \
+   tst-gcs-optional-static-on \
+   tst-gcs-override-static \
++  tst-gcs-unlock-static \
+   # gcs-tests-static
+ 
+ tests += \
+@@ -106,6 +113,24 @@ tst-gcs-optional-static-on-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=2
+ tst-gcs-optional-static-off-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=2
+ tst-gcs-override-static-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=3
+ 
++LDFLAGS-tst-gcs-execv += -Wl,-z,gcs=always
++tst-gcs-execv-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1
++tst-gcs-execv-ARGS = -- $(host-test-program-cmd)
++LDFLAGS-tst-gcs-fork += -Wl,-z,gcs=always
++tst-gcs-fork-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=2
++
++LDFLAGS-tst-gcs-lock += -Wl,-z,gcs=always
++tst-gcs-lock-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1
++LDFLAGS-tst-gcs-lock-ptrace += -Wl,-z,gcs=always
++tst-gcs-lock-ptrace-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1
++tst-gcs-lock-ptrace-ARGS = -- $(host-test-program-cmd)
++LDFLAGS-tst-gcs-lock-static += -Wl,-z,gcs=always
++tst-gcs-lock-static-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=1
++LDFLAGS-tst-gcs-unlock += -Wl,-z,gcs=always
++tst-gcs-unlock-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=2
++LDFLAGS-tst-gcs-unlock-static += -Wl,-z,gcs=always
++tst-gcs-unlock-static-ENV = GLIBC_TUNABLES=glibc.cpu.aarch64_gcs=2
++
+ # force one of the dependencies to be unmarked
+ LDFLAGS-tst-gcs-mod2.so += -Wl,-z,gcs=never
+ 
+diff --git a/sysdeps/unix/sysv/linux/aarch64/libc-start.h b/sysdeps/unix/sysv/linux/aarch64/libc-start.h
+index 9eecc557fd..4ccd13741b 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/libc-start.h
++++ b/sysdeps/unix/sysv/linux/aarch64/libc-start.h
+@@ -25,9 +25,17 @@
+ 
+ # ifndef PR_SET_SHADOW_STACK_STATUS
+ #  define PR_SET_SHADOW_STACK_STATUS	75
++#  define PR_LOCK_SHADOW_STACK_STATUS	76
+ #  define PR_SHADOW_STACK_ENABLE	(1UL << 0)
+ # endif
+ 
++# ifndef GCS_POLICY_DISABLED
++/* GCS is disabled.  */
++#  define GCS_POLICY_DISABLED 0
++/* Optionally enable GCS if all startup dependencies are marked.  */
++#  define GCS_POLICY_OPTIONAL 2
++# endif
++
+ /* Must be on a top-level stack frame that does not return.  */
+ static inline void __attribute__((always_inline))
+ aarch64_libc_setup_tls (void)
+@@ -46,12 +54,23 @@ aarch64_libc_setup_tls (void)
+ 
+   _rtld_main_check (main_map, _dl_argv[0]);
+ 
+-  if (GL(dl_aarch64_gcs) != 0)
++  uint64_t gcs = GL (dl_aarch64_gcs);
++  if (gcs != GCS_POLICY_DISABLED)
+     {
+-      int ret = INLINE_SYSCALL_CALL (prctl, PR_SET_SHADOW_STACK_STATUS,
+-				     PR_SHADOW_STACK_ENABLE, 0, 0, 0);
+-      if (ret)
+-        _dl_fatal_printf ("failed to enable GCS: %d\n", -ret);
++      int ret;
++      ret = INLINE_SYSCALL_CALL (prctl, PR_SET_SHADOW_STACK_STATUS,
++				 PR_SHADOW_STACK_ENABLE, 0, 0, 0);
++      if (ret != 0)
++	_dl_fatal_printf ("failed to enable GCS: %d\n", -ret);
++      /* Do not lock GCS features if policy is OPTIONAL.  */
++      if (gcs != GCS_POLICY_OPTIONAL)
++	{
++	  /* Lock all bits, including future bits.  */
++	  ret = INLINE_SYSCALL_CALL (prctl, PR_LOCK_SHADOW_STACK_STATUS,
++				     ~0, 0, 0, 0);
++	  if (ret != 0)
++	    _dl_fatal_printf ("failed to lock GCS: %d\n", -ret);
++	}
+     }
+ }
+ 
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-execv.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-execv.c
+new file mode 100644
+index 0000000000..91053a4726
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-execv.c
+@@ -0,0 +1,91 @@
++/* AArch64 test for GCS for creating child process.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-gcs-helper.h"
++
++#include <sys/prctl.h>
++#include <unistd.h>
++#include <errno.h>
++#include <string.h>
++
++static int
++target (void)
++{
++  /* In child.  */
++  printf ("in child: %u\n", getpid ());
++  TEST_VERIFY (__check_gcs_status ());
++
++  /* Try disabling GCS (should fail with EBUSY).  */
++  int res = prctl (PR_SET_SHADOW_STACK_STATUS, 0, 0, 0, 0);
++  TEST_COMPARE (res, -1);
++  TEST_COMPARE (errno, EBUSY);
++  return 0;
++}
++
++int main(int argc, char *argv[])
++{
++  /* Check if GCS could possible by enabled.  */
++  if (!(getauxval (AT_HWCAP) & HWCAP_GCS))
++    FAIL_UNSUPPORTED ("kernel or CPU does not support GCS");
++
++  /* GCS should be enabled for this test at the start.  */
++  TEST_VERIFY (__check_gcs_status ());
++
++  /* If last argument is 'target', we just run target code.  */
++  if (strcmp (argv[argc - 1], "target") == 0)
++    return target ();
++
++  /* In parent, we should at least have 3 arguments.  */
++  if (argc < 3)
++    FAIL_EXIT1 ("wrong number of arguments: %d", argc);
++
++  char *child_args[] = { NULL, NULL, NULL, NULL, NULL, NULL };
++
++  /* Check command line arguments to construct child command.  */
++  if (strcmp (argv[0], argv[2]) == 0)
++    {
++      /* Command looks like
++	 /path/to/test -- /path/to/test  */
++      /* /path/to/test  */
++      child_args[0] = argv[0];
++      /* Extra argument for the child process.  */
++      child_args[1] = (char *)"target";
++    }
++  else
++    {
++      /* Command looks like
++	 /path/to/test -- /path/to/ld.so ...  */
++      TEST_VERIFY_EXIT (argc > 5);
++      TEST_COMPARE_STRING (argv[3], "--library-path");
++      /* /path/to/ld-linux-aarch64.so.1  */
++      child_args[0] = argv[2];
++      /* --library-path  */
++      child_args[1] = argv[3];
++      /* Library path...  */
++      child_args[2] = argv[4];
++      /* /path/to/test  */
++      child_args[3] = argv[5];
++      /* Extra argument for the child process.  */
++      child_args[4] = (char *)"target";
++    }
++
++  printf ("in parent: %u\n", getpid ());
++  /* Spawn child process.  */
++  execv (child_args[0], child_args);
++  FAIL_EXIT1 ("execv: %m");
++}
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-fork.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-fork.c
+new file mode 100644
+index 0000000000..365807a562
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-fork.c
+@@ -0,0 +1,75 @@
++/* AArch64 test for GCS for creating child process using fork.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-gcs-helper.h"
++
++#include <support/xunistd.h>
++#include <sys/ptrace.h>
++#include <sys/prctl.h>
++#include <sys/wait.h>
++#include <sys/uio.h>
++#include <unistd.h>
++#include <errno.h>
++
++static int
++do_test (void)
++{
++  /* Check if GCS could possible by enabled.  */
++  if (!(getauxval (AT_HWCAP) & HWCAP_GCS))
++    FAIL_UNSUPPORTED ("kernel or CPU does not support GCS");
++
++  /* GCS should be enabled for this test at the start.  */
++  TEST_VERIFY (__check_gcs_status ());
++
++  pid_t pid = xfork ();
++  const char *name;
++  if (pid == 0)
++    name = "child";
++  else
++    name = "parent";
++
++  /* Both parent and child should initially have GCS enabled.  */
++  TEST_VERIFY (__check_gcs_status ());
++  uint64_t data;
++  if (prctl (PR_GET_SHADOW_STACK_STATUS, &data, 0, 0, 0))
++    FAIL_EXIT1 ("prctl: %m");
++  printf ("in %s: gcs status: %016lx\n", name, data);
++
++  if (pid)
++    {
++      int status;
++      xwaitpid (pid, &status, 0);
++      printf ("in %s: child exited with code %u\n", name, WEXITSTATUS(status));
++    }
++  else
++    {
++      /* Try disabling GCS for the child
++	 (should succeed because of the tunable).  */
++      if (prctl (PR_SET_SHADOW_STACK_STATUS, 0, 0, 0, 0))
++	FAIL_EXIT1 ("prctl: %m");
++      /* GCS should be disabled.  */
++      TEST_VERIFY (!__check_gcs_status ());
++      if (prctl (PR_GET_SHADOW_STACK_STATUS, &data, 0, 0, 0))
++	FAIL_EXIT1 ("prctl: %m");
++      printf ("in %s: gcs status: %016lx\n", name, data);
++    }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-helper.h b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-helper.h
+index 35ce0036ec..c075fdc205 100644
+--- a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-helper.h
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-helper.h
+@@ -26,7 +26,13 @@
+ #include <stdio.h>
+ #include <sys/auxv.h>
+ 
+-static bool __check_gcs_status (void)
++#ifndef PR_SET_SHADOW_STACK_STATUS
++# define PR_GET_SHADOW_STACK_STATUS 74
++# define PR_SET_SHADOW_STACK_STATUS 75
++#endif
++
++static bool
++__check_gcs_status (void)
+ {
+   register unsigned long x16 asm ("x16");
+   asm volatile (
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock-ptrace.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock-ptrace.c
+new file mode 100644
+index 0000000000..27fa1d3dea
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock-ptrace.c
+@@ -0,0 +1,166 @@
++/* AArch64 test for GCS for creating child process using fork
++   with ptrace to check locked GCS operations.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-gcs-helper.h"
++
++#include <support/xunistd.h>
++#include <support/xsignal.h>
++#include <sys/ptrace.h>
++#include <sys/prctl.h>
++#include <sys/wait.h>
++#include <sys/uio.h>
++#include <unistd.h>
++#include <string.h>
++#include <errno.h>
++
++/* Uapi struct for PTRACE_GETREGSET with NT_ARM_GCS.  */
++struct user_gcs
++{
++  uint64_t enabled;
++  uint64_t locked;
++  uint64_t gcspr_el0;
++};
++
++static int
++target (void)
++{
++  /* This signal is raised after the process has started
++     and has been initialised so we can ptrace it at this
++     point and obtain GCS locked features.  */
++  xraise (SIGUSR1);
++  return 0;
++}
++
++static void
++fork_target (char *args[], uint64_t aarch64_gcs)
++{
++  /* Currently kernel returns only lower 32 bits of locked
++     features so we only compare them.  */
++  bool lock_gcs = aarch64_gcs != 0 && aarch64_gcs != 2;
++  uint64_t expected_locked = lock_gcs ? 0xfffffffful : 0ul;
++  pid_t pid = xfork ();
++  if (pid == 0)
++    {
++      char tunables[90];
++      snprintf (tunables, sizeof (tunables), "GLIBC_TUNABLES="
++		"glibc.cpu.aarch64_gcs=0x%016lx", aarch64_gcs);
++      char *envp[] = { tunables, NULL };
++      /* We need to ptrace child process to use PTRACE_GETREGSET
++	 with NT_ARM_GCS after it has started.  */
++      int res = ptrace (PTRACE_TRACEME, 0, NULL, NULL);
++      if (res != 0)
++	FAIL_EXIT1 ("ptrace: %m");
++      execve (args[0], args, envp);
++      FAIL_EXIT1 ("execve: %m");
++    }
++  bool checked = false;
++  while (true)
++    {
++      int status;
++      xwaitpid (pid, &status, 0);
++      if (WIFSTOPPED (status))
++	{
++	  /* Child stopped by signal.  */
++	  int sig = WSTOPSIG (status);
++	  if (sig == SIGUSR1)
++	    {
++	      struct user_gcs ugcs = {};
++	      struct iovec io;
++	      io.iov_base = &ugcs;
++	      io.iov_len = sizeof (struct user_gcs);
++	      if (ptrace (PTRACE_GETREGSET, pid, NT_ARM_GCS, &io))
++		FAIL_EXIT1 ("ptrace (PTRACE_GETREGSET): %m");
++	      printf ("expected vs locked: %016lx %016lx\n",
++		      expected_locked, ugcs.locked);
++	      if (lock_gcs)
++		TEST_VERIFY_EXIT (ugcs.enabled);
++	      TEST_VERIFY_EXIT (ugcs.locked == expected_locked);
++	      if (aarch64_gcs != 0)
++		TEST_VERIFY_EXIT ((void *) ugcs.gcspr_el0 != NULL);
++	      checked = true;
++	    }
++        }
++      else if (WIFSIGNALED (status))
++	{
++	  /* Child terminated by signal.  */
++	  break;
++	}
++      else if (WIFEXITED (status))
++	{
++          /* Child terminated by normally.  */
++	  break;
++	}
++      ptrace (PTRACE_CONT, pid, 0, 0);
++    }
++  /* If child process hasn't run correctly, this will remain false.  */
++  TEST_VERIFY_EXIT (checked);
++}
++
++int main(int argc, char *argv[])
++{
++  /* Check if GCS could possible by enabled.  */
++  if (!(getauxval (AT_HWCAP) & HWCAP_GCS))
++    FAIL_UNSUPPORTED ("kernel or CPU does not support GCS");
++
++  /* GCS should be enabled for this test.  */
++  TEST_VERIFY (__check_gcs_status ());
++
++  /* If last argument is 'target', we just run target code.  */
++  if (strcmp (argv[argc - 1], "target") == 0)
++    return target ();
++
++  /* In parent, we should at least have 3 arguments.  */
++  if (argc < 3)
++    FAIL_EXIT1 ("wrong number of arguments: %d", argc);
++
++  char *child_args[] = { NULL, NULL, NULL, NULL, NULL , NULL };
++
++  /* Check command line arguments to construct child command.  */
++  if (strcmp (argv[0], argv[2]) == 0)
++    {
++      /* Command looks like
++	 /path/to/test -- /path/to/test  */
++      /* /path/to/test  */
++      child_args[0] = argv[0];
++      /* Extra argument for the child process.  */
++      child_args[1] = (char *)"target";
++    }
++  else
++    {
++      /* Command looks like
++	 /path/to/test -- /path/to/ld.so ...  */
++      TEST_VERIFY_EXIT (argc > 5);
++      TEST_COMPARE_STRING (argv[3], "--library-path");
++      /* /path/to/ld-linux-aarch64.so.1  */
++      child_args[0] = argv[2];
++      /* --library-path  */
++      child_args[1] = argv[3];
++      /* Library path...  */
++      child_args[2] = argv[4];
++      /* /path/to/test  */
++      child_args[3] = argv[5];
++      /* Extra argument for the child process.  */
++      child_args[4] = (char *)"target";
++    }
++
++  /* Check all 4 values for the aarch64_gcs tunable.  */
++  for (uint64_t aarch64_gcs = 0; aarch64_gcs < 4; aarch64_gcs++)
++    fork_target (child_args, aarch64_gcs);
++  return 0;
++}
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock-static.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock-static.c
+new file mode 100644
+index 0000000000..b80e2f70e8
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock-static.c
+@@ -0,0 +1 @@
++#include "tst-gcs-lock.c"
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock.c
+new file mode 100644
+index 0000000000..9a17ef514d
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-lock.c
+@@ -0,0 +1,58 @@
++/* AArch64 test for GCS locking.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include "tst-gcs-helper.h"
++
++#include <linux/prctl.h>
++#include <sys/prctl.h>
++#include <errno.h>
++
++static int
++do_test (void)
++{
++  /* Check if GCS could possible by enabled.  */
++  if (!(getauxval (AT_HWCAP) & HWCAP_GCS))
++    FAIL_UNSUPPORTED ("kernel or CPU does not support GCS");
++
++  TEST_VERIFY (__check_gcs_status ());
++
++  /* Try disabling GCS.  */
++  int res = prctl (PR_SET_SHADOW_STACK_STATUS, 0, 0, 0, 0);
++  if (res)
++    {
++      TEST_COMPARE (errno, EBUSY);
++#ifdef GCS_SHOULD_UNLOCK
++      FAIL_EXIT1 ("GCS was not unlocked (was supposed to): %m");
++#else
++      TEST_VERIFY (__check_gcs_status ());
++#endif
++    }
++  else
++    {
++#ifdef GCS_SHOULD_UNLOCK
++      TEST_VERIFY (!__check_gcs_status ());
++      puts ("GCS unlocked successfully");
++#else
++      FAIL_EXIT1 ("GCS was unlocked (was not supposed to)");
++#endif
++    }
++
++  return 0;
++}
++
++#include <support/test-driver.c>
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-unlock-static.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-unlock-static.c
+new file mode 100644
+index 0000000000..7e02820031
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-unlock-static.c
+@@ -0,0 +1,2 @@
++#define GCS_SHOULD_UNLOCK
++#include "tst-gcs-lock.c"
+diff --git a/sysdeps/unix/sysv/linux/aarch64/tst-gcs-unlock.c b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-unlock.c
+new file mode 100644
+index 0000000000..7e02820031
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/aarch64/tst-gcs-unlock.c
+@@ -0,0 +1,2 @@
++#define GCS_SHOULD_UNLOCK
++#include "tst-gcs-lock.c"
 diff --git a/sysdeps/unix/sysv/linux/getlogin_r.c b/sysdeps/unix/sysv/linux/getlogin_r.c
 index 3b85e91be6..200c96860f 100644
 --- a/sysdeps/unix/sysv/linux/getlogin_r.c
@@ -8749,3 +10264,61 @@ index 7587dd577a..ac7b70584e 100644
  #include <sysdep-cancel.h>
  
  int
+diff --git a/sysdeps/unix/sysv/linux/riscv/multiarch/Makefile b/sysdeps/unix/sysv/linux/riscv/multiarch/Makefile
+index 1d26966ded..a033ea9569 100644
+--- a/sysdeps/unix/sysv/linux/riscv/multiarch/Makefile
++++ b/sysdeps/unix/sysv/linux/riscv/multiarch/Makefile
+@@ -9,4 +9,7 @@ sysdep_routines += \
+   # sysdep_routines
+ 
+ CFLAGS-memcpy_noalignment.c += -mno-strict-align
++# Called during static initialization
++CFLAGS-memset-generic.c += $(no-stack-protector)
++CFLAGS-memcpy-generic.c += $(no-stack-protector)
+ endif
+diff --git a/sysdeps/unix/sysv/linux/tst-rseq.c b/sysdeps/unix/sysv/linux/tst-rseq.c
+index 11371dc6c5..ba93d390f4 100644
+--- a/sysdeps/unix/sysv/linux/tst-rseq.c
++++ b/sysdeps/unix/sysv/linux/tst-rseq.c
+@@ -48,8 +48,7 @@ do_rseq_main_test (void)
+   size_t rseq_align = MAX (getauxval (AT_RSEQ_ALIGN), RSEQ_MIN_ALIGN);
+   size_t rseq_feature_size = MAX (getauxval (AT_RSEQ_FEATURE_SIZE),
+                                   RSEQ_AREA_SIZE_INITIAL_USED);
+-  size_t rseq_alloc_size = roundup (MAX (rseq_feature_size,
+-                                    RSEQ_AREA_SIZE_INITIAL_USED), rseq_align);
++  size_t rseq_reg_size = MAX (rseq_feature_size, RSEQ_AREA_SIZE_INITIAL);
+   struct rseq *rseq_abi = __thread_pointer () + __rseq_offset;
+ 
+   TEST_VERIFY_EXIT (rseq_thread_registered ());
+@@ -89,8 +88,8 @@ do_rseq_main_test (void)
+   /* Test a rseq registration with the same arguments as the internal
+      registration which should fail with errno == EBUSY.  */
+   TEST_VERIFY (((unsigned long) rseq_abi % rseq_align) == 0);
+-  TEST_VERIFY (__rseq_size <= rseq_alloc_size);
+-  int ret = syscall (__NR_rseq, rseq_abi, rseq_alloc_size, 0, RSEQ_SIG);
++  TEST_VERIFY (__rseq_size <= rseq_reg_size);
++  int ret = syscall (__NR_rseq, rseq_abi, rseq_reg_size, 0, RSEQ_SIG);
+   TEST_VERIFY (ret != 0);
+   TEST_COMPARE (errno, EBUSY);
+ }
+diff --git a/sysdeps/x86_64/multiarch/dl-symbol-redir-ifunc.h b/sysdeps/x86_64/multiarch/dl-symbol-redir-ifunc.h
+index 04b6c1e6a3..b607e525f2 100644
+--- a/sysdeps/x86_64/multiarch/dl-symbol-redir-ifunc.h
++++ b/sysdeps/x86_64/multiarch/dl-symbol-redir-ifunc.h
+@@ -44,6 +44,16 @@ asm ("memset = " HAVE_MEMSET_IFUNC_GENERIC);
+ 
+ asm ("memcmp = " HAVE_MEMCMP_IFUNC_GENERIC);
+ 
++#if MINIMUM_X86_ISA_LEVEL >= 4
++# define HAVE_STRCMP_IFUNC_GENERIC "__strlen_evex"
++#elif MINIMUM_X86_ISA_LEVEL == 3
++# define HAVE_STRCMP_IFUNC_GENERIC "__strlen_avx2"
++#else
++# define HAVE_STRCMP_IFUNC_GENERIC "__strlen_sse2"
++#endif
++
++asm ("strlen = " HAVE_STRCMP_IFUNC_GENERIC);
++
+ #endif /* SHARED */
+ 
+ #endif

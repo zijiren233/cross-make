@@ -9,14 +9,14 @@ TARGETS_FILE="${SCRIPT_DIR}/targets.yaml"
 VERSION="${1:-}"
 
 if [ ! -f "$TARGETS_FILE" ]; then
-    echo "Error: targets.yaml not found at $TARGETS_FILE" >&2
-    exit 1
+  echo "Error: targets.yaml not found at $TARGETS_FILE" >&2
+  exit 1
 fi
 
 # Check for yq
 if ! command -v yq &>/dev/null; then
-    echo "Error: yq is required but not installed" >&2
-    exit 1
+  echo "Error: yq is required but not installed" >&2
+  exit 1
 fi
 
 # Get default versions
@@ -35,8 +35,8 @@ DEFAULT_FREEBSD_VER=$(yq '.defaults.FREEBSD_VER' "$TARGETS_FILE")
 
 # Output header
 if [ -n "$VERSION" ]; then
-    echo "# Release $VERSION"
-    echo ""
+  echo "# Release $VERSION"
+  echo ""
 fi
 
 # Linux musl targets
@@ -44,12 +44,12 @@ echo "## Linux musl Targets"
 echo ""
 echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | musl | Linux Headers |"
 echo "|--------|-----|----------|-----|-----|------|-----|------|------|---------------|"
-yq -r ".targets[] | select(.TARGET | test(\"linux-musl\")) | [.TARGET, .MUSL_VER] | @tsv" "$TARGETS_FILE" | \
-while IFS=$'\t' read -r target musl_ver; do
+yq -r ".targets[] | select(.TARGET | test(\"linux-musl\")) | [.TARGET, .MUSL_VER] | @tsv" "$TARGETS_FILE" |
+  while IFS=$'\t' read -r target musl_ver; do
     musl_ver="${musl_ver:-$DEFAULT_MUSL_VER}"
     [ "$musl_ver" = "null" ] && musl_ver="$DEFAULT_MUSL_VER"
     echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $musl_ver | $LINUX_VER |"
-done
+  done
 echo ""
 
 # Linux glibc targets
@@ -57,12 +57,12 @@ echo "## Linux glibc Targets"
 echo ""
 echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | glibc | Linux Headers |"
 echo "|--------|-----|----------|-----|-----|------|-----|------|-------|---------------|"
-yq -r ".targets[] | select(.TARGET | test(\"linux-gnu\")) | [(.ID // .TARGET), .GLIBC_VER] | @tsv" "$TARGETS_FILE" | \
-while IFS=$'\t' read -r id glibc_ver; do
+yq -r ".targets[] | select(.TARGET | test(\"linux-gnu\")) | [(.ID // .TARGET), .GLIBC_VER] | @tsv" "$TARGETS_FILE" |
+  while IFS=$'\t' read -r id glibc_ver; do
     glibc_ver="${glibc_ver:-$DEFAULT_GLIBC_VER}"
     [ "$glibc_ver" = "null" ] && glibc_ver="$DEFAULT_GLIBC_VER"
     echo "| \`$id\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $glibc_ver | $LINUX_VER |"
-done
+  done
 echo ""
 
 # Windows mingw targets
@@ -70,12 +70,12 @@ echo "## Windows MinGW Targets"
 echo ""
 echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | MinGW |"
 echo "|--------|-----|----------|-----|-----|------|-----|------|-------|"
-yq -r ".targets[] | select(.TARGET | test(\"mingw\")) | [.TARGET, .MINGW_VER] | @tsv" "$TARGETS_FILE" | \
-while IFS=$'\t' read -r target mingw_ver; do
+yq -r ".targets[] | select(.TARGET | test(\"mingw\")) | [.TARGET, .MINGW_VER] | @tsv" "$TARGETS_FILE" |
+  while IFS=$'\t' read -r target mingw_ver; do
     mingw_ver="${mingw_ver:-$DEFAULT_MINGW_VER}"
     [ "$mingw_ver" = "null" ] && mingw_ver="$DEFAULT_MINGW_VER"
     echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $mingw_ver |"
-done
+  done
 echo ""
 
 # FreeBSD targets
@@ -83,12 +83,12 @@ echo "## FreeBSD Targets"
 echo ""
 echo "| Target | GCC | Binutils | GMP | MPC | MPFR | ISL | zstd | FreeBSD |"
 echo "|--------|-----|----------|-----|-----|------|-----|------|---------|"
-yq -r ".targets[] | select(.TARGET | test(\"freebsd\")) | [.TARGET, .FREEBSD_VER] | @tsv" "$TARGETS_FILE" | \
-while IFS=$'\t' read -r target freebsd_ver; do
+yq -r ".targets[] | select(.TARGET | test(\"freebsd\")) | [.TARGET, .FREEBSD_VER] | @tsv" "$TARGETS_FILE" |
+  while IFS=$'\t' read -r target freebsd_ver; do
     freebsd_ver="${freebsd_ver:-$DEFAULT_FREEBSD_VER}"
     [ "$freebsd_ver" = "null" ] && freebsd_ver="$DEFAULT_FREEBSD_VER"
     echo "| \`$target\` | $GCC_VER | $BINUTILS_VER | $GMP_VER | $MPC_VER | $MPFR_VER | $ISL_VER | $ZSTD_VER | $freebsd_ver |"
-done
+  done
 echo ""
 
 # Host platforms

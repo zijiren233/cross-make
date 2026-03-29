@@ -403,4 +403,3 @@ fn_target_arch_mangled = $(patsubst i%86,x86,$(patsubst aarch64%,arm64%,$(call f
 fn_linux_arch = $(lastword $(foreach a,$(LINUX_ARCH_LIST),$(if $(filter $(a)%,$(call fn_target_arch_mangled,$(1))),$(a))))
 
 .SECONDARY:
-
