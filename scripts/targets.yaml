@@ -11,7 +11,7 @@ defaults:
   MPFR_VER: "4.2.2"
   ISL_VER: "0.27"
   ZSTD_VER: "1.5.7"
-  LINUX_VER: "6.12.59"
+  LINUX_VER: "6.12.79"
   MUSL_VER: "1.2.5"
   GLIBC_VER: "2.42"
   MINGW_VER: "v14.0.0"
