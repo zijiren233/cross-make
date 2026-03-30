@@ -1,0 +1,12 @@
+diff -aruN old/Makefile new/Makefile
+--- old/Makefile	2023-10-25 11:03:17.000000000 +0100
++++ new/Makefile	2023-10-26 15:56:10.054891251 +0100
+@@ -1380,7 +1380,7 @@
+ hdr-inst := -f $(srctree)/scripts/Makefile.headersinst obj
+
+ PHONY += headers
+-headers: $(version_h) scripts_unifdef uapi-asm-generic archheaders archscripts
++headers: $(version_h) scripts_unifdef uapi-asm-generic archheaders
+ 	$(if $(filter um, $(SRCARCH)), $(error Headers not exportable for UML))
+ 	$(Q)$(MAKE) $(hdr-inst)=include/uapi
+ 	$(Q)$(MAKE) $(hdr-inst)=arch/$(SRCARCH)/include/uapi

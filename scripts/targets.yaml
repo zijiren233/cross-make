@@ -12,7 +12,7 @@ defaults:
   ISL_VER: "0.27"
   ZSTD_VER: "1.5.7"
   LINUX_VER: "6.12.79"
-  MUSL_VER: "1.2.5"
+  MUSL_VER: "1.2.6"
   GLIBC_VER: "2.42"
   MINGW_VER: "v14.0.0"
   FREEBSD_VER: "14.3"
@@ -23,97 +23,97 @@ targets:
   # Linux musl targets
   # ============================================================================
   - TARGET: aarch64-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: aarch64_be-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: arm-linux-musleabi
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: arm-linux-musleabihf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: armv5-linux-musleabi
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: armv6-linux-musleabi
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: armv6-linux-musleabihf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: armv7-linux-musleabi
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: armv7-linux-musleabihf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: loongarch64-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mips-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mips-linux-muslsf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mipsel-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mipsel-linux-muslsf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mips64-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mips64-linux-muslsf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mips64el-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mips64el-linux-muslsf
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mipsisa32r6-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mipsisa32r6el-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mipsisa64r6-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: mipsisa64r6el-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: powerpc64-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: powerpc64le-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: riscv32-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: riscv64-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: s390x-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: i586-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: i686-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: x86_64-linux-musl
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   - TARGET: x86_64-linux-muslx32
-    MUSL_VER: "1.2.5"
+    MUSL_VER: "1.2.6"
 
   # ============================================================================
   # Linux glibc (gnu) targets
