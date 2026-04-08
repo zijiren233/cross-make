@@ -2901,10 +2901,10 @@ index 0000000000..9f03b0f7ca
 +#include <tst-execstack.c>
 diff --git a/elf/tst-link-map-contiguous-ldso.c b/elf/tst-link-map-contiguous-ldso.c
 new file mode 100644
-index 0000000000..04de808bb2
+index 0000000000..f0e26682f2
 --- /dev/null
 +++ b/elf/tst-link-map-contiguous-ldso.c
-@@ -0,0 +1,98 @@
+@@ -0,0 +1,158 @@
 +/* Check that _dl_find_object behavior matches up with gaps.
 +   Copyright (C) 2025 Free Software Foundation, Inc.
 +   This file is part of the GNU C Library.
@@ -2925,14 +2925,72 @@ index 0000000000..04de808bb2
 +
 +#include <dlfcn.h>
 +#include <gnu/lib-names.h>
++#include <inttypes.h>
 +#include <link.h>
 +#include <stdbool.h>
 +#include <stdio.h>
 +#include <support/check.h>
++#include <support/support.h>
 +#include <support/xdlfcn.h>
 +#include <support/xunistd.h>
++#include <support/xstdio.h>
 +#include <sys/mman.h>
 +#include <unistd.h>
++
++/* Slow path in case we cannot find a gap with mmap (when the runtime has
++   mapped all the pages in the gap for some reason).  */
++static bool
++find_gap_with_proc_self_map (const struct link_map *l)
++{
++  int pagesize = getpagesize ();
++
++  support_need_proc ("Reads /proc/self/maps to find gap in ld.so mapping");
++
++  /* Parse /proc/self/maps and find all the mappings in the ld.so range
++     but not from ld.so.  */
++  FILE *f = xfopen ("/proc/self/maps", "r");
++  char *line = NULL, *path_ldso = NULL;
++  size_t len;
++  bool found = false;
++  while (xgetline (&line, &len, f))
++    {
++      uintptr_t from, to;
++      char *path = NULL;
++      int r = sscanf (line, "%" SCNxPTR "-%" SCNxPTR "%*s%*s%*s%*s%ms",
++                      &from, &to, &path);
++
++      TEST_VERIFY (r == 2 || r == 3);
++      TEST_COMPARE (from % pagesize, 0);
++      TEST_COMPARE (to % pagesize, 0);
++
++      if (path_ldso == NULL && l->l_map_start == from)
++        {
++          TEST_COMPARE (r, 3);
++          path_ldso = path;
++          continue;
++        }
++
++      if (from > l->l_map_start && to < l->l_map_end
++          && (r == 2 || (path_ldso != NULL && strcmp (path, path_ldso))))
++        {
++          if (r == 2)
++            printf ("info: anonymous mapping found at 0x%" PRIxPTR " - 0x%"
++                    PRIxPTR "\n", from, to);
++          else
++            printf ("info: object \"%s\" found at 0x%" PRIxPTR " - 0x%"
++                    PRIxPTR "\n", path, from, to);
++
++          found = true;
++        }
++
++      free (path);
++    }
++
++  free (path_ldso);
++  free (line);
++  xfclose (f);
++  return found;
++}
 +
 +static int
 +do_test (void)
@@ -2971,16 +3029,18 @@ index 0000000000..04de808bb2
 +              if ((void *) dlfo.dlfo_link_map != (void *) l)
 +                {
 +                  printf ("info: object \"%s\" found at %p\n",
-+                          dlfo.dlfo_link_map->l_name, ptr);
++                          dlfo.dlfo_link_map->l_name, expected);
 +                  gap_found = true;
 +                }
 +            }
 +          else
 +            TEST_COMPARE (dlfo_ret, -1);
++
 +          xmunmap (ptr, 1);
 +          addr += pagesize;
 +        }
-+      if (!gap_found)
++
++      if (!gap_found && !find_gap_with_proc_self_map (l))
 +        FAIL ("no ld.so gap found");
 +    }
 +  else
@@ -14675,6 +14735,31 @@ index f89e784243..d2ab4cb829 100644
  
        int ret = INTERNAL_SYSCALL_CALL (rseq, RSEQ_SELF (), size, 0, RSEQ_SIG);
        if (!INTERNAL_SYSCALL_ERROR_P (ret))
+diff --git a/sysdeps/unix/sysv/linux/tst-rseq.c b/sysdeps/unix/sysv/linux/tst-rseq.c
+index 00181cfefb..e83ea2b939 100644
+--- a/sysdeps/unix/sysv/linux/tst-rseq.c
++++ b/sysdeps/unix/sysv/linux/tst-rseq.c
+@@ -48,8 +48,7 @@ do_rseq_main_test (void)
+   size_t rseq_align = MAX (getauxval (AT_RSEQ_ALIGN), RSEQ_MIN_ALIGN);
+   size_t rseq_feature_size = MAX (getauxval (AT_RSEQ_FEATURE_SIZE),
+                                   RSEQ_AREA_SIZE_INITIAL_USED);
+-  size_t rseq_alloc_size = roundup (MAX (rseq_feature_size,
+-                                    RSEQ_AREA_SIZE_INITIAL_USED), rseq_align);
++  size_t rseq_reg_size = MAX (rseq_feature_size, RSEQ_AREA_SIZE_INITIAL);
+   struct rseq *rseq_abi = __thread_pointer () + __rseq_offset;
+ 
+   TEST_VERIFY_EXIT (rseq_thread_registered ());
+@@ -89,8 +88,8 @@ do_rseq_main_test (void)
+   /* Test a rseq registration with the same arguments as the internal
+      registration which should fail with errno == EBUSY.  */
+   TEST_VERIFY (((unsigned long) rseq_abi % rseq_align) == 0);
+-  TEST_VERIFY (__rseq_size <= rseq_alloc_size);
+-  int ret = syscall (__NR_rseq, rseq_abi, rseq_alloc_size, 0, RSEQ_SIG);
++  TEST_VERIFY (__rseq_size <= rseq_reg_size);
++  int ret = syscall (__NR_rseq, rseq_abi, rseq_reg_size, 0, RSEQ_SIG);
+   TEST_VERIFY (ret != 0);
+   TEST_COMPARE (errno, EBUSY);
+ }
 diff --git a/sysdeps/x86/Makefile b/sysdeps/x86/Makefile
 index 5311b594af..c814060e08 100644
 --- a/sysdeps/x86/Makefile
