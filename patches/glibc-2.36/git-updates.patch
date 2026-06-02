@@ -3627,7 +3627,7 @@ index debb96b322..b72933b526 100644
  
  	      free (conf);
 diff --git a/iconvdata/Makefile b/iconvdata/Makefile
-index f4c089ed5d..d01b3fcab6 100644
+index f4c089ed5d..1ca3a193c7 100644
 --- a/iconvdata/Makefile
 +++ b/iconvdata/Makefile
 @@ -75,7 +75,8 @@ ifeq (yes,$(build-shared))
@@ -3636,16 +3636,18 @@ index f4c089ed5d..d01b3fcab6 100644
  	bug-iconv10 bug-iconv11 bug-iconv12 tst-iconv-big5-hkscs-to-2ucs4 \
 -	bug-iconv13 bug-iconv14 bug-iconv15
 +	bug-iconv13 bug-iconv14 bug-iconv15 \
-+	tst-iconv-iso-2022-cn-ext
++	tst-iconv-iso-2022-cn-ext tst-bug33980
  ifeq ($(have-thread-library),yes)
  tests += bug-iconv3
  endif
-@@ -330,6 +331,8 @@ $(objpfx)bug-iconv14.out: $(addprefix $(objpfx), $(gconv-modules)) \
+@@ -330,6 +331,10 @@ $(objpfx)bug-iconv14.out: $(addprefix $(objpfx), $(gconv-modules)) \
  			  $(addprefix $(objpfx),$(modules.so))
  $(objpfx)bug-iconv15.out: $(addprefix $(objpfx), $(gconv-modules)) \
  			  $(addprefix $(objpfx),$(modules.so))
 +$(objpfx)tst-iconv-iso-2022-cn-ext.out: $(addprefix $(objpfx), $(gconv-modules)) \
 +					$(addprefix $(objpfx),$(modules.so))
++$(objpfx)tst-bug33980.out: $(addprefix $(objpfx), $(gconv-modules)) \
++			   $(addprefix $(objpfx),$(modules.so))
  
  $(objpfx)iconv-test.out: run-iconv-test.sh \
  			 $(addprefix $(objpfx), $(gconv-modules)) \
@@ -3662,6 +3664,120 @@ index fa2f6b46e5..6c9e5a024e 100644
  	  {								      \
  	    /* The second character is not available.  */		      \
  	    result = __GCONV_INCOMPLETE_INPUT;				      \
+diff --git a/iconvdata/ibm1364.c b/iconvdata/ibm1364.c
+index ce3172416c..e79f98a769 100644
+--- a/iconvdata/ibm1364.c
++++ b/iconvdata/ibm1364.c
+@@ -67,12 +67,29 @@
+ 
+ /* Since this is a stateful encoding we have to provide code which resets
+    the output state to the initial state.  This has to be done during the
+-   flushing.  */
++   flushing.  For the to-internal direction (FROM_DIRECTION is true),
++   there may be a pending character that needs flushing.  */
+ #define EMIT_SHIFT_TO_INIT \
+   if ((data->__statep->__count & ~7) != sb)				      \
+     {									      \
+       if (FROM_DIRECTION)						      \
+-	data->__statep->__count &= 7;					      \
++	{								      \
++	  uint32_t ch = data->__statep->__count >> 7;			      \
++	  if (__glibc_unlikely (ch != 0))				      \
++	    {								      \
++	      if (__glibc_unlikely (outend - outbuf < 4))		      \
++		status = __GCONV_FULL_OUTPUT;				      \
++	      else							      \
++		{							      \
++		  put32u (outbuf, ch);					      \
++		  outbuf += 4;						      \
++		  /* Clear character and db bit.  */			      \
++		  data->__statep->__count &= 7;				      \
++		}							      \
++	    }								      \
++	  else								      \
++	    data->__statep->__count &= 7;				      \
++	}								      \
+       else								      \
+ 	{								      \
+ 	  /* We are not in the initial state.  To switch back we have	      \
+@@ -99,11 +116,13 @@
+     *curcsp = save_curcs
+ 
+ 
+-/* Current codeset type.  */
++/* Current codeset type.  The bit is stored in the __count variable of
++   the conversion state.  If the db bit is set, bit 7 and above store
++   a pending UCS-4 code point if non-zero.  */
+ enum
+ {
+-  sb = 0,
+-  db = 64
++  sb = 0,			/* Single byte mode.  */
++  db = 64			/* Double byte mode.  */
+ };
+ 
+ 
+@@ -119,21 +138,29 @@ enum
+       }									      \
+     else								      \
+       {									      \
+-	/* This is a combined character.  Make sure we have room.  */	      \
+-	if (__glibc_unlikely (outptr + 8 > outend))			      \
+-	  {								      \
+-	    result = __GCONV_FULL_OUTPUT;				      \
+-	    break;							      \
+-	  }								      \
+-									      \
+ 	const struct divide *cmbp					      \
+ 	  = &DB_TO_UCS4_COMB[ch - __TO_UCS4_COMBINED_MIN];		      \
+ 	assert (cmbp->res1 != 0 && cmbp->res2 != 0);			      \
+ 									      \
+ 	put32 (outptr, cmbp->res1);					      \
+ 	outptr += 4;							      \
+-	put32 (outptr, cmbp->res2);					      \
+-	outptr += 4;							      \
++									      \
++	/* See whether we have room for the second character.  */	      \
++	if (outend - outptr >= 4)					      \
++	  {								      \
++	    put32 (outptr, cmbp->res2);					      \
++	    outptr += 4;						      \
++	  }								      \
++	else								      \
++	  {								      \
++	    /* Otherwise store only the first character now, and	      \
++	       put the second one into the queue.  */			      \
++	    curcs |= cmbp->res2 << 7;					      \
++	    inptr += 2;							      \
++	    /* Tell the caller why we terminate the loop.  */		      \
++	    result = __GCONV_FULL_OUTPUT;				      \
++	    break;							      \
++	  }								      \
+       }									      \
+   }
+ #else
+@@ -153,7 +180,20 @@ enum
+ #define LOOPFCT 		FROM_LOOP
+ #define BODY \
+   {									      \
+-    uint32_t ch = *inptr;						      \
++    uint32_t ch;							      \
++									      \
++    ch = curcs >> 7;							      \
++    if (__glibc_unlikely (ch != 0))					      \
++      {									      \
++	put32 (outptr, ch);						      \
++	outptr += 4;							      \
++	/* Remove the pending character, but preserve state bits.  */	      \
++	curcs &= (1 << 7) - 1;						      \
++	continue;							      \
++      }									      \
++									      \
++    /* Otherwise read the next input byte.  */				      \
++    ch = *inptr;							      \
+ 									      \
+     if (__builtin_expect (ch, 0) == SO)					      \
+       {									      \
 diff --git a/iconvdata/iso-2022-cn-ext.c b/iconvdata/iso-2022-cn-ext.c
 index e09f358cad..2cc478a8c6 100644
 --- a/iconvdata/iso-2022-cn-ext.c
@@ -3692,6 +3808,165 @@ index e09f358cad..2cc478a8c6 100644
  		assert ((used >> 5) >= 3 && (used >> 5) <= 7);		      \
  		escseq = "+I+J+K+L+M" + ((used >> 5) - 3) * 2;		      \
  		*outptr++ = ESC;					      \
+diff --git a/iconvdata/tst-bug33980.c b/iconvdata/tst-bug33980.c
+new file mode 100644
+index 0000000000..c9693e0efe
+--- /dev/null
++++ b/iconvdata/tst-bug33980.c
+@@ -0,0 +1,153 @@
++/* Test for bug 33980: combining characters in IBM1390/IBM1399.
++   Copyright (C) 2026 Free Software Foundation, Inc.
++   This file is part of the GNU C Library.
++
++   The GNU C Library is free software; you can redistribute it and/or
++   modify it under the terms of the GNU Lesser General Public
++   License as published by the Free Software Foundation; either
++   version 2.1 of the License, or (at your option) any later version.
++
++   The GNU C Library is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   Lesser General Public License for more details.
++
++   You should have received a copy of the GNU Lesser General Public
++   License along with the GNU C Library; if not, see
++   <https://www.gnu.org/licenses/>.  */
++
++#include <alloc_buffer.h>
++#include <errno.h>
++#include <iconv.h>
++#include <stdbool.h>
++#include <string.h>
++
++#include <support/check.h>
++#include <support/next_to_fault.h>
++#include <support/support.h>
++
++/* Run iconv in a loop with a small output buffer of OUTBUFSIZE bytes
++   starting at OUTBUF.  OUTBUF should be right before an unmapped page
++   so that writing past the end will fault.  Skip SHIFT bytes at the
++   start of the input and output, to exercise different buffer
++   alignment.  TRUNCATE indicates skipped bytes at the end of
++   input (0 and 1 a valid).  */
++static void
++test_one (const char *encoding, unsigned int shift, unsigned int truncate,
++          char *outbuf, size_t outbufsize)
++{
++  /* In IBM1390 and IBM1399, the DBCS code 0xECB5 expands to two
++     Unicode code points when translated.  */
++  static char input[] =
++    {
++      /* 8 letters X.  */
++      0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7, 0xe7,
++      /* SO, 0xECB5, SI: shift to DBCS, special character, shift back.  */
++      0x0e, 0xec, 0xb5, 0x0f
++    };
++
++  /* Expected output after UTF-8 conversion.  */
++  static char expected[] =
++    {
++      'X', 'X', 'X', 'X', 'X', 'X', 'X', 'X',
++      /* U+304B (HIRAGANA LETTER KA).  */
++      0xe3, 0x81, 0x8b,
++      /* U+309A (COMBINING KATAKANA-HIRAGANA SEMI-VOICED SOUND MARK).  */
++      0xe3, 0x82, 0x9a
++    };
++
++  iconv_t cd = iconv_open ("UTF-8", encoding);
++  TEST_VERIFY_EXIT (cd != (iconv_t) -1);
++
++  char result_storage[64];
++  struct alloc_buffer result_buf
++    = alloc_buffer_create (result_storage, sizeof (result_storage));
++
++  char *inptr = &input[shift];
++  size_t inleft = sizeof (input) - shift - truncate;
++
++  while (inleft > 0)
++    {
++      char *outptr = outbuf;
++      size_t outleft = outbufsize;
++      size_t inleft_before = inleft;
++
++      size_t ret = iconv (cd, &inptr, &inleft, &outptr, &outleft);
++      size_t produced = outptr - outbuf;
++      alloc_buffer_copy_bytes (&result_buf, outbuf, produced);
++
++      if (ret == (size_t) -1 && errno == E2BIG)
++        {
++          if (produced == 0 && inleft == inleft_before)
++            {
++              /* Output buffer too small to make progress.  This is
++                 expected for very small output buffer sizes.  */
++              TEST_VERIFY_EXIT (outbufsize < 3);
++              break;
++            }
++          continue;
++        }
++      if (ret == (size_t) -1)
++        FAIL_EXIT1 ("%s (outbufsize %zu): iconv: %m", encoding, outbufsize);
++      break;
++    }
++
++  /* Flush any pending state (e.g. a buffered combined character).
++     With outbufsize < 3, we could not store the first character, so
++     the second character did not become pending, and there is nothing
++     to flush.  */
++  {
++    char *outptr = outbuf;
++    size_t outleft = outbufsize;
++
++    size_t ret = iconv (cd, NULL, NULL, &outptr, &outleft);
++    TEST_VERIFY_EXIT (ret == 0);
++    size_t produced = outptr - outbuf;
++    alloc_buffer_copy_bytes (&result_buf, outbuf, produced);
++
++    /* Second flush does not provide more data.  */
++    outptr = outbuf;
++    outleft = outbufsize;
++    ret = iconv (cd, NULL, NULL, &outptr, &outleft);
++    TEST_VERIFY_EXIT (ret == 0);
++    TEST_VERIFY (outptr == outbuf);
++  }
++
++  TEST_VERIFY_EXIT (!alloc_buffer_has_failed (&result_buf));
++  size_t result_used
++    = sizeof (result_storage) - alloc_buffer_size (&result_buf);
++
++  if (outbufsize >= 3)
++    {
++      TEST_COMPARE (inleft, 0);
++      TEST_COMPARE (result_used, sizeof (expected) - shift);
++      TEST_COMPARE_BLOB (result_storage, result_used,
++                         &expected[shift], sizeof (expected) - shift);
++    }
++  else
++    /* If the buffer is too small, only the leading X could be converted.  */
++    TEST_COMPARE (result_used, 8 - shift);
++
++  TEST_VERIFY_EXIT (iconv_close (cd) == 0);
++}
++
++static int
++do_test (void)
++{
++  struct support_next_to_fault ntf
++    = support_next_to_fault_allocate (8);
++
++  for (int shift = 0; shift <= 8; ++shift)
++    for (int truncate = 0; truncate < 2; ++truncate)
++      for (size_t outbufsize = 1; outbufsize <= 8; outbufsize++)
++        {
++          char *outbuf = ntf.buffer + ntf.length - outbufsize;
++          test_one ("IBM1390", shift, truncate, outbuf, outbufsize);
++          test_one ("IBM1399", shift, truncate, outbuf, outbufsize);
++        }
++
++  support_next_to_fault_free (&ntf);
++  return 0;
++}
++
++#include <support/test-driver.c>
 diff --git a/iconvdata/tst-iconv-iso-2022-cn-ext.c b/iconvdata/tst-iconv-iso-2022-cn-ext.c
 new file mode 100644
 index 0000000000..96a8765fd5
@@ -4022,6 +4297,21 @@ index b1710407d0..b896484320 100644
  
  tests-time64 := \
    tst-fcntl-time64 \
+diff --git a/io/fcntl.c b/io/fcntl.c
+index 491678bccc..d6e56629b8 100644
+--- a/io/fcntl.c
++++ b/io/fcntl.c
+@@ -18,6 +18,10 @@
+ #include <errno.h>
+ #include <fcntl.h>
+ 
++#ifndef __O_CLOEXEC
++# error __O_CLOEXEC not defined by fcntl.h/cloexec.h
++#endif
++
+ /* Perform file control operations on FD.  */
+ int
+ __fcntl (int fd, int cmd, ...)
 diff --git a/io/tst-fcntl-lock-lfs.c b/io/tst-fcntl-lock-lfs.c
 new file mode 100644
 index 0000000000..f2a909fb02
@@ -18040,9 +18330,18 @@ index 0000000000..8f21ebe1b6
 +#define UTMP_SIZE 384
 +#define LASTLOG_SIZE 292
 diff --git a/sysdeps/unix/sysv/linux/Makefile b/sysdeps/unix/sysv/linux/Makefile
-index a139a16532..d92ea7a1f3 100644
+index a139a16532..80ad22259c 100644
 --- a/sysdeps/unix/sysv/linux/Makefile
 +++ b/sysdeps/unix/sysv/linux/Makefile
+@@ -114,7 +114,7 @@ sysdep_headers += sys/mount.h sys/acct.h \
+ 		  bits/types/struct_shmid64_ds_helper.h \
+ 		  bits/pthread_stack_min.h bits/pthread_stack_min-dynamic.h \
+ 		  sys/rseq.h bits/rseq.h \
+-		  sys/pidfd.h
++		  sys/pidfd.h bits/cloexec.h
+ 
+ tests += tst-clone tst-clone2 tst-clone3 tst-fanotify tst-personality \
+ 	 tst-quota tst-sync_file_range tst-sysconf-iov_max tst-ttyname \
 @@ -131,6 +131,7 @@ tests += tst-clone tst-clone2 tst-clone3 tst-fanotify tst-personality \
    tst-pidfd \
    tst-process_mrelease \
@@ -18223,6 +18522,13 @@ index 391165a99c..d51597b923 100644
  };
  
  #endif /* _CPU_FEATURES_AARCH64_H  */
+diff --git a/sysdeps/unix/sysv/linux/alpha/bits/cloexec.h b/sysdeps/unix/sysv/linux/alpha/bits/cloexec.h
+new file mode 100644
+index 0000000000..f381f28a53
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/alpha/bits/cloexec.h
+@@ -0,0 +1 @@
++#define __O_CLOEXEC 010000000
 diff --git a/sysdeps/unix/sysv/linux/alpha/brk_call.h b/sysdeps/unix/sysv/linux/alpha/brk_call.h
 index b8088cf13f..0b851b6c86 100644
 --- a/sysdeps/unix/sysv/linux/alpha/brk_call.h
@@ -18384,11 +18690,29 @@ index 0000000000..30ee6279d2
 +
 +
 +#endif /* _BITS_STRUCT_STAT_H  */
+diff --git a/sysdeps/unix/sysv/linux/bits/cloexec.h b/sysdeps/unix/sysv/linux/bits/cloexec.h
+new file mode 100644
+index 0000000000..3059fb6473
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/bits/cloexec.h
+@@ -0,0 +1 @@
++#define __O_CLOEXEC 02000000
 diff --git a/sysdeps/unix/sysv/linux/bits/fcntl-linux.h b/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
-index 33ff88ce59..bfc674235d 100644
+index 33ff88ce59..b7d1ad99e2 100644
 --- a/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
 +++ b/sysdeps/unix/sysv/linux/bits/fcntl-linux.h
-@@ -101,7 +101,7 @@
+@@ -81,9 +81,7 @@
+ #ifndef __O_NOFOLLOW
+ # define __O_NOFOLLOW	0400000
+ #endif
+-#ifndef __O_CLOEXEC
+-# define __O_CLOEXEC   02000000
+-#endif
++#include <bits/cloexec.h>
+ #ifndef __O_DIRECT
+ # define __O_DIRECT	 040000
+ #endif
+@@ -101,7 +99,7 @@
  #endif
  
  #ifndef F_GETLK
@@ -18906,6 +19230,13 @@ index 064eaa08ae..4d01786120 100644
  __get_nprocs_sched (void)
  {
    enum
+diff --git a/sysdeps/unix/sysv/linux/hppa/bits/cloexec.h b/sysdeps/unix/sysv/linux/hppa/bits/cloexec.h
+new file mode 100644
+index 0000000000..f381f28a53
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/hppa/bits/cloexec.h
+@@ -0,0 +1 @@
++#define __O_CLOEXEC 010000000
 diff --git a/sysdeps/unix/sysv/linux/hppa/bits/struct_stat.h b/sysdeps/unix/sysv/linux/hppa/bits/struct_stat.h
 new file mode 100644
 index 0000000000..38b6e13e68
@@ -19877,6 +20208,13 @@ index ea38935497..f00817a6f6 100644
  }
  #if __TIMESIZE != 64
  libc_hidden_def (__shmctl64)
+diff --git a/sysdeps/unix/sysv/linux/sparc/bits/cloexec.h b/sysdeps/unix/sysv/linux/sparc/bits/cloexec.h
+new file mode 100644
+index 0000000000..6706eaa7d5
+--- /dev/null
++++ b/sysdeps/unix/sysv/linux/sparc/bits/cloexec.h
+@@ -0,0 +1 @@
++#define __O_CLOEXEC 0x400000
 diff --git a/sysdeps/unix/sysv/linux/sparc/bits/wordsize.h b/sysdeps/unix/sysv/linux/sparc/bits/wordsize.h
 index 7562875ee2..ea103e5970 100644
 --- a/sysdeps/unix/sysv/linux/sparc/bits/wordsize.h
@@ -19935,10 +20273,16 @@ index ac6af95e36..23b8b93f56 100644
 -END (__rt_sigreturn_stub)
 +END_NOCFI (__rt_sigreturn_stub)
 diff --git a/sysdeps/unix/sysv/linux/sys/mount.h b/sysdeps/unix/sysv/linux/sys/mount.h
-index f965986ba8..19841d0738 100644
+index f965986ba8..9a142bab4b 100644
 --- a/sysdeps/unix/sysv/linux/sys/mount.h
 +++ b/sysdeps/unix/sysv/linux/sys/mount.h
-@@ -27,77 +27,113 @@
+@@ -21,83 +21,118 @@
+ #ifndef _SYS_MOUNT_H
+ #define _SYS_MOUNT_H	1
+ 
+-#include <fcntl.h>
+ #include <features.h>
+ #include <stdint.h>
  #include <stddef.h>
  #include <sys/ioctl.h>
  
@@ -20053,7 +20397,7 @@ index f965986ba8..19841d0738 100644
  #define MS_MGC_VAL 0xc0ed0000	/* Magic flag number to indicate "new" flags */
  #define MS_MGC_MSK 0xffff0000	/* Magic flag number mask */
  
-@@ -106,20 +142,35 @@ enum
+@@ -106,20 +141,35 @@ enum
     is probably as bad and I don't want to create yet another include
     file.  */
  
@@ -20089,7 +20433,7 @@ index f965986ba8..19841d0738 100644
  #define BLKGETSIZE64 _IOR(0x12,114,size_t) /* return device size.  */
  
  
-@@ -137,9 +188,6 @@ enum
+@@ -137,9 +187,6 @@ enum
  };
  
  
@@ -20099,7 +20443,7 @@ index f965986ba8..19841d0738 100644
  /* fsmount flags.  */
  #define FSMOUNT_CLOEXEC         0x00000001
  
-@@ -157,6 +205,7 @@ enum
+@@ -157,6 +204,7 @@ enum
  #define MOUNT_ATTR_NOSYMFOLLOW  0x00200000 /* Do not follow symlinks.  */
  
  
@@ -20107,7 +20451,7 @@ index f965986ba8..19841d0738 100644
  /* For mount_setattr.  */
  struct mount_attr
  {
-@@ -165,6 +214,7 @@ struct mount_attr
+@@ -165,6 +213,7 @@ struct mount_attr
    uint64_t propagation;
    uint64_t userns_fd;
  };
@@ -20115,7 +20459,7 @@ index f965986ba8..19841d0738 100644
  
  #define MOUNT_ATTR_SIZE_VER0    32 /* sizeof first published struct */
  
-@@ -185,26 +235,31 @@ struct mount_attr
+@@ -185,31 +234,43 @@ struct mount_attr
  #define FSPICK_EMPTY_PATH       0x00000008
  
  
@@ -20149,12 +20493,27 @@ index f965986ba8..19841d0738 100644
 +# define FSCONFIG_CMD_RECONFIGURE FSCONFIG_CMD_RECONFIGURE
  };
 +#endif
-+
+ 
+-/* open_tree flags.  */
+-#define OPEN_TREE_CLONE    1         /* Clone the target tree and attach the clone */
+-#define OPEN_TREE_CLOEXEC  O_CLOEXEC /* Close the file on execve() */
 +/* fsopen flags.  */
 +#define FSOPEN_CLOEXEC          0x00000001
  
- /* open_tree flags.  */
- #define OPEN_TREE_CLONE    1         /* Clone the target tree and attach the clone */
++/* open_tree flags.  */
++#ifndef OPEN_TREE_CLONE
++# define OPEN_TREE_CLONE    1 /* Clone the target tree and attach the clone */
++#endif
++#ifndef O_CLOEXEC
++# include <bits/cloexec.h>
++# define O_CLOEXEC __O_CLOEXEC
++#endif
++#ifndef OPEN_TREE_CLOEXEC
++# define OPEN_TREE_CLOEXEC  O_CLOEXEC /* Close the file on execve() */
++#endif
+ 
+ __BEGIN_DECLS
+ 
 diff --git a/sysdeps/unix/sysv/linux/syscall-names.list b/sysdeps/unix/sysv/linux/syscall-names.list
 index 6c7b2f7011..028ad3107a 100644
 --- a/sysdeps/unix/sysv/linux/syscall-names.list
@@ -20327,6 +20686,18 @@ index a62f803123..be2ef2daf1 100755
      linux_version_headers = glibcsyscalls.linux_kernel_version(args.cc)
      # Constants in glibc were updated to match Linux v5.16.  When glibc
      # constants are updated this value should be updated to match the
+diff --git a/sysdeps/unix/sysv/linux/tst-mount.c b/sysdeps/unix/sysv/linux/tst-mount.c
+index b6333a60e6..d5c844455c 100644
+--- a/sysdeps/unix/sysv/linux/tst-mount.c
++++ b/sysdeps/unix/sysv/linux/tst-mount.c
+@@ -20,6 +20,7 @@
+ #include <support/check.h>
+ #include <support/xunistd.h>
+ #include <support/namespace.h>
++#include <fcntl.h> /* For AT_ constants.  */
+ #include <sys/mount.h>
+ 
+ _Static_assert (sizeof (struct mount_attr) == MOUNT_ATTR_SIZE_VER0,
 diff --git a/sysdeps/unix/sysv/linux/tst-pidfd-consts.py b/sysdeps/unix/sysv/linux/tst-pidfd-consts.py
 index 90cbb9be64..d732173abd 100644
 --- a/sysdeps/unix/sysv/linux/tst-pidfd-consts.py
