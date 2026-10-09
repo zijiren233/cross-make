@@ -5252,6 +5252,18 @@ index f5cee6caef..ba967833ad 100644
  
  #define RPC_THREAD_VARIABLE(x) (__rpc_thread_variables()->x)
  
+diff --git a/io/bits/statx-generic.h b/io/bits/statx-generic.h
+index 30a24765dc..70748b440a 100644
+--- a/io/bits/statx-generic.h
++++ b/io/bits/statx-generic.h
+@@ -61,6 +61,6 @@ __BEGIN_DECLS
+ /* Fill *BUF with information about PATH in DIRFD.  */
+ int statx (int __dirfd, const char *__restrict __path, int __flags,
+            unsigned int __mask, struct statx *__restrict __buf)
+-  __THROW __nonnull ((2, 5));
++  __THROW __nonnull ((5));
+ 
+ __END_DECLS
 diff --git a/io/fcntl.c b/io/fcntl.c
 index 10960699f2..a221e7658b 100644
 --- a/io/fcntl.c
@@ -5267,6 +5279,54 @@ index 10960699f2..a221e7658b 100644
  /* Perform file control operations on FD.  */
  int
  __fcntl (int fd, int cmd, ...)
+diff --git a/io/sys/stat.h b/io/sys/stat.h
+index 3b4ba80132..7ea39b8755 100644
+--- a/io/sys/stat.h
++++ b/io/sys/stat.h
+@@ -263,14 +263,14 @@ extern int __REDIRECT_NTH (fstat64, (int __fd, struct stat64 *__buf),
+ # ifndef __USE_FILE_OFFSET64
+ extern int fstatat (int __fd, const char *__restrict __file,
+ 		    struct stat *__restrict __buf, int __flag)
+-     __THROW __nonnull ((2, 3));
++     __THROW __nonnull ((3));
+ # else
+ #  ifdef __USE_TIME64_REDIRECTS
+ #   ifdef __REDIRECT_NTH
+ extern int __REDIRECT_NTH (fstatat, (int __fd, const char *__restrict __file,
+ 				     struct stat *__restrict __buf,
+ 				     int __flag),
+-			   __fstatat64_time64) __nonnull ((2, 3));
++			   __fstatat64_time64) __nonnull ((3));
+ #   else
+ #    define fstatat __fstatat64_time64
+ #   endif
+@@ -279,7 +279,7 @@ extern int __REDIRECT_NTH (fstatat, (int __fd, const char *__restrict __file,
+ extern int __REDIRECT_NTH (fstatat, (int __fd, const char *__restrict __file,
+ 				     struct stat *__restrict __buf,
+ 				     int __flag),
+-			   fstatat64) __nonnull ((2, 3));
++			   fstatat64) __nonnull ((3));
+ #   else
+ #    define fstatat fstatat64
+ #   endif
+@@ -290,7 +290,7 @@ extern int __REDIRECT_NTH (fstatat, (int __fd, const char *__restrict __file,
+ #  ifndef __USE_TIME64_REDIRECTS
+ extern int fstatat64 (int __fd, const char *__restrict __file,
+ 		      struct stat64 *__restrict __buf, int __flag)
+-     __THROW __nonnull ((2, 3));
++     __THROW __nonnull ((3));
+ #  else
+ #   ifdef __REDIRECT_NTH
+ extern int __REDIRECT_NTH (fstatat64, (int __fd,
+@@ -298,7 +298,7 @@ extern int __REDIRECT_NTH (fstatat64, (int __fd,
+ 				       struct stat64 *__restrict __buf,
+ 				       int __flag),
+ 			   __fstatat64_time64)
+-     __nonnull ((2, 3));
++     __nonnull ((3));
+ #   else
+ #    define fstatat64 __fstatat64_time64
+ #   endif
 diff --git a/libio/Makefile b/libio/Makefile
 index 6a507b67ea..f2e98f96eb 100644
 --- a/libio/Makefile
@@ -47175,10 +47235,217 @@ index ae9dcd6180..a0b31d80f6 100644
  	    {
  	      CHECK_GLIBC_IFUNC_PREFERRED_NEED_BOTH
 diff --git a/sysdeps/x86/dl-cacheinfo.h b/sysdeps/x86/dl-cacheinfo.h
-index a1c03b8903..7b1b61c096 100644
+index a1c03b8903..53c58e6851 100644
 --- a/sysdeps/x86/dl-cacheinfo.h
 +++ b/sysdeps/x86/dl-cacheinfo.h
-@@ -961,11 +961,11 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
+@@ -98,6 +98,15 @@ static const struct intel_02_cache_info
+ 
+ #define nintel_02_known (sizeof (intel_02_known) / sizeof (intel_02_known [0]))
+ 
++/* Cache for redundant cpuid queries in handle_intel, intel_check_word and
++   get_common_cache_info.  Currently, this has only been shown to significantly
++   improve performance on a specific Intel CPU (Xeon 6430).  */
++struct intel_cpuid_cache
++{
++  unsigned char leaf2_valid, leaf4_valid; /* Number of cached (sub)leaves.  */
++  unsigned int leaf2[4], leaf4[0x10][4];
++};
++
+ static int
+ intel_02_known_compare (const void *p1, const void *p2)
+ {
+@@ -118,7 +127,8 @@ static long int
+ __attribute__ ((noinline))
+ intel_check_word (int name, unsigned int value, bool *has_level_2,
+ 		  bool *no_level_2_or_3,
+-		  const struct cpu_features *cpu_features)
++		  const struct cpu_features *cpu_features,
++		  struct intel_cpuid_cache *cache)
+ {
+   if ((value & 0x80000000) != 0)
+     /* The register value is reserved.  */
+@@ -152,7 +162,21 @@ intel_check_word (int name, unsigned int value, bool *has_level_2,
+ 	  unsigned int round = 0;
+ 	  while (1)
+ 	    {
+-	      __cpuid_count (4, round, eax, ebx, ecx, edx);
++	      if (round < cache->leaf4_valid)
++		/* Subleaf was queried before.  Do not execute cpuid again.  */
++		eax = cache->leaf4[round][0], ebx = cache->leaf4[round][1],
++		ecx = cache->leaf4[round][2], edx = cache->leaf4[round][3];
++	      else if (round == cache->leaf4_valid
++		       && round < sizeof(cache->leaf4)/sizeof(*cache->leaf4))
++		{
++		  /* Cache the cpuid result if we have space.  */
++		  __cpuid_count (4, round, eax, ebx, ecx, edx);
++		  cache->leaf4[round][0] = eax, cache->leaf4[round][1] = ebx;
++		  cache->leaf4[round][2] = ecx, cache->leaf4[round][3] = edx;
++		  cache->leaf4_valid++;
++		}
++	      else
++		__cpuid_count (4, round, eax, ebx, ecx, edx);
+ 
+ 	      enum { null = 0, data = 1, inst = 2, uni = 3 } type = eax & 0x1f;
+ 	      if (type == null)
+@@ -247,7 +271,8 @@ intel_check_word (int name, unsigned int value, bool *has_level_2,
+ 
+ 
+ static long int __attribute__ ((noinline))
+-handle_intel (int name, const struct cpu_features *cpu_features)
++handle_intel (int name, const struct cpu_features *cpu_features,
++	      struct intel_cpuid_cache *cache)
+ {
+   unsigned int maxidx = cpu_features->basic.max_cpuid;
+ 
+@@ -260,41 +285,33 @@ handle_intel (int name, const struct cpu_features *cpu_features)
+   long int result = 0;
+   bool no_level_2_or_3 = false;
+   bool has_level_2 = false;
+-  unsigned int eax;
+-  unsigned int ebx;
+-  unsigned int ecx;
+-  unsigned int edx;
+-  __cpuid (2, eax, ebx, ecx, edx);
++  int i;
++
++  if (!cache->leaf2_valid)
++    {
++      __cpuid (2, cache->leaf2[0], cache->leaf2[1],
++		  cache->leaf2[2], cache->leaf2[3]);
++      cache->leaf2_valid = 1;
++    }
+ 
+   /* The low byte of EAX of CPUID leaf 2 should always return 1 and it
+      should be ignored.  If it isn't 1, use CPUID leaf 4 instead.  */
+-  if ((eax & 0xff) != 1)
++  if ((cache->leaf2[0] & 0xff) != 1)
+     return intel_check_word (name, 0xff, &has_level_2, &no_level_2_or_3,
+-			     cpu_features);
+-  else
+-    {
+-      eax &= 0xffffff00;
++			     cpu_features, cache);
+ 
+-      /* Process the individual registers' value.  */
+-      result = intel_check_word (name, eax, &has_level_2,
+-				 &no_level_2_or_3, cpu_features);
+-      if (result != 0)
+-	return result;
+-
+-      result = intel_check_word (name, ebx, &has_level_2,
+-				 &no_level_2_or_3, cpu_features);
+-      if (result != 0)
+-	return result;
++  /* Process all descriptors in leaf 2.  */
++  result = intel_check_word (name, cache->leaf2[0]&0xffffff00, &has_level_2,
++			    &no_level_2_or_3, cpu_features, cache);
++  if (result != 0)
++    return result;
+ 
+-      result = intel_check_word (name, ecx, &has_level_2,
+-				 &no_level_2_or_3, cpu_features);
+-      if (result != 0)
+-	return result;
+-
+-      result = intel_check_word (name, edx, &has_level_2,
+-				 &no_level_2_or_3, cpu_features);
++  for (i = 1; i < 4; i++)
++    {
++      result = intel_check_word (name, cache->leaf2[i], &has_level_2,
++				&no_level_2_or_3, cpu_features, cache);
+       if (result != 0)
+-	return result;
++        return result;
+     }
+ 
+   if (name >= _SC_LEVEL2_CACHE_SIZE && name <= _SC_LEVEL3_CACHE_LINESIZE
+@@ -569,7 +586,7 @@ handle_zhaoxin (int name)
+ 
+ static void
+ get_common_cache_info (long int *shared_ptr, long int * shared_per_thread_ptr, unsigned int *threads_ptr,
+-                long int core)
++                long int core, struct intel_cpuid_cache *cache)
+ {
+   unsigned int eax;
+   unsigned int ebx;
+@@ -627,7 +644,14 @@ get_common_cache_info (long int *shared_ptr, long int * shared_per_thread_ptr, u
+           int check = 0x1 | (threads_l3 == 0) << 1;
+           do
+             {
+-              __cpuid_count (4, i++, eax, ebx, ecx, edx);
++              if (cache != NULL && i < cache->leaf4_valid)
++                eax = cache->leaf4[i][0], ebx = cache->leaf4[i][1],
++                ecx = cache->leaf4[i][2], edx = cache->leaf4[i][3];
++              else
++                /* Do not attempt to cache queries at this point,
++		   because get_common_cache_info is called last.  */
++                __cpuid_count (4, i, eax, ebx, ecx, edx);
++              i++;
+ 
+               /* There seems to be a bug in at least some Pentium Ds
+                  which sometimes fail to iterate all cache parameters.
+@@ -807,35 +831,38 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
+ 
+   if (cpu_features->basic.kind == arch_kind_intel)
+     {
+-      data = handle_intel (_SC_LEVEL1_DCACHE_SIZE, cpu_features);
+-      shared = handle_intel (_SC_LEVEL3_CACHE_SIZE, cpu_features);
++      struct intel_cpuid_cache cache;
++      cache.leaf2_valid = cache.leaf4_valid = 0;
++
++      data = handle_intel (_SC_LEVEL1_DCACHE_SIZE, cpu_features, &cache);
++      shared = handle_intel (_SC_LEVEL3_CACHE_SIZE, cpu_features, &cache);
+       shared_per_thread = shared;
+ 
+       level1_icache_size
+-	= handle_intel (_SC_LEVEL1_ICACHE_SIZE, cpu_features);
++	= handle_intel (_SC_LEVEL1_ICACHE_SIZE, cpu_features, &cache);
+       level1_icache_linesize
+-	= handle_intel (_SC_LEVEL1_ICACHE_LINESIZE, cpu_features);
++	= handle_intel (_SC_LEVEL1_ICACHE_LINESIZE, cpu_features, &cache);
+       level1_dcache_size = data;
+       level1_dcache_assoc
+-	= handle_intel (_SC_LEVEL1_DCACHE_ASSOC, cpu_features);
++	= handle_intel (_SC_LEVEL1_DCACHE_ASSOC, cpu_features, &cache);
+       level1_dcache_linesize
+-	= handle_intel (_SC_LEVEL1_DCACHE_LINESIZE, cpu_features);
++	= handle_intel (_SC_LEVEL1_DCACHE_LINESIZE, cpu_features, &cache);
+       level2_cache_size
+-	= handle_intel (_SC_LEVEL2_CACHE_SIZE, cpu_features);
++	= handle_intel (_SC_LEVEL2_CACHE_SIZE, cpu_features, &cache);
+       level2_cache_assoc
+-	= handle_intel (_SC_LEVEL2_CACHE_ASSOC, cpu_features);
++	= handle_intel (_SC_LEVEL2_CACHE_ASSOC, cpu_features, &cache);
+       level2_cache_linesize
+-	= handle_intel (_SC_LEVEL2_CACHE_LINESIZE, cpu_features);
++	= handle_intel (_SC_LEVEL2_CACHE_LINESIZE, cpu_features, &cache);
+       level3_cache_size = shared;
+       level3_cache_assoc
+-	= handle_intel (_SC_LEVEL3_CACHE_ASSOC, cpu_features);
++	= handle_intel (_SC_LEVEL3_CACHE_ASSOC, cpu_features, &cache);
+       level3_cache_linesize
+-	= handle_intel (_SC_LEVEL3_CACHE_LINESIZE, cpu_features);
++	= handle_intel (_SC_LEVEL3_CACHE_LINESIZE, cpu_features, &cache);
+       level4_cache_size
+-	= handle_intel (_SC_LEVEL4_CACHE_SIZE, cpu_features);
++	= handle_intel (_SC_LEVEL4_CACHE_SIZE, cpu_features, &cache);
+ 
+       get_common_cache_info (&shared, &shared_per_thread, &threads,
+-			     level2_cache_size);
++			     level2_cache_size, &cache);
+     }
+   else if (cpu_features->basic.kind == arch_kind_zhaoxin)
+     {
+@@ -856,7 +883,7 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
+       level3_cache_linesize = handle_zhaoxin (_SC_LEVEL3_CACHE_LINESIZE);
+ 
+       get_common_cache_info (&shared, &shared_per_thread, &threads,
+-			     level2_cache_size);
++			     level2_cache_size, NULL);
+     }
+   else if (cpu_features->basic.kind == arch_kind_amd)
+     {
+@@ -961,11 +988,11 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
      non_temporal_threshold = maximum_non_temporal_threshold;
  
    /* NB: The REP MOVSB threshold must be greater than VEC_SIZE * 8.  */
@@ -47192,7 +47459,7 @@ index a1c03b8903..7b1b61c096 100644
    if (CPU_FEATURE_USABLE_P (cpu_features, AVX512F)
        && !CPU_FEATURE_PREFERRED_P (cpu_features, Prefer_No_AVX512))
      {
-@@ -988,14 +988,6 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
+@@ -988,14 +1015,6 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
    if (CPU_FEATURE_USABLE_P (cpu_features, FSRM))
      rep_movsb_threshold = 2112;
  
@@ -47207,7 +47474,7 @@ index a1c03b8903..7b1b61c096 100644
    /* For AMD CPUs that support ERMS (Zen3+), REP MOVSB is in a lot of
       cases slower than the vectorized path (and for some alignments,
       it is really slow, check BZ #30994).  */
-@@ -1017,6 +1009,13 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
+@@ -1017,6 +1036,13 @@ dl_init_cacheinfo (struct cpu_features *cpu_features)
    if (tunable_size != 0)
      shared = tunable_size;
  
@@ -47930,6 +48197,19 @@ index 77adec9050..066c839c2f 100644
  #include <sys/types.h>		/* Some systems define `time_t' here.  */
  
  #ifdef TIME_WITH_SYS_TIME
+diff --git a/timezone/zic.c b/timezone/zic.c
+index 00f00e307a..25cbb33a22 100644
+--- a/timezone/zic.c
++++ b/timezone/zic.c
+@@ -3235,7 +3235,7 @@ outzone(const struct zone *zpfirst, ptrdiff_t zonecount)
+ 				startttisut);
+ 			if (usestart) {
+ 				addtt(starttime, type);
+-				if (useuntil && nonTZlimtime < starttime) {
++				if (nonTZlimtime < starttime) {
+ 				  nonTZlimtime = starttime;
+ 				  nonTZlimtype = type;
+ 				}
 diff --git a/wcsmbs/Makefile b/wcsmbs/Makefile
 index 1cddd8cc6d..63adf0e8ef 100644
 --- a/wcsmbs/Makefile
