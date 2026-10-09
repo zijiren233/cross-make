@@ -1,0 +1,21 @@
+fstatat(2) path argument is allowed to be NULL
+with AT_EMPTY_PATH since Linux 6.11
+
+musl dereferences path without checking for NULL, causing a
+segmentation fault in userspace instead of passing NULL through
+to the kernel.
+
+Backported from Alpine Linux aports, main/musl:
+https://git.alpinelinux.org/aports/commit/main/musl?id=a75cec8b8c2d26b1db1c0ab520d02e7df0acd886
+
+--- a/src/stat/fstatat.c
++++ b/src/stat/fstatat.c
+@@ -78,7 +78,7 @@
+ 	int ret;
+ 	struct kstat kst;
+ 
+-	if (flag==AT_EMPTY_PATH && fd>=0 && !*path) {
++	if (flag==AT_EMPTY_PATH && fd>=0 && (!path || !*path)) {
+ 		ret = __syscall(SYS_fstat, fd, &kst);
+ 		if (ret==-EBADF && __syscall(SYS_fcntl, fd, F_GETFD)>=0) {
+ 			ret = __syscall(SYS_fstatat, fd, path, &kst, flag);

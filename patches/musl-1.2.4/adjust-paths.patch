@@ -1,0 +1,22 @@
+Distributions that support utmp through the utmps package (e.g. Alpine
+Linux) define _PATH_UTMP and _PATH_WTMP with different values in the
+utmps <utmp.h> header. Having conflicting definitions in musl <paths.h>
+causes macro redefinition errors for software including both headers
+(e.g. OpenSSH). Per musl upstream, distributions whose policy is to use
+utmps should patch <paths.h> accordingly.
+
+Backported from Alpine Linux aports, main/musl:
+https://git.alpinelinux.org/aports/commit/main/musl?id=d72a964d7f68bb113225a61d9425ba48005a99e0
+
+--- a/include/paths.h
++++ b/include/paths.h
+@@ -18,9 +18,7 @@
+ #define	_PATH_SHADOW	"/etc/shadow"
+ #define	_PATH_SHELLS	"/etc/shells"
+ #define	_PATH_TTY	"/dev/tty"
+-#define _PATH_UTMP	"/dev/null/utmp"
+ #define	_PATH_VI	"/usr/bin/vi"
+-#define _PATH_WTMP	"/dev/null/wtmp"
+ 
+ #define	_PATH_DEV	"/dev/"
+ #define	_PATH_TMP	"/tmp/"
