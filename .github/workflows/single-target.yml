@@ -221,8 +221,10 @@ jobs:
         if: startsWith(inputs.platform, 'darwin')
         run: |
           diskutil list
-          # disk3 for aarch64, disk1 for x86_64
-          DISK=${{ contains(inputs.platform, 'aarch64') && 'disk3' || 'disk1' }}
+          # Locate the APFS container backing the system volume; hard-coded
+          # disk numbers rot as runner images change layout
+          DISK=$(diskutil info / | awk '/Part of Whole/ {print $4}')
+          echo "Using APFS container: $DISK"
           # RAM disk for work directory (x86_64 only, aarch64 has enough disk space)
           if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
             diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://12582912)
