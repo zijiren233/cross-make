@@ -200,12 +200,12 @@ jobs:
         run: |
           sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
           sudo chmod +x /usr/local/bin/yq
-          bash ./scripts/sources.sh download -S sources
+          bash ./scripts/sources.sh download -S sources -T "${{ inputs.target }}"
 
       - name: Download sources (macOS)
         if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'darwin')
         run: |
-          bash ./scripts/sources.sh download -S sources
+          bash ./scripts/sources.sh download -S sources -T "${{ inputs.target }}"
 
       # Save cache if we downloaded (not from artifact, to avoid redundant cache)
       - name: Save sources cache

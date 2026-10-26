@@ -193,6 +193,82 @@ GetSourcesCacheKey() {
   GetAllSources | sha256sum | cut -d' ' -f1 | head -c 16
 }
 
+# List sources required by a single target (by ID or TARGET).
+# Mirrors the libc selection logic of scripts/build.sh WriteConfig.
+GetTargetSources() {
+  local id_or_target="$1"
+
+  # Defaults (single yq call)
+  local defaults
+  defaults=$(yq -r '.defaults | to_entries | .[] | "\(.key)=\(.value)"' "$TARGETS_YAML")
+  local def_gcc def_binutils def_gmp def_mpc def_mpfr def_isl def_zstd
+  local def_linux def_musl def_glibc def_mingw def_freebsd def_netbsd
+  while IFS='=' read -r key value; do
+    case "$key" in
+    GCC_VER) def_gcc="$value" ;;
+    BINUTILS_VER) def_binutils="$value" ;;
+    GMP_VER) def_gmp="$value" ;;
+    MPC_VER) def_mpc="$value" ;;
+    MPFR_VER) def_mpfr="$value" ;;
+    ISL_VER) def_isl="$value" ;;
+    ZSTD_VER) def_zstd="$value" ;;
+    LINUX_VER) def_linux="$value" ;;
+    MUSL_VER) def_musl="$value" ;;
+    GLIBC_VER) def_glibc="$value" ;;
+    MINGW_VER) def_mingw="$value" ;;
+    FREEBSD_VER) def_freebsd="$value" ;;
+    NETBSD_VER) def_netbsd="$value" ;;
+    esac
+  done <<<"$defaults"
+
+  # Per-target versions: MUSL|GLIBC|MINGW|FREEBSD|NETBSD|GCC (first matching row)
+  local tcfg
+  tcfg=$(yq -r "[.targets[] | select(.ID == \"${id_or_target}\" or .TARGET == \"${id_or_target}\")] | .[0] | [.MUSL_VER // \"\", .GLIBC_VER // \"\", .MINGW_VER // \"\", .FREEBSD_VER // \"\", .NETBSD_VER // \"\", .GCC_VER // \"\"] | join(\"|\")" "$TARGETS_YAML")
+  local t_musl t_glibc t_mingw t_freebsd t_netbsd t_gcc
+  IFS='|' read -r t_musl t_glibc t_mingw t_freebsd t_netbsd t_gcc <<<"$tcfg"
+
+  local target
+  target=$(yq -r ".targets[] | select(.ID == \"${id_or_target}\") | .TARGET // \"\"" "$TARGETS_YAML")
+  [ -z "$target" ] && target="$id_or_target"
+
+  local sources=()
+  sources+=("gcc-${t_gcc:-$def_gcc}.tar.xz")
+  sources+=("binutils-${def_binutils}.tar.xz")
+  sources+=("gmp-${def_gmp}.tar.bz2")
+  sources+=("mpc-${def_mpc}.tar.gz")
+  sources+=("mpfr-${def_mpfr}.tar.bz2")
+  sources+=("isl-${def_isl}.tar.bz2")
+  sources+=("zstd-${def_zstd}.tar.gz")
+  sources+=("config.sub")
+  sources+=("config.guess")
+
+  if [ -n "$t_mingw" ] || [[ "$target" == *mingw* ]]; then
+    sources+=("mingw-w64-${t_mingw:-$def_mingw}.tar.bz2")
+  elif [ -n "$t_freebsd" ] || [[ "$target" == *freebsd* ]]; then
+    local fa
+    fa=$(GetFreeBSDArch "$target")
+    [ -n "$fa" ] && sources+=("freebsd-${t_freebsd:-$def_freebsd}-${fa}.tar.xz")
+  elif [ -n "$t_netbsd" ] || [[ "$target" == *netbsd* ]]; then
+    local na nx
+    local ni
+    ni=$(GetNetBSDArch "$target")
+    if [ -n "$ni" ]; then
+      na="${ni%%|*}"
+      nx="${ni##*|}"
+      sources+=("netbsd-${t_netbsd:-$def_netbsd}-${na}-base.${nx}")
+      sources+=("netbsd-${t_netbsd:-$def_netbsd}-${na}-comp.${nx}")
+    fi
+  elif [ -n "$t_glibc" ] || { [[ "$target" == *gnu* || "$target" == *glibc* ]] && [ -z "$t_musl" ]; }; then
+    sources+=("glibc-${t_glibc:-$def_glibc}.tar.gz")
+    sources+=("linux-${def_linux}.tar.xz")
+  else
+    sources+=("musl-${t_musl:-$def_musl}.tar.gz")
+    sources+=("linux-${def_linux}.tar.xz")
+  fi
+
+  printf '%s\n' "${sources[@]}" | sort -u
+}
+
 # Download all sources
 DownloadSources() {
   local sources_dir="${SOURCES_DIR:-sources}"
@@ -211,7 +287,13 @@ DownloadSources() {
   echo "Downloading all sources to: $sources_dir"
   echo ""
   echo "Sources to download:"
-  local all_sources=$(GetAllSources)
+  local all_sources
+  if [ -n "$FILTER_TARGET" ]; then
+    echo "(filtered for target: $FILTER_TARGET)"
+    all_sources=$(GetTargetSources "$FILTER_TARGET")
+  else
+    all_sources=$(GetAllSources)
+  fi
   echo "$all_sources" | while read -r src; do
     if [ -f "${sources_dir}/${src}" ]; then
       echo "  [cached] $src"
@@ -258,28 +340,45 @@ Usage() {
   echo "Options for download:"
   echo "  -C          Use China mirrors"
   echo "  -S <dir>    Download to specified directory (default: sources)"
+  echo "  -T <target> Only download sources needed by this target (ID or TARGET)"
   echo ""
   echo "Examples:"
   echo "  $0 list"
   echo "  $0 cache-key"
   echo "  $0 download"
   echo "  $0 download -C -S /path/to/sources"
+  echo "  $0 download -T aarch64-w64-mingw32 -S sources"
 }
 
 # Main
 case "${1:-}" in
 list)
-  GetAllSources
+  shift
+  while getopts "T:" arg; do
+    case $arg in
+    T) FILTER_TARGET="$OPTARG" ;;
+    *)
+      Usage
+      exit 1
+      ;;
+    esac
+  done
+  if [ -n "$FILTER_TARGET" ]; then
+    GetTargetSources "$FILTER_TARGET"
+  else
+    GetAllSources
+  fi
   ;;
 cache-key)
   GetSourcesCacheKey
   ;;
 download)
   shift
-  while getopts "CS:" arg; do
+  while getopts "CT:S:" arg; do
     case $arg in
     C) USE_CHINA_MIRROR="true" ;;
     S) SOURCES_DIR="$OPTARG" ;;
+    T) FILTER_TARGET="$OPTARG" ;;
     *)
       Usage
       exit 1
