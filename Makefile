@@ -255,12 +255,15 @@ $(SOURCES)/config.guess: | $(SOURCES)
 # Define template for FreeBSD base.txz download rules
 # $(1) = architecture suffix (e.g., amd64, aarch64, powerpc64le)
 # $(2) = download path (e.g., amd64, arm64/aarch64, powerpc/powerpc64le)
+# EOL releases are removed from FREEBSD_SITE and only remain on ftp-archive.
 define FREEBSD_DOWNLOAD_RULE
 $$(SOURCES)/freebsd-%-$(1).tar.xz: hashes/freebsd-%-$(1).tar.xz.sha1 | $$(SOURCES)
 	mkdir -p $$@.tmp
-	cd $$@.tmp && $$(DL_CMD) $$(notdir $$@) $$(FREEBSD_SITE)/$(2)/$$*-RELEASE/base.txz
-	cd $$@.tmp && touch $$(notdir $$@)
-	cd $$@.tmp && $$(SHA1_CMD) $$(CURDIR)/hashes/$$(notdir $$@).sha1
+	cd $$@.tmp && ok=0; for url in \
+		"$$(FREEBSD_SITE)/$(2)/$$*-RELEASE/base.txz" \
+		"https://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/$(2)/$$*-RELEASE/base.txz"; do \
+		if $$(DL_CMD) $$(notdir $$@) "$$$$url" && touch $$(notdir $$@) && $$(SHA1_CMD) $$(CURDIR)/hashes/$$(notdir $$@).sha1; then ok=1; break; fi; \
+	done; [ "$$$$ok" = 1 ]
 	mv $$@.tmp/$$(notdir $$@) $$@
 	rm -rf $$@.tmp
 endef
