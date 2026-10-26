@@ -232,17 +232,23 @@ $(SOURCES):
 
 $(SOURCES)/config.sub: | $(SOURCES)
 	mkdir -p $@.tmp
-	cd $@.tmp && $(DL_CMD) $(notdir $@) "https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=$(CONFIG_SUB_REV)"
-	cd $@.tmp && touch $(notdir $@)
-	cd $@.tmp && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_SUB_REV).sha1
+	cd $@.tmp && ok=0; for url in \
+		"https://raw.githubusercontent.com/GitMirroring/config/$(CONFIG_SUB_REV)/config.sub" \
+		"https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=$(CONFIG_SUB_REV)" \
+		"https://git.savannah.gnu.org/cgit/config.git/plain/config.sub?id=$(CONFIG_SUB_REV)"; do \
+		if $(DL_CMD) $(notdir $@) "$$url" && touch $(notdir $@) && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_SUB_REV).sha1; then ok=1; break; fi; \
+	done; [ "$$ok" = 1 ]
 	mv $@.tmp/$(notdir $@) $@
 	rm -rf $@.tmp
 
 $(SOURCES)/config.guess: | $(SOURCES)
 	mkdir -p $@.tmp
-	cd $@.tmp && $(DL_CMD) $(notdir $@) "https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=$(CONFIG_GUESS_REV)"
-	cd $@.tmp && touch $(notdir $@)
-	cd $@.tmp && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_GUESS_REV).sha1
+	cd $@.tmp && ok=0; for url in \
+		"https://raw.githubusercontent.com/GitMirroring/config/$(CONFIG_GUESS_REV)/config.guess" \
+		"https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=$(CONFIG_GUESS_REV)" \
+		"https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=$(CONFIG_GUESS_REV)"; do \
+		if $(DL_CMD) $(notdir $@) "$$url" && touch $(notdir $@) && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_GUESS_REV).sha1; then ok=1; break; fi; \
+	done; [ "$$ok" = 1 ]
 	mv $@.tmp/$(notdir $@) $@
 	rm -rf $@.tmp
 
