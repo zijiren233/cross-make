@@ -330,6 +330,10 @@ MAKE += MAKEINFO=false
 
 LINKER_HASH_STYLE =
 
+# PE/COFF has no PIE: the default-pie static spec passes "-z text" which pe
+# ld rejects, breaking -static links. Windows ASLR comes from --dynamicbase.
+PIE_CONFIG = --disable-default-pie
+
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
 	--enable-fully-dynamic-string
