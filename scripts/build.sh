@@ -405,6 +405,12 @@ function WriteConfig() {
   local YAML_FREEBSD_VER="$(GetTargetConfig "$BUILD_ID" FREEBSD_VER)"
   local YAML_NETBSD_VER="$(GetTargetConfig "$BUILD_ID" NETBSD_VER)"
   local YAML_MINGW_VER="$(GetTargetConfig "$BUILD_ID" MINGW_VER)"
+  local YAML_GCC_VER="$(GetTargetConfig "$BUILD_ID" GCC_VER)"
+
+  # Per-target GCC version override (takes precedence over default/CLI)
+  if [ -n "$YAML_GCC_VER" ]; then
+    GCC_VER="$YAML_GCC_VER"
+  fi
 
   # Use YAML values if available, otherwise use defaults based on target type
   if [ -n "$YAML_MUSL_VER" ]; then

@@ -1,0 +1,9 @@
+diff --git a/libitm/Makefile.in b/libitm/Makefile.in
+--- a/libitm/Makefile.in
++++ b/libitm/Makefile.in
+@@ -188,4 +188,4 @@
+ LTCPPASCOMPILE = $(LIBTOOL) $(AM_V_lt) $(AM_LIBTOOLFLAGS) \
+-	$(LIBTOOLFLAGS) --mode=compile $(CCAS) $(DEFS) \
++	$(LIBTOOLFLAGS) --tag=CC --mode=compile $(CCAS) $(DEFS) \
+ 	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+ 	$(AM_CCASFLAGS) $(CCASFLAGS)

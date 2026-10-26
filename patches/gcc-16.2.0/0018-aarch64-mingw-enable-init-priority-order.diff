@@ -1,0 +1,12 @@
+diff --git a/gcc/config/aarch64/aarch64-coff.h b/gcc/config/aarch64/aarch64-coff.h
+index aef07e62a9f7..6d4c7927c7dc 100644
+--- a/gcc/config/aarch64/aarch64-coff.h
++++ b/gcc/config/aarch64/aarch64-coff.h
+@@ -70,9 +70,6 @@
+ 
+ #define GLOBAL_ASM_OP "\t.global\t"
+ 
+-#undef SUPPORTS_INIT_PRIORITY
+-#define SUPPORTS_INIT_PRIORITY 0
+-
+ #endif

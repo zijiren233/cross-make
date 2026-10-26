@@ -92,12 +92,12 @@ GetAllSources() {
   # Get targets (single yq call, pipe-separated to handle empty fields)
   # Format: TARGET|MUSL_VER|GLIBC_VER|MINGW_VER|FREEBSD_VER|NETBSD_VER
   local targets_data
-  targets_data=$(yq -r '.targets[] | [.TARGET // "", .MUSL_VER // "", .GLIBC_VER // "", .MINGW_VER // "", .FREEBSD_VER // "", .NETBSD_VER // ""] | join("|")' "$TARGETS_YAML")
+  targets_data=$(yq -r '.targets[] | [.TARGET // "", .MUSL_VER // "", .GLIBC_VER // "", .MINGW_VER // "", .FREEBSD_VER // "", .NETBSD_VER // "", .GCC_VER // ""] | join("|")' "$TARGETS_YAML")
 
-  local musl_vers="" glibc_vers="" mingw_vers="" freebsd_files="" netbsd_files=""
+  local musl_vers="" glibc_vers="" mingw_vers="" gcc_vers="" freebsd_files="" netbsd_files=""
   local need_linux="false"
 
-  while IFS='|' read -r target musl_ver glibc_ver mingw_ver freebsd_ver netbsd_ver; do
+  while IFS='|' read -r target musl_ver glibc_ver mingw_ver freebsd_ver netbsd_ver gcc_ver; do
     [ -z "$target" ] && continue
 
     # Musl targets
@@ -123,6 +123,11 @@ GetAllSources() {
       mingw_vers="$mingw_vers $mingw_ver"
     elif [[ "$target" == *mingw* ]]; then
       mingw_vers="$mingw_vers $def_mingw"
+    fi
+
+    # Per-target GCC versions
+    if [ -n "$gcc_ver" ]; then
+      gcc_vers="$gcc_vers $gcc_ver"
     fi
 
     # FreeBSD targets
@@ -168,6 +173,9 @@ GetAllSources() {
   done
   for ver in $(echo "$mingw_vers" | tr ' ' '\n' | sort -u); do
     [ -n "$ver" ] && sources+=("mingw-w64-${ver}.tar.bz2")
+  done
+  for ver in $(echo "$gcc_vers" | tr ' ' '\n' | sort -u); do
+    [ -n "$ver" ] && sources+=("gcc-${ver}.tar.xz")
   done
   for file in $(echo "$freebsd_files" | tr ' ' '\n' | sort -u); do
     [ -n "$file" ] && sources+=("$file")
