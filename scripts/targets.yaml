@@ -15,7 +15,7 @@ defaults:
   MUSL_VER: "1.2.6"
   GLIBC_VER: "2.42"
   MINGW_VER: "v14.0.0"
-  FREEBSD_VER: "14.3"
+  FREEBSD_VER: "14.5"
   NETBSD_VER: "10.1"
 
 targets:
@@ -2235,65 +2235,65 @@ targets:
     GCC_VER: "16.2.0"
 
   # ============================================================================
-  # FreeBSD 13 targets (FREEBSD_VER: 13.5)
+  # FreeBSD 13 targets (13.x EOL, pruned from mirrors; sources on 14.5)
   # ============================================================================
   - TARGET: x86_64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: aarch64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64le-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: riscv64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   # ============================================================================
-  # FreeBSD 14 targets (FREEBSD_VER: 14.3)
+  # FreeBSD 14 targets (FREEBSD_VER: 14.5)
   # ============================================================================
   - TARGET: x86_64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: aarch64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64le-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: riscv64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   # ============================================================================
-  # FreeBSD 15 targets (FREEBSD_VER: 15.0)
+  # FreeBSD 15 targets (FREEBSD_VER: 15.1)
   # Note: FreeBSD 15 dropped support for i386 and 32-bit powerpc
   # ============================================================================
   - TARGET: x86_64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: aarch64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: powerpc64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: powerpc64le-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: riscv64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   # ============================================================================
   # NetBSD 10 targets (NETBSD_VER: 10.1)
