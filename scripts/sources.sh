@@ -193,6 +193,50 @@ GetSourcesCacheKey() {
   GetAllSources | sha256sum | cut -d' ' -f1 | head -c 16
 }
 
+# List sources required by the clang (LLVM) toolchain build.
+# Mirrors litecross/Makefile.clang: llvm + musl sysroots + linux headers +
+# statically linked host deps (zlib/zstd/libxml2).
+GetClangSources() {
+  local defaults
+  defaults=$(yq -r '.defaults | to_entries | .[] | "\(.key)=\(.value)"' "$TARGETS_YAML")
+  local def_llvm def_musl def_linux def_zstd def_zlib def_libxml2
+  while IFS='=' read -r key value; do
+    case "$key" in
+    LLVM_VER) def_llvm="$value" ;;
+    MUSL_VER) def_musl="$value" ;;
+    LINUX_VER) def_linux="$value" ;;
+    ZSTD_VER) def_zstd="$value" ;;
+    ZLIB_VER) def_zlib="$value" ;;
+    LIBXML2_VER) def_libxml2="$value" ;;
+    esac
+  done <<<"$defaults"
+
+  local sources=(
+    "llvm-project-${def_llvm}.src.tar.xz"
+    "musl-${def_musl}.tar.gz"
+    "linux-${def_linux}.tar.xz"
+    "zstd-${def_zstd}.tar.gz"
+    "zlib-${def_zlib}.tar.gz"
+    "libxml2-${def_libxml2}.tar.xz"
+    "config.sub"
+    "config.guess"
+  )
+  printf '%s\n' "${sources[@]}" | sort -u
+}
+
+# Resolve a download scope to a source list: empty = all, "clang" = the LLVM
+# toolchain set, anything else = a single gcc-mode target (ID or TARGET).
+GetScopedSources() {
+  local scope="${1:-}"
+  if [ "$scope" = "clang" ]; then
+    GetClangSources
+  elif [ -n "$scope" ]; then
+    GetTargetSources "$scope"
+  else
+    GetAllSources
+  fi
+}
+
 # List sources required by a single target (by ID or TARGET).
 # Mirrors the libc selection logic of scripts/build.sh WriteConfig.
 GetTargetSources() {
@@ -290,7 +334,7 @@ DownloadSources() {
   local all_sources
   if [ -n "$FILTER_TARGET" ]; then
     echo "(filtered for target: $FILTER_TARGET)"
-    all_sources=$(GetTargetSources "$FILTER_TARGET")
+    all_sources=$(GetScopedSources "$FILTER_TARGET")
   else
     all_sources=$(GetAllSources)
   fi
@@ -341,6 +385,7 @@ Usage() {
   echo "  -C          Use China mirrors"
   echo "  -S <dir>    Download to specified directory (default: sources)"
   echo "  -T <target> Only download sources needed by this target (ID or TARGET)"
+  echo "  -T clang    Only download sources needed by the LLVM toolchain build"
   echo ""
   echo "Examples:"
   echo "  $0 list"
@@ -348,6 +393,7 @@ Usage() {
   echo "  $0 download"
   echo "  $0 download -C -S /path/to/sources"
   echo "  $0 download -T aarch64-w64-mingw32 -S sources"
+  echo "  $0 download -T clang -S sources"
 }
 
 # Main
@@ -364,13 +410,29 @@ list)
     esac
   done
   if [ -n "$FILTER_TARGET" ]; then
-    GetTargetSources "$FILTER_TARGET"
+    GetScopedSources "$FILTER_TARGET"
   else
     GetAllSources
   fi
   ;;
 cache-key)
-  GetSourcesCacheKey
+  shift
+  while getopts "T:" arg; do
+    case $arg in
+    T) FILTER_TARGET="$OPTARG" ;;
+    *)
+      Usage
+      exit 1
+      ;;
+    esac
+  done
+  if [ "$FILTER_TARGET" = "clang" ]; then
+    # Hash only the clang toolchain source set; the gcc world stays on the
+    # shared full-list key so orchestrator cache sharing is unaffected
+    GetClangSources | sha256sum | cut -d' ' -f1 | head -c 16
+  else
+    GetSourcesCacheKey
+  fi
   ;;
 download)
   shift

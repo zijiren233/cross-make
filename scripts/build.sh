@@ -193,6 +193,9 @@ function Init() {
     DEFAULT_MINGW_VER="$(GetYamlDefault MINGW_VER)"
     DEFAULT_FREEBSD_VER="$(GetYamlDefault FREEBSD_VER)"
     DEFAULT_NETBSD_VER="$(GetYamlDefault NETBSD_VER)"
+    DEFAULT_LLVM_VER="$(GetYamlDefault LLVM_VER)"
+    DEFAULT_ZLIB_VER="$(GetYamlDefault ZLIB_VER)"
+    DEFAULT_LIBXML2_VER="$(GetYamlDefault LIBXML2_VER)"
 
     if [ ! "$CONFIG_SUB_REV" ]; then
       CONFIG_SUB_REV="$DEFAULT_CONFIG_SUB_REV"
@@ -236,12 +239,22 @@ function Init() {
     if [ -z "${NETBSD_VER+x}" ]; then
       NETBSD_VER="$DEFAULT_NETBSD_VER"
     fi
+    if [ -z "${LLVM_VER+x}" ]; then
+      LLVM_VER="$DEFAULT_LLVM_VER"
+    fi
+    if [ -z "${ZLIB_VER+x}" ]; then
+      ZLIB_VER="$DEFAULT_ZLIB_VER"
+    fi
+    if [ -z "${LIBXML2_VER+x}" ]; then
+      LIBXML2_VER="$DEFAULT_LIBXML2_VER"
+    fi
   }
 }
 
 function Help() {
   echo "-h: help"
   echo "-a: enable archive"
+  echo "-e: set compiler (gcc/clang; clang builds the LLVM toolchain)"
   echo "-T: targets file path or targets string"
   echo "-S: sources directory path"
   echo "-o: output dist directory path"
@@ -267,7 +280,7 @@ function Help() {
 }
 
 function ParseArgs() {
-  while getopts "haT:S:o:IR:Cc:x:d:nNH:KLlO:j:DPb" arg; do
+  while getopts "hae:T:S:o:IR:Cc:x:d:nNH:KLlO:j:DPb" arg; do
     case $arg in
     h)
       Help
@@ -275,6 +288,9 @@ function ParseArgs() {
       ;;
     a)
       ENABLE_ARCHIVE="true"
+      ;;
+    e)
+      COMPILER_MODE="$OPTARG"
       ;;
     T)
       TARGETS_FILE="$OPTARG"
@@ -480,6 +496,46 @@ $(if [ -n "$OPTIMIZE_LEVEL" ] && [ "$OPTIMIZE_LEVEL" != "2" ]; then
 $(if [ -n "$LINKER" ] && [ -z "$NATIVE" ] && [ -z "$HOST" ]; then
     echo "# Use custom linker for cross build only"
     echo "LDFLAGS += -fuse-ld=${LINKER}"
+  fi)
+
+CCACHE = ${CCACHE}
+
+$(if [ -n "$COWPATCH_SYMLINK" ]; then echo "COWPATCH_EXTRACT = -I"; fi)
+$(if [ -n "$ORIG_DIR" ]; then echo "ORIG_DIR = ${ORIG_DIR}"; fi)
+
+EOF
+  for arg in "$@"; do
+    echo "$arg" >>config.mak
+  done
+}
+
+# Write config.mak for the clang (LLVM) toolchain build.
+# Clang mode is multi-target: the root Makefile nulls TARGET/GCC_VER/... when
+# COMPILER=clang, so only the LLVM-side versions matter here.
+function WriteClangConfig() {
+  cat >config.mak <<EOF
+COMPILER = clang
+CONFIG_SUB_REV = ${CONFIG_SUB_REV}
+OUTPUT = ${OUTPUT}
+$(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
+LLVM_VER = ${LLVM_VER}
+MUSL_VER = ${MUSL_VER}
+LINUX_VER = ${LINUX_VER}
+ZSTD_VER = ${ZSTD_VER}
+ZLIB_VER = ${ZLIB_VER}
+LIBXML2_VER = ${LIBXML2_VER}
+
+# only work in cross build
+# native build will find ${TARGET}-gcc ${TARGET}-g++ in env to build
+ifneq (${CC}${CXX},)
+CC = ${CC}
+CXX = ${CXX}
+endif
+
+CHINA = ${USE_CHINA_MIRROR}
+
+$(if [ -n "$OPTIMIZE_LEVEL" ] && [ "$OPTIMIZE_LEVEL" != "2" ]; then
+    echo "COMMON_FLAGS += -O${OPTIMIZE_LEVEL}"
   fi)
 
 CCACHE = ${CCACHE}
@@ -810,6 +866,43 @@ function Build() {
   fi
 }
 
+# Build the multi-target LLVM/clang toolchain (COMPILER=clang).
+# The artifact carries clang-cl/lld-link (MSVC ABI capable) plus the
+# per-target musl sysroots and llvm binutils symlinks.
+function BuildClang() {
+  local DIST_NAME="${DIST}/clang"
+
+  echo "========================================"
+  echo "Clang Toolchain Build (LLVM ${LLVM_VER})"
+  echo "========================================"
+  echo "build clang toolchain to ${DIST_NAME}"
+  OUTPUT="${DIST_NAME}" WriteClangConfig "export PATH=$PATH"
+
+  if RunMake "${DIST_NAME}" "${DIST_NAME}.log" "clang"; then
+    echo "build clang toolchain success"
+    for tool in clang-cl lld-link ld.lld llvm-rc; do
+      if [ ! -e "${DIST_NAME}/clang/bin/${tool}" ]; then
+        echo "warning: ${tool} missing from clang/bin"
+      fi
+    done
+    TestCrossCC "${DIST_NAME}/bin/x86_64-linux-musl-clang"
+    TestCrossCXX "${DIST_NAME}/bin/x86_64-linux-musl-clang++"
+  else
+    local EXIT_CODE=$?
+    if [ ! "$LOG_TO_STD" ]; then
+      tail -n 3000 "${DIST_NAME}.log"
+      echo "full build log: ${DIST_NAME}.log"
+    fi
+    echo "build clang toolchain error"
+    exit $EXIT_CODE
+  fi
+
+  if [ "$ENABLE_ARCHIVE" ]; then
+    tar -zcf "${DIST_NAME}.tgz" -C "${DIST_NAME}" .
+    echo "package ${DIST_NAME} to ${DIST_NAME}.tgz success"
+  fi
+}
+
 # ALL_TARGETS is now read from targets.yaml via GetAllTargets function
 
 function BuildAll() {
@@ -848,4 +941,15 @@ ChToScriptFileDir
 Init
 ParseArgs "$@"
 FixArgs
-BuildAll
+case "${COMPILER_MODE:-gcc}" in
+gcc)
+  BuildAll
+  ;;
+clang)
+  BuildClang
+  ;;
+*)
+  echo "unknown compiler: ${COMPILER_MODE} (supported: gcc, clang)"
+  exit 1
+  ;;
+esac
