@@ -80,8 +80,10 @@ jobs:
         id: cache-key
         run: |
           KEY=$(./scripts/sources.sh cache-key)
-          echo "key=sources-${KEY}" >> $GITHUB_OUTPUT
-          echo "Sources cache key: sources-${KEY}"
+          # Scope the cache to the target: downloads are target-filtered,
+          # so a shared key would let one target restore another's partial set
+          echo "key=sources-${KEY}-${{ inputs.target }}" >> $GITHUB_OUTPUT
+          echo "Sources cache key: sources-${KEY}-${{ inputs.target }}"
 
       - name: Determine platform config
         id: config
