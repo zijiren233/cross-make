@@ -105,7 +105,9 @@ endef
 ifeq ($(shell uname -s),Darwin)
 STAT =
 else
-STAT = -static --static
+# -no-pie: Alpine gcc defaults to PIE, turning -static into static-pie whose
+# x86_64 self-relocation crashes the linked tools at startup
+STAT = -static --static -no-pie
 endif
 
 # Shell script to fix broken symlinks with absolute /lib/* paths
@@ -191,6 +193,8 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-DLLVM_RUNTIME_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)))' \
 	-DLLVM_TARGETS_TO_BUILD='$(subst $(subst ,, ),;,$(call llvm_targets,$(TARGETS)))' \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
+	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_EXE_LINKER_FLAGS='$(EXE_LD_FLAGS) $(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SHARED_LINKER_FLAGS='$(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_CXX_FLAGS='$(TARGET_CONFIG_$(t))') \
