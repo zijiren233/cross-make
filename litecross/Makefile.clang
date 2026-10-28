@@ -308,7 +308,7 @@ obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm
 	touch $@
 
 obj_zlib/%/.lc_built: | obj_zlib/%/.lc_configured
-	cd obj_zlib/$* && $(MAKE)
+	cd obj_zlib/$* && $(MAKE) AR='$(DESTDIR)$(OUTPUT)/bin/$*-ar' ARFLAGS=rc RANLIB='$(DESTDIR)$(OUTPUT)/bin/$*-ranlib'
 	touch $@
 
 obj_zlib/.lc_built: | obj_zlib/.lc_configured
