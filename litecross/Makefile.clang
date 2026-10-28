@@ -301,6 +301,8 @@ obj_zlib/.lc_configured: | obj_zlib/ src_zlib
 	touch $@
 
 obj_zlib/%/.lc_configured: export CC = $(CCACHE) $(DESTDIR)$(OUTPUT)/bin/$*-clang
+obj_zlib/%/.lc_configured: export AR = $(DESTDIR)$(OUTPUT)/bin/$*-ar
+obj_zlib/%/.lc_configured: export RANLIB = $(DESTDIR)$(OUTPUT)/bin/$*-ranlib
 obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm
 	cd obj_zlib/$* && sh ../../src_zlib/configure --prefix= --static
 	touch $@
