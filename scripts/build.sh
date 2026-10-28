@@ -885,9 +885,10 @@ function BuildClang() {
         echo "warning: ${tool} missing from clang/bin"
       fi
     done
-    # MSVC-ABI smoke: compile-only needs no Windows SDK
+    # MSVC-ABI smoke: compile-only needs no Windows SDK. '--' stops clang-cl
+    # from parsing the leading-slash absolute path as an MSVC option.
     printf 'int main(void){return 0;}\n' >"${DIST_NAME}/clangcl-smoke.c"
-    "${DIST_NAME}/clang/bin/clang-cl" /nologo /c "/Fo:${DIST_NAME}/clangcl-smoke.obj" "${DIST_NAME}/clangcl-smoke.c"
+    "${DIST_NAME}/clang/bin/clang-cl" /nologo /c "/Fo:${DIST_NAME}/clangcl-smoke.obj" -- "${DIST_NAME}/clangcl-smoke.c"
     rm -f "${DIST_NAME}/clangcl-smoke.c" "${DIST_NAME}/clangcl-smoke.obj"
     echo "clang-cl compile smoke OK"
     TestCrossCC "${DIST_NAME}/bin/x86_64-linux-musl-clang"

@@ -254,7 +254,7 @@ jobs:
               /dist/clang/bin/lld-link --version && \
               /dist/clang/bin/llvm-rc --version && \
               printf "int main(void){return 0;}\n" > /tmp/smoke.c && \
-              /dist/clang/bin/clang-cl /c /Fo:/tmp/smoke.obj /tmp/smoke.c && \
+              /dist/clang/bin/clang-cl /c /Fo:/tmp/smoke.obj -- /tmp/smoke.c && \
               echo "clang-cl compile smoke OK" && \
               file /tmp/smoke.obj'
 
@@ -281,7 +281,7 @@ jobs:
           ./dist/clang/bin/clang-cl --version
           ./dist/clang/bin/lld-link --version
           printf 'int main(void){return 0;}\n' > /tmp/smoke.c
-          ./dist/clang/bin/clang-cl /c /Fo:/tmp/smoke.obj /tmp/smoke.c
+          ./dist/clang/bin/clang-cl /c /Fo:/tmp/smoke.obj -- /tmp/smoke.c
           echo "clang-cl compile smoke OK"
 
       - name: Upload dist
