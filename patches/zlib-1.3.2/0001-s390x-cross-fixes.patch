@@ -1,0 +1,31 @@
+fix s390x VX support for musl cross builds
+
+1. configure detects the s390x VX support (VGFMAFLAG, clang:
+   -fzvector [-march=z13]) but never substitutes it into the generated
+   Makefile, so the detection result is lost and crc32_vx.c fails with
+   cross clang toolchains.
+2. crc32_vx.c uses the glibc alias HWCAP_S390_VX; musl only provides the
+   kernel UAPI name HWCAP_S390_VXRS (same value, 2048).
+--- a/configure
++++ b/configure
+@@ -1021,6 +1021,7 @@
+ /^LLVM_GCOV_FLAG *=/s#=.*#=$LLVM_GCOV_FLAG#
+ /^CFLAGS *=/s#=.*#=$CFLAGS#
+ /^SFLAGS *=/s#=.*#=$SFLAGS#
++/^VGFMAFLAG *=/s#=.*#=$VGFMAFLAG#
+ /^LDFLAGS *=/s#=.*#=$LDFLAGS#
+ /^LDSHARED *=/s#=.*#=$LDSHARED#
+ /^CPP *=/s#=.*#=$CPP#
+--- a/contrib/crc32vx/crc32_vx.c
++++ b/contrib/crc32vx/crc32_vx.c
+@@ -20,6 +20,10 @@
+ #include <vecintrin.h>
+ #include <sys/auxv.h>
+ 
++#ifndef HWCAP_S390_VX
++#define HWCAP_S390_VX HWCAP_S390_VXRS
++#endif
++
+ #ifdef __clang__
+ #  if ((__clang_major__ == 18) || (__clang_major__ == 19 && (__clang_minor__ < 1 || (__clang_minor__ == 1 && __clang_patchlevel__ < 2))))
+ # error crc32_vx optimizations are broken due to compiler bug in Clang versions: 18.0.0 <= clang_version < 19.1.2. \

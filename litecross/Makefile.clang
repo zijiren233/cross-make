@@ -31,6 +31,14 @@ TARGETS = \
 
 TARGET_CONFIG_armv7-linux-musleabihf = -mfpu=vfpv3
 
+# ARM baselines for the builtins/runtimes. Upstream compiler-rt arm .S files
+# use ARMv6T2 instructions (mls/movw/bfc) unguarded, and clang's default march
+# for arm-/armv6- triples is plain v6/v6kz, so the baseline must be pinned
+# explicitly here; this also flows into the target's clang.cfg defaults.
+TARGET_CONFIG_arm-linux-musleabihf = -march=armv6t2 -mfpu=vfpv2
+TARGET_CONFIG_armv6-linux-musleabihf = -march=armv6t2 -mfpu=vfpv2
+TARGET_CONFIG_armv6-linux-musleabi = -march=armv6t2
+
 # https://github.com/llvm/llvm-project/issues/58377
 # https://github.com/ziglang/zig/issues/4925
 $(foreach t,$(TARGETS), \
