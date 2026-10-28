@@ -79,7 +79,11 @@ jobs:
         if: inputs.sources-cache-key == ''
         id: cache-key
         run: |
-          KEY=$(./scripts/sources.sh cache-key)
+          if [ "${{ inputs.target }}" = "clang" ]; then
+            KEY=$(./scripts/sources.sh cache-key -T clang)
+          else
+            KEY=$(./scripts/sources.sh cache-key)
+          fi
           # Scope the cache to the target: downloads are target-filtered,
           # so a shared key would let one target restore another's partial set
           echo "key=sources-${KEY}-${{ inputs.target }}" >> $GITHUB_OUTPUT
@@ -157,6 +161,11 @@ jobs:
           defaults write dev.biscuit.yeetd killapsd true
           yeetd &
 
+          BREW_EXTRA=""
+          if [ "${{ inputs.target }}" = "clang" ]; then
+            BREW_EXTRA="cmake ninja"
+          fi
+
           brew install \
             bash \
             make \
@@ -172,7 +181,8 @@ jobs:
             texinfo \
             yq \
             rsync \
-            vmtouch
+            vmtouch \
+            $BREW_EXTRA
 
           # Lock gcc/g++ in memory for faster access
           GCC_PREFIX=$(brew --prefix gcc@14)
@@ -227,8 +237,12 @@ jobs:
           # disk numbers rot as runner images change layout
           DISK=$(diskutil info / | awk '/Part of Whole/ {print $4}')
           echo "Using APFS container: $DISK"
-          # RAM disk for work directory (x86_64 only, aarch64 has enough disk space)
-          if [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
+          if [ "${{ inputs.target }}" = "clang" ]; then
+            # LLVM build dirs exceed the RAM disk budget; use disk-backed
+            # case-sensitive volumes for the clang toolchain build
+            diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
+          elif [[ "${{ inputs.platform }}" == "darwin-x86_64" ]]; then
+            # RAM disk for work directory (x86_64 only, aarch64 has enough disk space)
             diskutil erasevolume "Case-sensitive HFS+" cross $(hdiutil attach -nomount ram://12582912)
           else
             diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
@@ -246,10 +260,19 @@ jobs:
       - name: Build (Linux)
         if: startsWith(inputs.platform, 'linux')
         run: |
+          WORK_OPTS="--tmpfs /work:exec,size=8G"
+          APK_EXTRA=""
+          if [ "${{ inputs.target }}" = "clang" ]; then
+            # LLVM build dirs exceed the tmpfs budget, and the clang build
+            # needs cmake/ninja in the container
+            WORK_OPTS="--volume ${PWD}/work:/work"
+            APK_EXTRA="cmake ninja"
+          fi
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
             --cap-add=IPC_LOCK \
-            --tmpfs /work:exec,size=8G \
+            $WORK_OPTS \
+            --env APK_EXTRA \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \
@@ -277,10 +300,11 @@ jobs:
                 file \
                 zip \
                 yq \
-                findutils && \
+                findutils \
+                $APK_EXTRA && \
               apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
               vmtouch -l -h -f -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
-              rsync -a --exclude=sources /src/ /work/ && \
+              rsync -a --exclude=sources --exclude=work /src/ /work/ && \
               find /sources -type f -exec touch {} + && \
               cd /work && \
               bash scripts/build.sh \
