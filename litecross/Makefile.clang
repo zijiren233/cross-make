@@ -31,13 +31,17 @@ TARGETS = \
 
 TARGET_CONFIG_armv7-linux-musleabihf = -mfpu=vfpv3
 
-# ARM baselines for the builtins/runtimes. Upstream compiler-rt arm .S files
-# use ARMv6T2 instructions (mls/movw/bfc) unguarded, and clang's default march
-# for arm-/armv6- triples is plain v6/v6kz, so the baseline must be pinned
-# explicitly here; this also flows into the target's clang.cfg defaults.
-TARGET_CONFIG_arm-linux-musleabihf = -march=armv6t2 -mfpu=vfpv2
-TARGET_CONFIG_armv6-linux-musleabihf = -march=armv6t2 -mfpu=vfpv2
-TARGET_CONFIG_armv6-linux-musleabi = -march=armv6t2
+# ARM baselines, kept at armv6kz+vfpv2 to match the gcc-mode toolchain and
+# Alpine's armhf baseline (ARM1176/RPi1 class). Upstream compiler-rt's
+# optimized arm FP assembly requires ARMv6T2 (mls/movw), so those targets
+# build builtins with COMPILER_RT_ARM_OPTIMIZED_FP=OFF (Alpine's approach),
+# which falls back to the portable C implementations; armv7 keeps them on.
+TARGET_CONFIG_arm-linux-musleabihf = -march=armv6kz -mfpu=vfpv2
+TARGET_CONFIG_armv6-linux-musleabihf = -march=armv6kz -mfpu=vfpv2
+TARGET_CONFIG_armv6-linux-musleabi = -march=armv6kz
+
+# 32-bit ARM targets whose baseline lacks ARMv6T2
+ARM_V6_TARGETS = arm-linux-musleabihf armv6-linux-musleabihf armv6-linux-musleabi
 
 # https://github.com/llvm/llvm-project/issues/58377
 # https://github.com/ziglang/zig/issues/4925
@@ -136,7 +140,6 @@ export CXXFLAGS = $(COMMON_FLAGS)
 FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-Wno-dev \
 	$(if $(filter ccache,$(CCACHE)),-DLLVM_CCACHE_BUILD=ON) \
-	-DCLANG_ENABLE_CIR=OFF \
 	-DLLVM_ENABLE_BINDINGS=OFF \
 	-DCLANG_PLUGIN_SUPPORT=ON \
 	-DLIBCLANG_BUILD_STATIC=ON \
@@ -196,6 +199,7 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
+	$(foreach t,$(ARM_V6_TARGETS),-DBUILTINS_$(call normalise_target,$(t))_COMPILER_RT_ARM_OPTIMIZED_FP=OFF) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_EXE_LINKER_FLAGS='$(EXE_LD_FLAGS) $(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SHARED_LINKER_FLAGS='$(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_CXX_FLAGS='$(TARGET_CONFIG_$(t))') \
