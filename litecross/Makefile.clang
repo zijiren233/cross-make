@@ -52,17 +52,6 @@ MINGW_CRT_CONFIG_i586-w64-mingw32 = --enable-lib32 --disable-lib64
 MINGW_CRT_CONFIG_i686-w64-mingw32 = --enable-lib32 --disable-lib64
 MINGW_CRT_CONFIG_x86_64-w64-mingw32 = --disable-lib32 --enable-lib64
 MINGW_CRT_CONFIG_aarch64-w64-mingw32 = --disable-lib32 --disable-lib64 --enable-libarm64
-MINGW_BUILTIN_ARCH_i586-w64-mingw32 = i386
-MINGW_BUILTIN_ARCH_i686-w64-mingw32 = i386
-MINGW_BUILTIN_ARCH_x86_64-w64-mingw32 = x86_64
-MINGW_BUILTIN_ARCH_aarch64-w64-mingw32 = aarch64
-# crtbegin is ELF-only; on aarch64 the x87 long-double helpers (mingw keeps
-# 80-bit long double only on x86) and the Linux LSE atomics outline helper
-# cannot be built for windows-gnu
-MINGW_BUILTIN_EXCLUDE = crtbegin
-MINGW_BUILTIN_EXCLUDE_aarch64 = crtbegin lse divxc3 mulxc3 powixf2 truncxfhf2 \
-	extendhfxf2 fixunsxfdi fixunsxfsi fixunsxfti fixxfdi fixxfti floatdixf \
-	floattixf floatundixf floatuntixf
 
 # https://github.com/llvm/llvm-project/issues/58377
 # https://github.com/ziglang/zig/issues/4925
@@ -228,18 +217,25 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_DO_STRIP=1 \
 	-DCMAKE_INSTALL_PREFIX=/clang \
-	-DLLVM_BUILTIN_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)))' \
+	-DLLVM_BUILTIN_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)));$(subst $(subst ,, ),;,$(MINGW_TARGETS))' \
 	-DLLVM_DEFAULT_TARGET_TRIPLE=$(DEFAULT_TARGET) \
 	-DLLVM_DISTRIBUTION_COMPONENTS='clang;clang-resource-headers;lld;LTO;$(subst $(subst ,, ),;,$(TOOLS))' \
 	-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld' \
 	-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind' \
 	-DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
 	-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
-	-DLLVM_RUNTIME_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)))' \
+	-DLLVM_RUNTIME_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)));$(subst $(subst ,, ),;,$(MINGW_TARGETS))' \
 	-DLLVM_TARGETS_TO_BUILD='$(subst $(subst ,, ),;,$(call llvm_targets,$(TARGETS)))' \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
+	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_CMAKE_SYSTEM_NAME=Windows) \
+	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSTEM_NAME=Windows) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LLVM_ENABLE_RUNTIMES=libunwind) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBUNWIND_ENABLE_SHARED=OFF) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBUNWIND_USE_COMPILER_RT=ON) \
 	$(foreach t,$(ARM_V6_TARGETS),-DBUILTINS_$(call normalise_target,$(t))_COMPILER_RT_ARM_OPTIMIZED_FP=OFF) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_EXE_LINKER_FLAGS='$(EXE_LD_FLAGS) $(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SHARED_LINKER_FLAGS='$(TARGET_CONFIG_$(t))') \
@@ -275,7 +271,7 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 
 all: llvm musl mingw
 
-install: install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-mingwbuiltins install-symlinks
+install: install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
 
 llvm: | obj_llvm/.lc_built_3
 musl: | $(foreach t,$(TARGETS),obj_musl/$(t)/.lc_built)
@@ -287,9 +283,8 @@ install-configs: $(foreach t,$(TARGETS) $(MINGW_TARGETS),install-configs_$(t))
 install-winbuiltins: $(foreach t,$(WIN_BUILTIN_TARGETS),install-winbuiltins_$(t))
 install-symlinks: $(foreach t,$(TARGETS) $(MINGW_TARGETS),install-symlinks_$(t))
 install-mingw: $(foreach t,$(MINGW_TARGETS),install-mingw_$(t))
-install-mingwbuiltins: $(foreach t,$(MINGW_TARGETS),install-mingwbuiltins_$(t))
 
-.PHONY: all llvm musl mingw install-llvm install-musl install-kernel-headers install-configs install-winbuiltins install-mingw install-mingwbuiltins install-symlinks clean
+.PHONY: all llvm musl mingw install-llvm install-musl install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks clean
 
 src_llvm: | $(LLVM_SRCDIR)
 	ln -sf $(LLVM_SRCDIR) $@
@@ -339,7 +334,7 @@ obj_sysroot/%/.lc_headers: | obj_sysroot/ obj_musl/%/.lc_configured
 	cd obj_musl/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install-headers
 	touch $@
 
-obj_llvm/.lc_built_2: | $(foreach t,$(TARGETS),obj_sysroot/$(t)/.lc_headers obj_sysroot/$(t)/.lc_linux_headers)
+obj_llvm/.lc_built_2: | $(foreach t,$(TARGETS),obj_sysroot/$(t)/.lc_headers obj_sysroot/$(t)/.lc_linux_headers) $(foreach t,$(MINGW_TARGETS),obj_sysroot/$(t)/.lc_mingw_headers)
 	cd obj_llvm && ninja builtins
 	touch $@
 
@@ -426,8 +421,9 @@ obj_sysroot/%/.lc_linux_headers: | obj_kernel_headers/%/.lc_built
 	touch $@
 
 obj_llvm/.lc_built_3: | $(foreach t,$(TARGETS),obj_musl/$(t)/.lc_built \
-							obj_sysroot/$(t)/.lc_crt_workaround \
-							obj_sysroot/$(t)/.lc_linux_headers)
+						obj_sysroot/$(t)/.lc_crt_workaround \
+						obj_sysroot/$(t)/.lc_linux_headers) \
+						$(foreach t,$(MINGW_TARGETS),obj_sysroot/$(t)/.lc_mingw_crt)
 	cd obj_llvm && ninja runtimes
 	touch $@
 
@@ -543,36 +539,11 @@ obj_mingw_pthreads/%/.lc_built: | obj_mingw_pthreads/%/.lc_configured
 	cd obj_mingw_pthreads/$* && $(MAKE)
 	touch $@
 
-# builtins for windows-gnu: unlike windows-msvc the mingw sysroot provides
-# libc headers, so int_util/emutls compile normally and no abort shim is
-# needed; the archive keeps the lib-prefixed GNU name the driver looks up
-MINGW_BUILTIN_EXCLUDE_P = $(foreach n,$(MINGW_BUILTIN_EXCLUDE),$(n).c $(n).S)
-MINGW_BUILTIN_EXCLUDE_aarch64_P = $(foreach n,$(MINGW_BUILTIN_EXCLUDE_aarch64),$(n).c $(n).S)
-MINGW_BUILTIN_GENERIC_SRCS := $(filter-out $(MINGW_BUILTIN_EXCLUDE_P) $(MINGW_BUILTIN_EXCLUDE_aarch64_P),$(notdir $(wildcard src_llvm/compiler-rt/lib/builtins/*.c)))
-MINGW_BUILTIN_i386_SRCS := $(filter-out $(MINGW_BUILTIN_EXCLUDE_P),$(notdir $(wildcard src_llvm/compiler-rt/lib/builtins/i386/*.c src_llvm/compiler-rt/lib/builtins/i386/*.S)))
-MINGW_BUILTIN_x86_64_SRCS := $(filter-out $(MINGW_BUILTIN_EXCLUDE_P),$(notdir $(wildcard src_llvm/compiler-rt/lib/builtins/x86_64/*.c src_llvm/compiler-rt/lib/builtins/x86_64/*.S)))
-MINGW_BUILTIN_aarch64_SRCS := $(filter-out $(MINGW_BUILTIN_EXCLUDE_aarch64_P),$(notdir $(wildcard src_llvm/compiler-rt/lib/builtins/aarch64/*.c src_llvm/compiler-rt/lib/builtins/aarch64/*.S)))
-
-obj_mingwbuiltins/%/.lc_built: | obj_mingwbuiltins/%/ src_llvm obj_sysroot/%/.lc_mingw_headers obj_llvm/.lc_built_1
-	cd obj_mingwbuiltins/$* && \
-	for f in $(MINGW_BUILTIN_GENERIC_SRCS); do \
-		$(CURDIR)/obj_llvm/bin/clang --target=$* --sysroot=$(CURDIR)/obj_sysroot/$* -O2 -fno-builtin -c -o $${f%.c}.o $(CURDIR)/src_llvm/compiler-rt/lib/builtins/$$f || exit 1; \
-	done && \
-	for f in $(MINGW_BUILTIN_$(MINGW_BUILTIN_ARCH_$*)_SRCS); do \
-		$(CURDIR)/obj_llvm/bin/clang --target=$* --sysroot=$(CURDIR)/obj_sysroot/$* -O2 -fno-builtin -c -o $${f%.*}.o $(CURDIR)/src_llvm/compiler-rt/lib/builtins/$(MINGW_BUILTIN_ARCH_$*)/$$f || exit 1; \
-	done && \
-	$(CURDIR)/obj_llvm/bin/llvm-ar rc libclang_rt.builtins.a *.o
-	touch $@
-
 install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj_mingw_pthreads/%/.lc_built
 	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_pthreads/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 
-install-mingwbuiltins_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang | obj_mingwbuiltins/%/.lc_built
-	triple=$$($(DESTDIR)$(OUTPUT)/clang/bin/clang --target=$* -print-target-triple); \
-	mkdir -p $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$$triple; \
-	cp obj_mingwbuiltins/$*/libclang_rt.builtins.a $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$$triple/
 
 # The driver looks up implicit config files by the *normalized* form of the
 # triple the wrapper was invoked as (arm-linux-musleabihf-clang reads
