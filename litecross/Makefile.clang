@@ -186,7 +186,6 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_DO_STRIP=1 \
 	-DCMAKE_INSTALL_PREFIX=/clang \
-	-DDEFAULT_SYSROOT=../../TARGET \
 	-DLLVM_BUILTIN_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)))' \
 	-DLLVM_DEFAULT_TARGET_TRIPLE=$(DEFAULT_TARGET) \
 	-DLLVM_DISTRIBUTION_COMPONENTS='clang;clang-resource-headers;lld;LTO;$(subst $(subst ,, ),;,$(TOOLS))' \
@@ -308,7 +307,7 @@ obj_zlib/.lc_configured: | obj_zlib/ src_zlib
 obj_zlib/%/.lc_configured: export CC = $(CCACHE) $(DESTDIR)$(OUTPUT)/bin/$*-clang
 obj_zlib/%/.lc_configured: export AR = $(DESTDIR)$(OUTPUT)/bin/$*-ar
 obj_zlib/%/.lc_configured: export RANLIB = $(DESTDIR)$(OUTPUT)/bin/$*-ranlib
-obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm
+obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm install-configs_%
 	cd obj_zlib/$* && sh ../../src_zlib/configure --prefix= --static
 	touch $@
 
@@ -397,9 +396,20 @@ install-kernel-headers_%: | obj_kernel_headers/%/.lc_built
 	mkdir -p $(DESTDIR)$(OUTPUT)/$*/include
 	cp -R obj_kernel_headers/$*/staged/include/* $(DESTDIR)$(OUTPUT)/$*/include
 
-install-configs_%: | $(DESDIR)$(OUTPUT)/clang/bin/
-	echo "--target=$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$*-clang.cfg
-	echo "--target=$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$*-clang++.cfg
+# Real-file anchor so install-configs never races install-llvm under -j
+$(DESTDIR)$(OUTPUT)/clang/bin/clang: install-llvm
+	@test -f $@ || { echo "expected $@ after install-llvm" >&2; exit 1; }
+
+# The driver looks up implicit config files by the *normalized* form of the
+# triple the wrapper was invoked as (arm-linux-musleabihf-clang reads
+# arm-unknown-linux-musleabihf-clang.cfg next to the real binary), so ask
+# clang itself for the exact name it will search for. <CFGDIR> expands to the
+# directory holding the .cfg, keeping the sysroot next to the install and the
+# toolchain relocatable; this replaces the DEFAULT_SYSROOT patch.
+install-configs_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang
+	triple=$$($(DESTDIR)$(OUTPUT)/clang/bin/clang --target=$* -print-target-triple); \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang.cfg; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang++.cfg
 
 install-symlinks_%: | $(DESTDIR)$(OUTPUT)/bin/
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-clang
