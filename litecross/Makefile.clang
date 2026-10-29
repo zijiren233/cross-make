@@ -542,7 +542,7 @@ obj_mingw_pthreads/%/.lc_built: | obj_mingw_pthreads/%/.lc_configured
 	cd obj_mingw_pthreads/$* && $(MAKE)
 	touch $@
 
-install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj_mingw_pthreads/%/.lc_built
+install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj_mingw_pthreads/%/.lc_built $(DESTDIR)$(OUTPUT)/bin/
 	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_pthreads/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
