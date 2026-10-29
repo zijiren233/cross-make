@@ -132,6 +132,26 @@ COMMON_FLAGS = -O2 -g0 -Wno-error -w
 COMMON_LD_FLAGS = -s
 EXE_LD_FLAGS = $(COMMON_LD_FLAGS) $(STAT)
 
+# clang-cl/lld-link link against clang_rt.builtins.lib for the windows-msvc
+# targets. compiler-rt's cmake cannot cross-configure those targets on a POSIX
+# host without a Windows SDK (it switches to cl-style flags whose deps=msvc
+# dependency tracking ninja rejects off Windows, and a few sources include
+# libc headers), so compile the builtins sources directly with the built
+# clang instead. Sources are filtered to the set upstream itself builds for
+# msvc: x87 long-double code (MSVC long double == double), crtbegin,
+# enable_execute_stack, eprintf, emutls and int_util need libc/ELF support
+# and are dropped; __compilerrt_abort_impl is provided as a trap, matching
+# the upstream freestanding build.
+WIN_BUILTIN_TARGETS = x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+WIN_BUILTIN_ARCH_x86_64-pc-windows-msvc = x86_64
+WIN_BUILTIN_ARCH_aarch64-pc-windows-msvc = aarch64
+WIN_BUILTIN_EXCLUDE = crtbegin divxc3 emutls enable_execute_stack eprintf \
+	extendhfxf2 fixunsxfdi fixunsxfsi fixunsxfti fixxfdi fixxfti floatdixf \
+	floattixf floatundixf floatuntixf int_util mulxc3 powixf2 truncxfhf2
+WIN_BUILTIN_GENERIC_SRCS := $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/*.c))))
+WIN_BUILTIN_SRCS_x86_64 := $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/x86_64/*.c))))
+WIN_BUILTIN_SRCS_aarch64 := $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/aarch64/*.c))))
+
 export CFLAGS = $(COMMON_FLAGS)
 export CXXFLAGS = $(COMMON_FLAGS)
 
@@ -233,7 +253,7 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 
 all: llvm musl
 
-install: install-llvm install-musl install-zlib install-kernel-headers install-configs install-symlinks
+install: install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-symlinks
 
 llvm: | obj_llvm/.lc_built_3
 musl: | $(foreach t,$(TARGETS),obj_musl/$(t)/.lc_built)
@@ -241,9 +261,10 @@ install-musl: $(foreach t,$(TARGETS),install-musl_$(t))
 install-zlib: $(foreach t,$(TARGETS),install-zlib_$(t))
 install-kernel-headers: $(foreach t,$(TARGETS),install-kernel-headers_$(t))
 install-configs: $(foreach t,$(TARGETS),install-configs_$(t))
+install-winbuiltins: $(foreach t,$(WIN_BUILTIN_TARGETS),install-winbuiltins_$(t))
 install-symlinks: $(foreach t,$(TARGETS),install-symlinks_$(t))
 
-.PHONY: all llvm musl install-llvm install-musl install-kernel-headers install-configs install-symlinks clean
+.PHONY: all llvm musl install-llvm install-musl install-kernel-headers install-configs install-winbuiltins install-symlinks clean
 
 src_llvm: | $(LLVM_SRCDIR)
 	ln -sf $(LLVM_SRCDIR) $@
@@ -399,6 +420,26 @@ install-kernel-headers_%: | obj_kernel_headers/%/.lc_built
 # Real-file anchor so install-configs never races install-llvm under -j
 $(DESTDIR)$(OUTPUT)/clang/bin/clang: install-llvm
 	@test -f $@ || { echo "expected $@ after install-llvm" >&2; exit 1; }
+
+# llvm 16+ has only the major version number in the resource dir
+WIN_RESOURCE_VER = $(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(LLVM_VER),$(call fn_major_version,$(LLVM_VER)))
+
+obj_winbuiltins/%/.lc_built: | obj_winbuiltins/%/ src_llvm obj_llvm/.lc_built_1
+	cd obj_winbuiltins/$* && \
+	printf 'void __compilerrt_abort_impl(const char*f,int l,const char*fn){__builtin_trap();}\n' > int_abort.c && \
+	../../obj_llvm/bin/clang --target=$* -O2 -fno-builtin -c -o int_abort.obj int_abort.c && \
+	for n in $(WIN_BUILTIN_GENERIC_SRCS); do \
+		../../obj_llvm/bin/clang --target=$* -O2 -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$n.c || exit 1; \
+	done && \
+	for n in $(WIN_BUILTIN_SRCS_$(WIN_BUILTIN_ARCH_$*)); do \
+		../../obj_llvm/bin/clang --target=$* -O2 -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$(WIN_BUILTIN_ARCH_$*)/$$n.c || exit 1; \
+	done && \
+	../../obj_llvm/bin/llvm-ar rc clang_rt.builtins.lib *.obj
+	touch $@
+
+install-winbuiltins_%: | obj_winbuiltins/%/.lc_built
+	mkdir -p $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$*
+	cp obj_winbuiltins/$*/clang_rt.builtins.lib $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$*/
 
 # The driver looks up implicit config files by the *normalized* form of the
 # triple the wrapper was invoked as (arm-linux-musleabihf-clang reads
