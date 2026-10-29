@@ -418,7 +418,7 @@ netbsd-%: COWPATCH_EXTRACT = -l
 	mv $@.tmp $@
 
 ifeq ($(COMPILER),clang)
-extract_all: | $(filter-out mingw-w64-% glibc-% freebsd-% netbsd-%,$(SRC_DIRS))
+extract_all: | $(filter-out glibc-% freebsd-% netbsd-%,$(SRC_DIRS))
 else ifneq ($(findstring mingw,$(TARGET)),)
 extract_all: | $(filter-out linux-% musl-% glibc-% freebsd-% netbsd-%,$(SRC_DIRS))
 else ifneq ($(findstring freebsd,$(TARGET)),)

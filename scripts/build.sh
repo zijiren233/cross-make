@@ -520,6 +520,7 @@ OUTPUT = ${OUTPUT}
 $(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
 LLVM_VER = ${LLVM_VER}
 MUSL_VER = ${MUSL_VER}
+MINGW_VER = ${MINGW_VER}
 LINUX_VER = ${LINUX_VER}
 ZSTD_VER = ${ZSTD_VER}
 ZLIB_VER = ${ZLIB_VER}
@@ -880,7 +881,7 @@ function BuildClang() {
 
   if RunMake "${DIST_NAME}" "${DIST_NAME}.log" "clang"; then
     echo "build clang toolchain success"
-    for tool in clang-cl lld-link ld.lld llvm-rc; do
+    for tool in clang-cl lld-link ld.lld llvm-rc llvm-dlltool; do
       if [ ! -e "${DIST_NAME}/clang/bin/${tool}" ]; then
         echo "warning: ${tool} missing from clang/bin"
       fi
@@ -893,6 +894,26 @@ function BuildClang() {
     echo "clang-cl compile smoke OK"
     TestCrossCC "${DIST_NAME}/bin/x86_64-linux-musl-clang"
     TestCrossCXX "${DIST_NAME}/bin/x86_64-linux-musl-clang++"
+    # mingw (windows-gnu) smoke: the toolchain ships its own CRT, so these
+    # link complete PE executables with no external SDK
+    for tgt in i586-w64-mingw32 i686-w64-mingw32 x86_64-w64-mingw32 aarch64-w64-mingw32; do
+      if ! echo 'int main(void){return 0;}' >mingw-smoke.c; then
+        echo "mingw smoke: cannot write source"
+        return 1
+      fi
+      if ! "${DIST_NAME}/bin/${tgt}-clang" mingw-smoke.c -o mingw-smoke.exe; then
+        echo "mingw smoke error: ${tgt}"
+        rm -f mingw-smoke.c mingw-smoke.exe
+        return 1
+      fi
+      if ! file mingw-smoke.exe | grep -q "PE.*Windows"; then
+        echo "mingw smoke error: ${tgt} output is not a PE executable"
+        rm -f mingw-smoke.c mingw-smoke.exe
+        return 1
+      fi
+      rm -f mingw-smoke.c mingw-smoke.exe
+    done
+    echo "mingw PE link smoke OK"
   else
     local EXIT_CODE=$?
     if [ ! "$LOG_TO_STD" ]; then

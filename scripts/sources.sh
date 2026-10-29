@@ -199,12 +199,13 @@ GetSourcesCacheKey() {
 GetClangSources() {
   local defaults
   defaults=$(yq -r '.defaults | to_entries | .[] | "\(.key)=\(.value)"' "$TARGETS_YAML")
-  local def_llvm def_musl def_linux def_zstd def_zlib def_libxml2
+  local def_llvm def_musl def_linux def_zstd def_zlib def_libxml2 def_mingw
   while IFS='=' read -r key value; do
     case "$key" in
     LLVM_VER) def_llvm="$value" ;;
     MUSL_VER) def_musl="$value" ;;
     LINUX_VER) def_linux="$value" ;;
+    MINGW_VER) def_mingw="$value" ;;
     ZSTD_VER) def_zstd="$value" ;;
     ZLIB_VER) def_zlib="$value" ;;
     LIBXML2_VER) def_libxml2="$value" ;;
@@ -218,6 +219,7 @@ GetClangSources() {
     "zstd-${def_zstd}.tar.gz"
     "zlib-${def_zlib}.tar.gz"
     "libxml2-${def_libxml2}.tar.xz"
+    "mingw-w64-${def_mingw}.tar.bz2"
     "config.sub"
     "config.guess"
   )
