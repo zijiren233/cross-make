@@ -914,6 +914,15 @@ function BuildClang() {
       rm -f mingw-smoke.c mingw-smoke.exe
     done
     echo "mingw PE link smoke OK"
+    # mingw C++ smoke: libc++/libc++abi/libunwind link a full program
+    printf '#include <iostream>\n#include <thread>\nint main(){std::thread t([]{});t.join();std::cout<<"ok"<<std::endl;}\n' >mingw-smoke.cc
+    if ! "${DIST_NAME}/bin/x86_64-w64-mingw32-clang++" -pthread mingw-smoke.cc -o mingw-smoke.exe || ! file mingw-smoke.exe | grep -q "PE.*Windows"; then
+      echo "mingw C++ smoke error"
+      rm -f mingw-smoke.cc mingw-smoke.exe
+      return 1
+    fi
+    rm -f mingw-smoke.cc mingw-smoke.exe
+    echo "mingw C++ smoke OK"
   else
     local EXIT_CODE=$?
     if [ ! "$LOG_TO_STD" ]; then

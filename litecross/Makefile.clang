@@ -241,9 +241,17 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
 	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSTEM_NAME=Windows) \
 	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
-	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LLVM_ENABLE_RUNTIMES=libunwind) \
-	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBUNWIND_ENABLE_SHARED=OFF) \
+	$(foreach t,$(MINGW_TARGETS),'-DRUNTIMES_$(t)_LLVM_ENABLE_RUNTIMES=libunwind;libcxx;libcxxabi') \
 	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBUNWIND_USE_COMPILER_RT=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_USE_COMPILER_RT=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_USE_COMPILER_RT=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_USE_LLVM_UNWINDER=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_ENABLE_STATIC_UNWINDER=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_ENABLE_SHARED=OFF) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_HAS_WIN32_THREAD_API=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_ENABLE_ABI_LINKER_SCRIPT=OFF) \
+	$(foreach t,i586-w64-mingw32 i686-w64-mingw32 x86_64-w64-mingw32,-DRUNTIMES_$(t)_LIBCXX_CXX_FLAGS=-D__USE_MINGW_ANSI_STDIO=1) \
 	$(foreach t,$(ARM_V6_TARGETS),-DBUILTINS_$(call normalise_target,$(t))_COMPILER_RT_ARM_OPTIMIZED_FP=OFF) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_EXE_LINKER_FLAGS='$(EXE_LD_FLAGS) $(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SHARED_LINKER_FLAGS='$(TARGET_CONFIG_$(t))') \
@@ -554,8 +562,10 @@ install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj
 # toolchain relocatable; this replaces the DEFAULT_SYSROOT patch.
 install-configs_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang
 	triple=$$($(DESTDIR)$(OUTPUT)/clang/bin/clang --target=$* -print-target-triple); \
-	echo "--target=$* --sysroot=<CFGDIR>/../../$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang.cfg; \
-	echo "--target=$* --sysroot=<CFGDIR>/../../$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang++.cfg
+	extra="$(TARGET_CONFIG_$*)"; \
+	case "$*" in *-w64-mingw32) extra="$$extra -stdlib=libc++ -isystem<CFGDIR>/../include/$$triple/c++/v1 -isystem<CFGDIR>/../include/c++/v1";; esac; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang.cfg; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang++.cfg
 
 install-symlinks_%: | $(DESTDIR)$(OUTPUT)/bin/
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-clang
