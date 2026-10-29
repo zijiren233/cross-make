@@ -104,7 +104,6 @@ override MPC_VER =
 override MPFR_VER =
 override ISL_VER =
 override BINUTILS_VER =
-override MINGW_VER =
 
 endif
 
