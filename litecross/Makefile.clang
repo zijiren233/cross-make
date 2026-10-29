@@ -44,6 +44,13 @@ TARGET_CONFIG_armv6-linux-musleabi = -march=armv6kz
 # 32-bit ARM targets whose baseline lacks ARMv6T2
 ARM_V6_TARGETS = arm-linux-musleabihf armv6-linux-musleabihf armv6-linux-musleabi
 
+# Explicit runtime selection mirrors llvm-mingw's wrapper cfg defaults so the
+# choice does not depend on CLANG_DEFAULT_* baked at cmake time
+TARGET_CONFIG_i586-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+TARGET_CONFIG_i686-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+TARGET_CONFIG_x86_64-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+TARGET_CONFIG_aarch64-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+
 # mingw-w64 (windows-gnu) targets, mirroring the gcc-mode target set. The CRT,
 # winpthreads and compiler-rt builtins are built with the just-built clang +
 # lld + llvm tools, the same arrangement llvm-mingw ships.
@@ -230,6 +237,7 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
 	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_CMAKE_SYSTEM_NAME=Windows) \
 	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_COMPILER_RT_EXCLUDE_ATOMIC_BUILTIN=OFF) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
 	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSTEM_NAME=Windows) \
 	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
@@ -467,25 +475,10 @@ install-winbuiltins_%: | obj_winbuiltins/%/.lc_built
 
 # ---- mingw-w64 (windows-gnu) ----
 
-# windres-style frontend for llvm-rc: mingw-w64's autotools invoke the RC
-# compiler as `RC -i IN -o OUT --include DIR`, llvm-rc wants MSRC syntax.
-define MINGW_RCWRAP
-#!/bin/sh
-in= out=; iargs=
-while [ $$# -gt 0 ]; do
-  case "$$1" in
-    -i) in=$$2; shift 2;;
-    -o) out=$$2; shift 2;;
-    --include|-I) iargs="$$iargs /I $$2"; shift 2;;
-    *) iargs="$$iargs $$1"; shift;;
-  esac
-done
-exec "$$(dirname $$0)/obj_llvm/bin/llvm-rc" $$iargs "$$in" /FO "$$out"
-endef
-
-obj_mingw_rcwrap: | obj_llvm/.lc_built_1
-	$(file >$@,$(MINGW_RCWRAP))
-	chmod +x $@
+# llvm-windres is not a distribution component upstream, so build it in the
+# LLVM tree on demand; install-mingw copies it next to the clang binaries
+$(CURDIR)/obj_llvm/bin/llvm-windres: | obj_llvm/.lc_built_1
+	cd obj_llvm && ninja llvm-windres
 
 # Point every autotools probe at the built LLVM tools
 # absolute tool paths: mingw-w64's make recurses into subdirectories where
@@ -501,13 +494,14 @@ MINGW_CROSSVARS = \
 	AS='$(CURDIR)/obj_llvm/bin/clang --target=$*' \
 	LD='$(CURDIR)/obj_llvm/bin/ld.lld' \
 	DLLTOOL='$(CURDIR)/obj_llvm/bin/llvm-dlltool' \
-	RC='$(CURDIR)/obj_mingw_rcwrap -I $(CURDIR)/obj_sysroot/$*/include' \
+	RC='$(CURDIR)/obj_llvm/bin/llvm-windres --target=$* --include $(CURDIR)/obj_sysroot/$*/include' \
 	STRIP='$(CURDIR)/obj_llvm/bin/llvm-strip' \
 	OBJDUMP='$(CURDIR)/obj_llvm/bin/llvm-objdump'
 
 obj_mingw_headers/%/.lc_configured: | obj_mingw_headers/%/ src_mingw
 	cd obj_mingw_headers/$* && sh ../../src_mingw/mingw-w64-headers/configure \
-		--prefix= --host=$* --enable-sdk=all --enable-idl --enable-secure-api --with-sysroot=/ \
+		--prefix= --host=$* --enable-sdk=all --enable-idl \
+		--with-default-msvcrt=ucrt --with-default-win32-winnt=0x601 --with-sysroot=/ \
 		|| (cat config.log && exit 1)
 	touch $@
 
@@ -515,9 +509,10 @@ obj_sysroot/%/.lc_mingw_headers: | obj_mingw_headers/%/.lc_configured
 	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install
 	touch $@
 
-obj_mingw_crt/%/.lc_configured: | obj_mingw_crt/%/ src_mingw obj_sysroot/%/.lc_mingw_headers obj_llvm/.lc_built_1 obj_mingw_rcwrap
+obj_mingw_crt/%/.lc_configured: $(CURDIR)/obj_llvm/bin/llvm-windres | obj_mingw_crt/%/ src_mingw obj_sysroot/%/.lc_mingw_headers obj_llvm/.lc_built_1
 	cd obj_mingw_crt/$* && sh ../../src_mingw/mingw-w64-crt/configure \
-		--prefix= --host=$* --with-sysroot=/ $(MINGW_CRT_CONFIG_$*) $(MINGW_CROSSVARS) \
+		--prefix= --host=$* --with-sysroot=/ --with-default-msvcrt=ucrt \
+		--with-default-win32-winnt=0x601 $(MINGW_CRT_CONFIG_$*) $(MINGW_CROSSVARS) \
 		|| (cat config.log && exit 1)
 	touch $@
 
@@ -529,9 +524,9 @@ obj_sysroot/%/.lc_mingw_crt: | obj_mingw_crt/%/.lc_built
 	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install
 	touch $@
 
-obj_mingw_pthreads/%/.lc_configured: | obj_mingw_pthreads/%/ src_mingw obj_sysroot/%/.lc_mingw_crt obj_mingw_rcwrap
+obj_mingw_pthreads/%/.lc_configured: $(CURDIR)/obj_llvm/bin/llvm-windres | obj_mingw_pthreads/%/ src_mingw obj_sysroot/%/.lc_mingw_crt
 	cd obj_mingw_pthreads/$* && sh ../../src_mingw/mingw-w64-libraries/winpthreads/configure \
-		--prefix= --host=$* --with-sysroot=/ $(MINGW_CROSSVARS) \
+		--prefix= --host=$* --with-sysroot=/ --with-default-msvcrt=ucrt $(MINGW_CROSSVARS) \
 		|| (cat config.log && exit 1)
 	touch $@
 
@@ -543,6 +538,12 @@ install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj
 	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_pthreads/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
+	# the real ssp symbols live in the CRT; the driver adds -lssp/-lssp_nonshared
+	# under -fstack-protector, so ship empty archives like llvm-mingw does
+	printf "" | $(CURDIR)/obj_llvm/bin/llvm-ar rc $(DESTDIR)$(OUTPUT)/$*/lib/libssp.a
+	printf "" | $(CURDIR)/obj_llvm/bin/llvm-ar rc $(DESTDIR)$(OUTPUT)/$*/lib/libssp_nonshared.a
+	cp $(CURDIR)/obj_llvm/bin/llvm-windres $(DESTDIR)$(OUTPUT)/clang/bin/
+	ln -sf ../clang/bin/llvm-windres $(DESTDIR)$(OUTPUT)/bin/$*-windres
 
 
 # The driver looks up implicit config files by the *normalized* form of the
@@ -559,6 +560,8 @@ install-configs_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang
 install-symlinks_%: | $(DESTDIR)$(OUTPUT)/bin/
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-clang
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang++ $*-clang++
+	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-gcc
+	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang++ $*-g++
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang-cpp $*-cpp
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-cc
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang++ $*-c++

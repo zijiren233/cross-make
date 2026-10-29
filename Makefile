@@ -446,7 +446,9 @@ $(BUILD_DIR):
 $(BUILD_DIR)/Makefile: | $(BUILD_DIR)
 	ln -sf $(REL_TOP)/litecross/Makefile.$(COMPILER) $@
 
-$(BUILD_DIR)/config.mak: | $(BUILD_DIR)
+# regenerate when the top-level config.mak changes, so persistent build
+# volumes (darwin CI) pick up new SRCDIR entries instead of reusing stale ones
+$(BUILD_DIR)/config.mak: $(REL_TOP)/config.mak | $(BUILD_DIR)
 	printf >$@ '%s\n' \
 	$(if $(filter-out local,$(HOST)),"HOST = $(HOST)") \
 	$(if $(NATIVE),"NATIVE = $(NATIVE)") \
