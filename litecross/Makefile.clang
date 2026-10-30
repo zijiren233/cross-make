@@ -173,11 +173,19 @@ WIN_BUILTIN_GENERIC_SRCS = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basena
 WIN_BUILTIN_SRCS_x86_64 = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/x86_64/*.c))))
 WIN_BUILTIN_SRCS_aarch64 = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/aarch64/*.c))))
 # cpu_model lives in its own subdir outside the per-arch wildcards; upstream
-# builds it for msvc too (__cpu_model/__cpu_indicator_init for FMV). Only the
-# x86 one compiles without a Windows SDK: aarch64.c pulls in windows.h through
-# aarch64/lse_atomics/windows.inc.
+# builds it for msvc too (__cpu_model/__cpu_indicator_init for FMV). x86.c
+# compiles freestanding; aarch64.c reaches windows.h through
+# aarch64/lse_atomics/windows.inc and needs the build-time xwin SDK headers
+# (scripts/build.sh --winsdk provisions $(XWIN_SDK); nothing from it ships in
+# the artifacts).
 WIN_BUILTIN_EXTRA_SRCS_x86_64-pc-windows-msvc = cpu_model/x86.c
-WIN_BUILTIN_EXTRA_SRCS_aarch64-pc-windows-msvc =
+WIN_BUILTIN_EXTRA_SRCS_aarch64-pc-windows-msvc = cpu_model/aarch64.c
+XWIN_SDK ?= $(abspath $(CURDIR)/../../xwin-sdk)
+XWIN_INCLUDES = -isystem $(XWIN_SDK)/splat/crt/include \
+	-isystem $(XWIN_SDK)/splat/sdk/include/um \
+	-isystem $(XWIN_SDK)/splat/sdk/include/ucrt \
+	-isystem $(XWIN_SDK)/splat/sdk/include/shared
+WIN_BUILTIN_EXTRA_CFLAGS_aarch64-pc-windows-msvc = $(XWIN_INCLUDES)
 
 export CFLAGS = $(COMMON_FLAGS)
 export CXXFLAGS = $(COMMON_FLAGS)
@@ -485,10 +493,15 @@ obj_winbuiltins/%/.lc_built: | obj_winbuiltins/%/ src_llvm obj_llvm/.lc_built_1
 	done && \
 	for s in $(WIN_BUILTIN_EXTRA_SRCS_$*); do \
 		n=$$(basename $$s .c); \
-		../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$s || exit 1; \
+		../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin $(WIN_BUILTIN_EXTRA_CFLAGS_$*) -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$s || exit 1; \
 	done && \
 	../../obj_llvm/bin/llvm-ar rc clang_rt.builtins.lib *.obj
 	touch $@
+
+$(XWIN_SDK)/.lc_ready:
+	bash $(REL_TOP)/scripts/build.sh --winsdk "$(XWIN_SDK)"
+
+obj_winbuiltins/aarch64-pc-windows-msvc/.lc_built: | $(XWIN_SDK)/.lc_ready
 
 install-winbuiltins_%: | obj_winbuiltins/%/.lc_built
 	mkdir -p $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$*

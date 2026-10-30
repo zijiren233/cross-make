@@ -9,6 +9,67 @@ function ChToScriptFileDir() {
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGETS_YAML="${SCRIPT_DIR}/targets.yaml"
 
+XWIN_VER="0.10.0"
+
+# Provision the Windows SDK headers/libs (build-time only, never shipped in
+# the artifacts) with xwin, for the windows-msvc cpu_model builtins and the
+# clang-cl link smoke test. Idempotent: a directory with .lc_ready is reused.
+# Usage: GetWinSDK <sdk_dir>
+function GetWinSDK() {
+  local SDK_DIR="$1"
+  if [ -e "${SDK_DIR}/.lc_ready" ]; then
+    echo "windows sdk already provisioned: ${SDK_DIR}"
+    return 0
+  fi
+
+  local XWIN=""
+  if command -v xwin >/dev/null 2>&1; then
+    XWIN="$(command -v xwin)"
+  else
+    mkdir -p "${SDK_DIR}/dl"
+    local ASSET=""
+    case "$(uname -s)/$(uname -m)" in
+    Linux/x86_64) ASSET="xwin-${XWIN_VER}-x86_64-unknown-linux-musl.tar.gz" ;;
+    Linux/aarch64) ASSET="xwin-${XWIN_VER}-aarch64-unknown-linux-musl.tar.gz" ;;
+    Darwin/*)
+      if command -v cargo >/dev/null 2>&1; then
+        # xwin ships no darwin binaries; build it once into the sdk dir
+        echo "installing xwin ${XWIN_VER} via cargo (one-time)"
+        cargo install --root "${SDK_DIR}/cargo-root" --version "${XWIN_VER}" --locked xwin
+        XWIN="${SDK_DIR}/cargo-root/bin/xwin"
+      fi
+      ;;
+    esac
+    if [ -z "${XWIN}" ] && [ -n "${ASSET}" ]; then
+      curl -sSfL --retry 5 -o "${SDK_DIR}/dl/${ASSET}" \
+        "https://github.com/Jake-Shadle/xwin/releases/download/${XWIN_VER}/${ASSET}"
+      tar -xzf "${SDK_DIR}/dl/${ASSET}" -C "${SDK_DIR}/dl"
+      XWIN="$(find "${SDK_DIR}/dl" -type f -name xwin | head -n1)"
+      chmod +x "${XWIN}"
+    fi
+  fi
+  if [ -z "${XWIN}" ] || [ ! -x "${XWIN}" ]; then
+    echo "error: xwin unavailable; install xwin (or cargo) to fetch the windows sdk, or point XWIN_SDK at a provisioned splat"
+    return 1
+  fi
+
+  # x86_64+aarch64: headers are shared; libs are needed for the clang-cl
+  # link smoke and cpu_model on both arches
+  "${XWIN}" --accept-license --arch aarch64 --arch x86_64 -t 300 --http-retry 5 \
+    --cache-dir "${SDK_DIR}/cache" splat --output "${SDK_DIR}/splat"
+  rm -rf "${SDK_DIR}/cache" "${SDK_DIR}/dl"
+  touch "${SDK_DIR}/.lc_ready"
+  echo "windows sdk provisioned: ${SDK_DIR}"
+}
+
+# Standalone provisioning entry for the makefiles: scripts/build.sh --winsdk <dir>
+if [ "$1" = "--winsdk" ]; then
+  ChToScriptFileDir
+  cd ..
+  GetWinSDK "$2"
+  exit $?
+fi
+
 # Parse YAML defaults section to get a default value
 # Usage: GetYamlDefault KEY
 function GetYamlDefault() {
@@ -255,6 +316,7 @@ function Help() {
   echo "-h: help"
   echo "-a: enable archive"
   echo "-e: set compiler (gcc/clang; clang builds the LLVM toolchain)"
+  echo "--winsdk <dir>: provision the build-time windows sdk via xwin and exit"
   echo "-T: targets file path or targets string"
   echo "-S: sources directory path"
   echo "-o: output dist directory path"
@@ -879,6 +941,11 @@ function BuildClang() {
   echo "build clang toolchain to ${DIST_NAME}"
   OUTPUT="${DIST_NAME}" WriteClangConfig "export PATH=$PATH"
 
+  # Windows SDK (headers + import libs) for the msvc-target cpu_model
+  # builtins and the clang-cl link smoke; used at build time only
+  export XWIN_SDK="${PWD}/xwin-sdk"
+  GetWinSDK "${XWIN_SDK}"
+
   if RunMake "${DIST_NAME}" "${DIST_NAME}.log" "clang"; then
     echo "build clang toolchain success"
     for tool in clang-cl lld-link ld.lld llvm-rc llvm-dlltool; do
@@ -886,12 +953,32 @@ function BuildClang() {
         echo "warning: ${tool} missing from clang/bin"
       fi
     done
-    # MSVC-ABI smoke: compile-only needs no Windows SDK. '--' stops clang-cl
-    # from parsing the leading-slash absolute path as an MSVC option.
-    printf 'int main(void){return 0;}\n' >"${DIST_NAME}/clangcl-smoke.c"
-    "${DIST_NAME}/clang/bin/clang-cl" /nologo /c "/Fo:${DIST_NAME}/clangcl-smoke.obj" -- "${DIST_NAME}/clangcl-smoke.c"
-    rm -f "${DIST_NAME}/clangcl-smoke.c" "${DIST_NAME}/clangcl-smoke.obj"
-    echo "clang-cl compile smoke OK"
+    # MSVC-ABI smoke: link a real exe per msvc target against the build-time
+    # xwin SDK so the resource-dir builtins and the CRT link set are exercised.
+    # '--' stops clang-cl from parsing the leading-slash absolute path as an
+    # MSVC option.
+    local SPLAT="${XWIN_SDK}/splat"
+    local sm_arch sm_machine
+    for t in x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+      case "$t" in
+      x86_64*) sm_arch=x86_64 sm_machine=x64 ;;
+      aarch64*) sm_arch=aarch64 sm_machine=arm64 ;;
+      esac
+      printf 'int main(void){return 0;}\n' >"${DIST_NAME}/clangcl-smoke.c"
+      "${DIST_NAME}/clang/bin/clang-cl" /nologo --target=$t /c "/Fo:${DIST_NAME}/clangcl-smoke.obj" -- "${DIST_NAME}/clangcl-smoke.c"
+      "${DIST_NAME}/clang/bin/lld-link" /nologo /machine:$sm_machine /subsystem:console /entry:mainCRTStartup \
+        "/out:${DIST_NAME}/clangcl-smoke.exe" "${DIST_NAME}/clangcl-smoke.obj" \
+        "${DIST_NAME}/clang/lib/clang/${LLVM_VER%%.*}/lib/$t/clang_rt.builtins.lib" \
+        "/libpath:${SPLAT}/crt/lib/${sm_arch}" "/libpath:${SPLAT}/sdk/lib/ucrt/${sm_arch}" "/libpath:${SPLAT}/sdk/lib/um/${sm_arch}" \
+        libcmt.lib libvcruntime.lib libucrt.lib
+      file "${DIST_NAME}/clangcl-smoke.exe" | grep -q "PE.*Windows" || {
+        echo "clang-cl link smoke: $t output is not a PE executable"
+        rm -f "${DIST_NAME}/clangcl-smoke.c" "${DIST_NAME}/clangcl-smoke.obj" "${DIST_NAME}/clangcl-smoke.exe"
+        return 1
+      }
+      rm -f "${DIST_NAME}/clangcl-smoke.c" "${DIST_NAME}/clangcl-smoke.obj" "${DIST_NAME}/clangcl-smoke.exe"
+    done
+    echo "clang-cl link smoke OK"
     TestCrossCC "${DIST_NAME}/bin/x86_64-linux-musl-clang"
     TestCrossCXX "${DIST_NAME}/bin/x86_64-linux-musl-clang++"
     # mingw (windows-gnu) smoke: the toolchain ships its own CRT, so these
