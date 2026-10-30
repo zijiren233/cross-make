@@ -330,6 +330,11 @@ MAKE += MAKEINFO=false
 
 LINKER_HASH_STYLE =
 
+# UCRT and the same Win7 minimum the clang-mode toolchain uses (llvm-mingw's
+# defaults); the ARM64 Windows ecosystem is UCRT-first. Overridable via
+# MINGW_CONFIG in config.mak or on the make command line.
+MINGW_CONFIG ?= --with-default-msvcrt=ucrt --with-default-win32-winnt=0x601
+
 # PE/COFF has no PIE: the default-pie static spec passes "-z text" which pe
 # ld rejects, breaking -static links. Windows ASLR comes from --dynamicbase.
 PIE_CONFIG = --disable-default-pie

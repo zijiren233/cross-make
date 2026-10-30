@@ -1,10 +1,13 @@
 compiler-rt: do not force a march in the arm/armhf target tests
 
 The march baseline is injected per-target through TARGET_CONFIG in
-litecross/Makefile.clang (armv6t2 for arm-/armv6-, default v7 for armv7)
-because upstream arm builtins require ARMv6T2 instructions while clang
-defaults arm-/armv6- triples to plain v6/v6kz. The ABI split stays.
-diff --git a/Volumes/workspace/tmp/clang23/regen/arm/orig/base-config-ix.cmake b/Volumes/workspace/tmp/clang23/regen/arm/new/base-config-ix.cmake
+litecross/Makefile.clang (armv6kz for arm-/armv6-, matching the Alpine
+armhf baseline; default v7 for armv7). Upstream forced armv7-a here
+because its optimized arm FP assembly needs ARMv6T2; the v6 targets
+instead build builtins with COMPILER_RT_ARM_OPTIMIZED_FP=OFF (Alpine's
+approach), which falls back to the portable C implementations. The ABI
+split stays.
+diff --git a/compiler-rt/cmake/base-config-ix.cmake b/compiler-rt/cmake/base-config-ix.cmake
 index 1b66dec..b3e0314 100644
 --- a/compiler-rt/cmake/base-config-ix.cmake
 +++ b/compiler-rt/cmake/base-config-ix.cmake

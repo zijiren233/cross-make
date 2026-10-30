@@ -164,13 +164,27 @@ jobs:
       - name: Download sources (Linux)
         if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'linux')
         run: |
-          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64) YQ=yq_linux_amd64;;
+            Linux-ARM64) YQ=yq_linux_arm64;;
+            macOS-ARM64) YQ=yq_darwin_arm64;;
+            macOS-X64) YQ=yq_darwin_amd64;;
+          esac
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/$YQ"
           sudo chmod +x /usr/local/bin/yq
           bash ./scripts/sources.sh download -S sources -T clang
 
       - name: Download sources (macOS)
         if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'darwin')
         run: |
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64) YQ=yq_linux_amd64;;
+            Linux-ARM64) YQ=yq_linux_arm64;;
+            macOS-ARM64) YQ=yq_darwin_arm64;;
+            macOS-X64) YQ=yq_darwin_amd64;;
+          esac
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/$YQ"
+          sudo chmod +x /usr/local/bin/yq
           bash ./scripts/sources.sh download -S sources -T clang
 
       # Save cache if we downloaded (not from artifact, to avoid redundant cache)

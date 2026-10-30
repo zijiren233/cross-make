@@ -166,9 +166,16 @@ WIN_BUILTIN_ARCH_aarch64-pc-windows-msvc = aarch64
 WIN_BUILTIN_EXCLUDE = crtbegin divxc3 emutls enable_execute_stack eprintf \
 	extendhfxf2 fixunsxfdi fixunsxfsi fixunsxfti fixxfdi fixxfti floatdixf \
 	floattixf floatundixf floatuntixf int_util mulxc3 powixf2 truncxfhf2
-WIN_BUILTIN_GENERIC_SRCS := $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/*.c))))
-WIN_BUILTIN_SRCS_x86_64 := $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/x86_64/*.c))))
-WIN_BUILTIN_SRCS_aarch64 := $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/aarch64/*.c))))
+# Deferred (=) on purpose: the wildcards must resolve when the recipe runs,
+# after the src_llvm symlink exists; := would expand them at parse time on a
+# clean tree and silently produce an archive with only the trap shim.
+WIN_BUILTIN_GENERIC_SRCS = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/*.c))))
+WIN_BUILTIN_SRCS_x86_64 = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/x86_64/*.c))))
+WIN_BUILTIN_SRCS_aarch64 = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/aarch64/*.c))))
+# cpu_model lives in its own subdir outside the per-arch wildcards; upstream
+# builds it for msvc too (__cpu_model/__cpu_indicator_init for FMV)
+WIN_BUILTIN_EXTRA_SRCS_x86_64-pc-windows-msvc = cpu_model/x86.c
+WIN_BUILTIN_EXTRA_SRCS_aarch64-pc-windows-msvc = cpu_model/aarch64.c
 
 export CFLAGS = $(COMMON_FLAGS)
 export CXXFLAGS = $(COMMON_FLAGS)
@@ -474,6 +481,10 @@ obj_winbuiltins/%/.lc_built: | obj_winbuiltins/%/ src_llvm obj_llvm/.lc_built_1
 	for n in $(WIN_BUILTIN_SRCS_$(WIN_BUILTIN_ARCH_$*)); do \
 		../../obj_llvm/bin/clang --target=$* -O2 -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$(WIN_BUILTIN_ARCH_$*)/$$n.c || exit 1; \
 	done && \
+	for s in $(WIN_BUILTIN_EXTRA_SRCS_$*); do \
+		n=$$(basename $$s .c); \
+		../../obj_llvm/bin/clang --target=$* -O2 -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$s || exit 1; \
+	done && \
 	../../obj_llvm/bin/llvm-ar rc clang_rt.builtins.lib *.obj
 	touch $@
 
@@ -542,7 +553,7 @@ obj_mingw_pthreads/%/.lc_built: | obj_mingw_pthreads/%/.lc_configured
 	cd obj_mingw_pthreads/$* && $(MAKE)
 	touch $@
 
-install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj_mingw_pthreads/%/.lc_built $(DESTDIR)$(OUTPUT)/bin/
+install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj_mingw_pthreads/%/.lc_built $(DESTDIR)$(OUTPUT)/bin/ $(DESTDIR)$(OUTPUT)/clang/bin/
 	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
 	cd obj_mingw_pthreads/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
@@ -565,7 +576,8 @@ install-configs_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang
 	extra="$(TARGET_CONFIG_$*)"; \
 	case "$*" in *-w64-mingw32) extra="$$extra -stdlib=libc++ -isystem<CFGDIR>/../include/$$triple/c++/v1 -isystem<CFGDIR>/../include/c++/v1";; esac; \
 	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang.cfg; \
-	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang++.cfg
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang++.cfg; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang-cpp.cfg
 
 install-symlinks_%: | $(DESTDIR)$(OUTPUT)/bin/
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-clang
