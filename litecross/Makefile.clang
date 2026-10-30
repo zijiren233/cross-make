@@ -499,7 +499,7 @@ obj_winbuiltins/%/.lc_built: | obj_winbuiltins/%/ src_llvm obj_llvm/.lc_built_1
 	touch $@
 
 $(XWIN_SDK)/.lc_ready:
-	bash $(REL_TOP)/scripts/build.sh --winsdk "$(XWIN_SDK)"
+	bash $(CURDIR)/../../scripts/build.sh --winsdk "$(XWIN_SDK)"
 
 obj_winbuiltins/aarch64-pc-windows-msvc/.lc_built: | $(XWIN_SDK)/.lc_ready
 

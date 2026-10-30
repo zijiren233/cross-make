@@ -15,6 +15,14 @@ XWIN_VER="0.10.0"
 # the artifacts) with xwin, for the windows-msvc cpu_model builtins and the
 # clang-cl link smoke test. Idempotent: a directory with .lc_ready is reused.
 # Usage: GetWinSDK <sdk_dir>
+function Sha256File() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  else
+    shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
 function GetWinSDK() {
   local SDK_DIR="$1"
   if [ -e "${SDK_DIR}/.lc_ready" ]; then
@@ -31,25 +39,33 @@ function GetWinSDK() {
     case "$(uname -s)/$(uname -m)" in
     Linux/x86_64) ASSET="xwin-${XWIN_VER}-x86_64-unknown-linux-musl.tar.gz" ;;
     Linux/aarch64) ASSET="xwin-${XWIN_VER}-aarch64-unknown-linux-musl.tar.gz" ;;
-    Darwin/*)
-      if command -v cargo >/dev/null 2>&1; then
-        # xwin ships no darwin binaries; build it once into the sdk dir
-        echo "installing xwin ${XWIN_VER} via cargo (one-time)"
-        cargo install --root "${SDK_DIR}/cargo-root" --version "${XWIN_VER}" --locked xwin
-        XWIN="${SDK_DIR}/cargo-root/bin/xwin"
-      fi
-      ;;
     esac
-    if [ -z "${XWIN}" ] && [ -n "${ASSET}" ]; then
-      curl -sSfL --retry 5 -o "${SDK_DIR}/dl/${ASSET}" \
-        "https://github.com/Jake-Shadle/xwin/releases/download/${XWIN_VER}/${ASSET}"
+    if [ -n "${ASSET}" ]; then
+      local URL="https://github.com/Jake-Shadle/xwin/releases/download/${XWIN_VER}"
+      curl -sSfL --retry 5 -o "${SDK_DIR}/dl/${ASSET}" "${URL}/${ASSET}"
+      curl -sSfL --retry 5 -o "${SDK_DIR}/dl/${ASSET}.sha256" "${URL}/${ASSET}.sha256"
+      local WANT GOT
+      WANT="$(awk '{print $1}' "${SDK_DIR}/dl/${ASSET}.sha256")"
+      GOT="$(Sha256File "${SDK_DIR}/dl/${ASSET}")"
+      if [ "${WANT}" != "${GOT}" ]; then
+        echo "error: xwin checksum mismatch for ${ASSET} (want ${WANT}, got ${GOT})"
+        return 1
+      fi
       tar -xzf "${SDK_DIR}/dl/${ASSET}" -C "${SDK_DIR}/dl"
       XWIN="$(find "${SDK_DIR}/dl" -type f -name xwin | head -n1)"
+    elif command -v cargo >/dev/null 2>&1; then
+      # no prebuilt for this host (darwin, other linux arches); build it once
+      # into the sdk dir
+      echo "installing xwin ${XWIN_VER} via cargo (one-time)"
+      cargo install --root "${SDK_DIR}/cargo-root" --version "${XWIN_VER}" --locked xwin
+      XWIN="${SDK_DIR}/cargo-root/bin/xwin"
+    fi
+    if [ -n "${XWIN}" ]; then
       chmod +x "${XWIN}"
     fi
   fi
   if [ -z "${XWIN}" ] || [ ! -x "${XWIN}" ]; then
-    echo "error: xwin unavailable; install xwin (or cargo) to fetch the windows sdk, or point XWIN_SDK at a provisioned splat"
+    echo "error: xwin unavailable on this host; install xwin or cargo, or pre-provision a splat and export XWIN_SDK at it"
     return 1
   fi
 
@@ -942,8 +958,10 @@ function BuildClang() {
   OUTPUT="${DIST_NAME}" WriteClangConfig "export PATH=$PATH"
 
   # Windows SDK (headers + import libs) for the msvc-target cpu_model
-  # builtins and the clang-cl link smoke; used at build time only
-  export XWIN_SDK="${PWD}/xwin-sdk"
+  # builtins and the clang-cl link smoke; used at build time only. A
+  # pre-provisioned XWIN_SDK (e.g. for hosts without an xwin prebuilt) is
+  # honored as-is.
+  export XWIN_SDK="${XWIN_SDK:-${PWD}/xwin-sdk}"
   GetWinSDK "${XWIN_SDK}"
 
   if RunMake "${DIST_NAME}" "${DIST_NAME}.log" "clang"; then
