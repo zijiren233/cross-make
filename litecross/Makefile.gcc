@@ -330,12 +330,24 @@ MAKE += MAKEINFO=false
 
 LINKER_HASH_STYLE =
 
+# UCRT and the same Win7 minimum the clang-mode toolchain uses (llvm-mingw's
+# defaults); the ARM64 Windows ecosystem is UCRT-first. Overridable via
+# MINGW_CONFIG in config.mak or on the make command line.
+MINGW_CONFIG ?= --with-default-msvcrt=ucrt --with-default-win32-winnt=0x601
+
+# PE/COFF has no PIE: the default-pie static spec passes "-z text" which pe
+# ld rejects, breaking -static links. Windows ASLR comes from --dynamicbase.
+PIE_CONFIG = --disable-default-pie
+
 GCC_CONFIG_FOR_TARGET += --disable-sjlj-exceptions \
 	--disable-dw2-exceptions \
 	--enable-fully-dynamic-string
 
 ifneq ($(findstring aarch64,$(TARGET)),)
 THREADS_CONFIG = --enable-threads=win32
+# aarch64 outline-atomics helpers (__aarch64_*_sync) live in libgcc, which is
+# not built yet when winpthreads links against its stub fakelib/libgcc.a.
+MINGW_NO_OUTLINE_ATOMICS = -mno-outline-atomics
 endif
 
 ifneq ($(findstring x86_64,$(TARGET)),)
@@ -769,6 +781,8 @@ FULL_MINGW_PTHREADS_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
 	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
+	CFLAGS="$(CFLAGS) $(MINGW_NO_OUTLINE_ATOMICS)" \
+	CXXFLAGS="$(CXXFLAGS) $(MINGW_NO_OUTLINE_ATOMICS)" \
 	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS_FOR_TARGET)" \
 	DLLTOOL="$(TARGET_DLLTOOL_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" AR="$(TARGET_AR_FOR_BUILD)" RANLIB="$(TARGET_RANLIB_FOR_BUILD)" \
@@ -781,6 +795,8 @@ FULL_MINGW_CRT_CONFIG += RC="$(TARGET_RC_FOR_BUILD)" \
 	CC="$(TARGET_CC_FOR_BUILD)" \
 	CXX="$(TARGET_CXX_FOR_BUILD)" \
 	CPP="$(TARGET_CPP_FOR_BUILD)" CPPFLAGS="-I$(SYSROOT_INCLUDEDIR)" \
+	CFLAGS="$(CFLAGS) $(MINGW_NO_OUTLINE_ATOMICS)" \
+	CXXFLAGS="$(CXXFLAGS) $(MINGW_NO_OUTLINE_ATOMICS)" \
 	LD="$(TARGET_LD_FOR_BUILD)" LDFLAGS="-L$(SYSROOT_LIBDIR) $(LDFLAGS_FOR_TARGET)" \
 	DLLTOOL="$(TARGET_DLLTOOL_FOR_BUILD)" \
 	AS="$(TARGET_AS_FOR_BUILD)" AR="$(TARGET_AR_FOR_BUILD)" RANLIB="$(TARGET_RANLIB_FOR_BUILD)" \

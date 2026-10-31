@@ -1,0 +1,24 @@
+diff --git a/libstdc++-v3/po/Makefile.am b/libstdc++-v3/po/Makefile.am
+index 12d34910830..61b13762b71 100644
+--- a/libstdc++-v3/po/Makefile.am
++++ b/libstdc++-v3/po/Makefile.am
+@@ -38,6 +38,7 @@ MSGFMT = msgfmt
+ EXTRA_DIST = string_literals.cc POTFILES.in $(PACKAGE).pot $(LOCALE_IN)
+ 
+ .po.mo:
++	env --unset=LD_LIBRARY_PATH \
+ 	$(MSGFMT) -o $@ $<
+ 
+ all-local: all-local-$(USE_NLS)
+diff --git a/libstdc++-v3/po/Makefile.in b/libstdc++-v3/po/Makefile.in
+index 8e93445acd2..d6ff06e5ddb 100644
+--- a/libstdc++-v3/po/Makefile.in
++++ b/libstdc++-v3/po/Makefile.in
+@@ -561,6 +561,7 @@ uninstall-am:
+ 
+ 
+ .po.mo:
++	env --unset=LD_LIBRARY_PATH \
+ 	$(MSGFMT) -o $@ $<
+ 
+ all-local: all-local-$(USE_NLS)

@@ -3,6 +3,7 @@ OUTPUT = $(CURDIR)/output-clang
 CCACHE =
 LLVM_SRCDIR = LLVM_SRCDIR_not_set
 MUSL_SRCDIR = MUSL_SRCDIR_not_set
+MINGW_SRCDIR = MINGW_SRCDIR_not_set
 
 TARGETS = \
 	aarch64-linux-musl \
@@ -31,6 +32,34 @@ TARGETS = \
 
 TARGET_CONFIG_armv7-linux-musleabihf = -mfpu=vfpv3
 
+# ARM baselines, kept at armv6kz+vfpv2 to match the gcc-mode toolchain and
+# Alpine's armhf baseline (ARM1176/RPi1 class). Upstream compiler-rt's
+# optimized arm FP assembly requires ARMv6T2 (mls/movw), so those targets
+# build builtins with COMPILER_RT_ARM_OPTIMIZED_FP=OFF (Alpine's approach),
+# which falls back to the portable C implementations; armv7 keeps them on.
+TARGET_CONFIG_arm-linux-musleabihf = -march=armv6kz -mfpu=vfpv2
+TARGET_CONFIG_armv6-linux-musleabihf = -march=armv6kz -mfpu=vfpv2
+TARGET_CONFIG_armv6-linux-musleabi = -march=armv6kz
+
+# 32-bit ARM targets whose baseline lacks ARMv6T2
+ARM_V6_TARGETS = arm-linux-musleabihf armv6-linux-musleabihf armv6-linux-musleabi
+
+# Explicit runtime selection mirrors llvm-mingw's wrapper cfg defaults so the
+# choice does not depend on CLANG_DEFAULT_* baked at cmake time
+TARGET_CONFIG_i586-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+TARGET_CONFIG_i686-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+TARGET_CONFIG_x86_64-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+TARGET_CONFIG_aarch64-w64-mingw32 = -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld
+
+# mingw-w64 (windows-gnu) targets, mirroring the gcc-mode target set. The CRT,
+# winpthreads and compiler-rt builtins are built with the just-built clang +
+# lld + llvm tools, the same arrangement llvm-mingw ships.
+MINGW_TARGETS = i586-w64-mingw32 i686-w64-mingw32 x86_64-w64-mingw32 aarch64-w64-mingw32
+MINGW_CRT_CONFIG_i586-w64-mingw32 = --enable-lib32 --disable-lib64
+MINGW_CRT_CONFIG_i686-w64-mingw32 = --enable-lib32 --disable-lib64
+MINGW_CRT_CONFIG_x86_64-w64-mingw32 = --disable-lib32 --enable-lib64
+MINGW_CRT_CONFIG_aarch64-w64-mingw32 = --disable-lib32 --disable-lib64 --enable-libarm64
+
 # https://github.com/llvm/llvm-project/issues/58377
 # https://github.com/ziglang/zig/issues/4925
 $(foreach t,$(TARGETS), \
@@ -41,6 +70,7 @@ DEFAULT_TARGET = x86_64-linux-musl
 
 TOOLS = \
 	llvm-ar \
+	llvm-dlltool \
 	llvm-nm \
 	llvm-objcopy \
 	llvm-objdump \
@@ -97,7 +127,9 @@ endef
 ifeq ($(shell uname -s),Darwin)
 STAT =
 else
-STAT = -static --static
+# -no-pie: Alpine gcc defaults to PIE, turning -static into static-pie whose
+# x86_64 self-relocation crashes the linked tools at startup
+STAT = -static --static -no-pie
 endif
 
 # Shell script to fix broken symlinks with absolute /lib/* paths
@@ -118,6 +150,43 @@ COMMON_FLAGS = -O2 -g0 -Wno-error -w
 COMMON_LD_FLAGS = -s
 EXE_LD_FLAGS = $(COMMON_LD_FLAGS) $(STAT)
 
+# clang-cl/lld-link link against clang_rt.builtins.lib for the windows-msvc
+# targets. compiler-rt's cmake cannot cross-configure those targets on a POSIX
+# host without a Windows SDK (it switches to cl-style flags whose deps=msvc
+# dependency tracking ninja rejects off Windows, and a few sources include
+# libc headers), so compile the builtins sources directly with the built
+# clang instead. Sources are filtered to the set upstream itself builds for
+# msvc: x87 long-double code (MSVC long double == double), crtbegin,
+# enable_execute_stack, eprintf, emutls and int_util need libc/ELF support
+# and are dropped; __compilerrt_abort_impl is provided as a trap, matching
+# the upstream freestanding build.
+WIN_BUILTIN_TARGETS = x86_64-pc-windows-msvc aarch64-pc-windows-msvc
+WIN_BUILTIN_ARCH_x86_64-pc-windows-msvc = x86_64
+WIN_BUILTIN_ARCH_aarch64-pc-windows-msvc = aarch64
+WIN_BUILTIN_EXCLUDE = crtbegin divxc3 emutls enable_execute_stack eprintf \
+	extendhfxf2 fixunsxfdi fixunsxfsi fixunsxfti fixxfdi fixxfti floatdixf \
+	floattixf floatundixf floatuntixf int_util mulxc3 powixf2 truncxfhf2
+# Deferred (=) on purpose: the wildcards must resolve when the recipe runs,
+# after the src_llvm symlink exists; := would expand them at parse time on a
+# clean tree and silently produce an archive with only the trap shim.
+WIN_BUILTIN_GENERIC_SRCS = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/*.c))))
+WIN_BUILTIN_SRCS_x86_64 = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/x86_64/*.c))))
+WIN_BUILTIN_SRCS_aarch64 = $(filter-out $(WIN_BUILTIN_EXCLUDE),$(notdir $(basename $(wildcard src_llvm/compiler-rt/lib/builtins/aarch64/*.c))))
+# cpu_model lives in its own subdir outside the per-arch wildcards; upstream
+# builds it for msvc too (__cpu_model/__cpu_indicator_init for FMV). x86.c
+# compiles freestanding; aarch64.c reaches windows.h through
+# aarch64/lse_atomics/windows.inc and needs the build-time xwin SDK headers
+# (scripts/build.sh --winsdk provisions $(XWIN_SDK); nothing from it ships in
+# the artifacts).
+WIN_BUILTIN_EXTRA_SRCS_x86_64-pc-windows-msvc = cpu_model/x86.c
+WIN_BUILTIN_EXTRA_SRCS_aarch64-pc-windows-msvc = cpu_model/aarch64.c
+XWIN_SDK ?= $(abspath $(CURDIR)/../../xwin-sdk)
+XWIN_INCLUDES = -isystem $(XWIN_SDK)/splat/crt/include \
+	-isystem $(XWIN_SDK)/splat/sdk/include/um \
+	-isystem $(XWIN_SDK)/splat/sdk/include/ucrt \
+	-isystem $(XWIN_SDK)/splat/sdk/include/shared
+WIN_BUILTIN_EXTRA_CFLAGS_aarch64-pc-windows-msvc = $(XWIN_INCLUDES)
+
 export CFLAGS = $(COMMON_FLAGS)
 export CXXFLAGS = $(COMMON_FLAGS)
 
@@ -126,6 +195,7 @@ export CXXFLAGS = $(COMMON_FLAGS)
 FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-Wno-dev \
 	$(if $(filter ccache,$(CCACHE)),-DLLVM_CCACHE_BUILD=ON) \
+	-DLLVM_ENABLE_BINDINGS=OFF \
 	-DCLANG_PLUGIN_SUPPORT=ON \
 	-DLIBCLANG_BUILD_STATIC=ON \
 	-DCLANG_DEFAULT_PIE_ON_LINUX=ON \
@@ -171,16 +241,35 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_DO_STRIP=1 \
 	-DCMAKE_INSTALL_PREFIX=/clang \
-	-DDEFAULT_SYSROOT=../../TARGET \
-	-DLLVM_BUILTIN_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)))' \
+	-DLLVM_BUILTIN_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)));$(subst $(subst ,, ),;,$(MINGW_TARGETS))' \
 	-DLLVM_DEFAULT_TARGET_TRIPLE=$(DEFAULT_TARGET) \
 	-DLLVM_DISTRIBUTION_COMPONENTS='clang;clang-resource-headers;lld;LTO;$(subst $(subst ,, ),;,$(TOOLS))' \
 	-DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lld' \
 	-DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind' \
+	-DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON \
 	-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON \
-	-DLLVM_RUNTIME_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)))' \
+	-DLLVM_RUNTIME_TARGETS='$(subst $(subst ,, ),;,$(call normalise_targets,$(TARGETS)));$(subst $(subst ,, ),;,$(MINGW_TARGETS))' \
 	-DLLVM_TARGETS_TO_BUILD='$(subst $(subst ,, ),;,$(call llvm_targets,$(TARGETS)))' \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
+	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_CMAKE_SYSTEM_NAME=Windows) \
+	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(MINGW_TARGETS),-DBUILTINS_$(t)_COMPILER_RT_EXCLUDE_ATOMIC_BUILTIN=OFF) \
+	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_CMAKE_SYSTEM_NAME=Linux) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSTEM_NAME=Windows) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_CMAKE_SYSROOT=$(CURDIR)/obj_sysroot/$(t)) \
+	$(foreach t,$(MINGW_TARGETS),'-DRUNTIMES_$(t)_LLVM_ENABLE_RUNTIMES=libunwind;libcxx;libcxxabi') \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBUNWIND_USE_COMPILER_RT=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_USE_COMPILER_RT=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_USE_COMPILER_RT=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_USE_LLVM_UNWINDER=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_ENABLE_STATIC_UNWINDER=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXXABI_ENABLE_SHARED=OFF) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_HAS_WIN32_THREAD_API=ON) \
+	$(foreach t,$(MINGW_TARGETS),-DRUNTIMES_$(t)_LIBCXX_ENABLE_ABI_LINKER_SCRIPT=OFF) \
+	$(foreach t,i586-w64-mingw32 i686-w64-mingw32 x86_64-w64-mingw32,-DRUNTIMES_$(t)_LIBCXX_CXX_FLAGS=-D__USE_MINGW_ANSI_STDIO=1) \
+	$(foreach t,$(ARM_V6_TARGETS),-DBUILTINS_$(call normalise_target,$(t))_COMPILER_RT_ARM_OPTIMIZED_FP=OFF) \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_EXE_LINKER_FLAGS='$(EXE_LD_FLAGS) $(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_SHARED_LINKER_FLAGS='$(TARGET_CONFIG_$(t))') \
 	$(foreach t,$(TARGETS),-DBUILTINS_$(call normalise_target,$(t))_CMAKE_CXX_FLAGS='$(TARGET_CONFIG_$(t))') \
@@ -213,25 +302,31 @@ FULL_LLVM_CONFIG = $(LLVM_CONFIG) \
 	$(foreach t,$(TARGETS),-DRUNTIMES_$(call normalise_target,$(t))_LIBUNWIND_USE_COMPILER_RT=ON) \
 	# end
 
-all: llvm musl
+all: llvm musl mingw
 
-install: install-llvm install-musl install-zlib install-kernel-headers install-configs install-symlinks
+install: install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
 
 llvm: | obj_llvm/.lc_built_3
 musl: | $(foreach t,$(TARGETS),obj_musl/$(t)/.lc_built)
+mingw: | $(foreach t,$(MINGW_TARGETS),obj_mingw_pthreads/$(t)/.lc_built)
 install-musl: $(foreach t,$(TARGETS),install-musl_$(t))
 install-zlib: $(foreach t,$(TARGETS),install-zlib_$(t))
 install-kernel-headers: $(foreach t,$(TARGETS),install-kernel-headers_$(t))
-install-configs: $(foreach t,$(TARGETS),install-configs_$(t))
-install-symlinks: $(foreach t,$(TARGETS),install-symlinks_$(t))
+install-configs: $(foreach t,$(TARGETS) $(MINGW_TARGETS),install-configs_$(t))
+install-winbuiltins: $(foreach t,$(WIN_BUILTIN_TARGETS),install-winbuiltins_$(t))
+install-symlinks: $(foreach t,$(TARGETS) $(MINGW_TARGETS),install-symlinks_$(t))
+install-mingw: $(foreach t,$(MINGW_TARGETS),install-mingw_$(t))
 
-.PHONY: all llvm musl install-llvm install-musl install-kernel-headers install-configs install-symlinks clean
+.PHONY: all llvm musl mingw install-llvm install-musl install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks install-win clean
 
 src_llvm: | $(LLVM_SRCDIR)
 	ln -sf $(LLVM_SRCDIR) $@
 
 src_musl: | $(MUSL_SRCDIR)
 	ln -sf $(MUSL_SRCDIR) $@
+
+src_mingw: | $(MINGW_SRCDIR)
+	ln -sf $(MINGW_SRCDIR) $@
 
 src_kernel_headers: | $(LINUX_SRCDIR)
 	ln -sf "$(LINUX_SRCDIR)" $@
@@ -272,7 +367,7 @@ obj_sysroot/%/.lc_headers: | obj_sysroot/ obj_musl/%/.lc_configured
 	cd obj_musl/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install-headers
 	touch $@
 
-obj_llvm/.lc_built_2: | $(foreach t,$(TARGETS),obj_sysroot/$(t)/.lc_headers obj_sysroot/$(t)/.lc_linux_headers)
+obj_llvm/.lc_built_2: | $(foreach t,$(TARGETS),obj_sysroot/$(t)/.lc_headers obj_sysroot/$(t)/.lc_linux_headers) $(foreach t,$(MINGW_TARGETS),obj_sysroot/$(t)/.lc_mingw_headers)
 	cd obj_llvm && ninja builtins
 	touch $@
 
@@ -287,12 +382,14 @@ obj_zlib/.lc_configured: | obj_zlib/ src_zlib
 	touch $@
 
 obj_zlib/%/.lc_configured: export CC = $(CCACHE) $(DESTDIR)$(OUTPUT)/bin/$*-clang
-obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm
+obj_zlib/%/.lc_configured: export AR = $(DESTDIR)$(OUTPUT)/bin/$*-ar
+obj_zlib/%/.lc_configured: export RANLIB = $(DESTDIR)$(OUTPUT)/bin/$*-ranlib
+obj_zlib/%/.lc_configured: | obj_zlib/%/ src_zlib install-llvm install-configs_%
 	cd obj_zlib/$* && sh ../../src_zlib/configure --prefix= --static
 	touch $@
 
 obj_zlib/%/.lc_built: | obj_zlib/%/.lc_configured
-	cd obj_zlib/$* && $(MAKE)
+	cd obj_zlib/$* && $(MAKE) AR='$(DESTDIR)$(OUTPUT)/bin/$*-ar' ARFLAGS=rc RANLIB='$(DESTDIR)$(OUTPUT)/bin/$*-ranlib'
 	touch $@
 
 obj_zlib/.lc_built: | obj_zlib/.lc_configured
@@ -357,13 +454,91 @@ obj_sysroot/%/.lc_linux_headers: | obj_kernel_headers/%/.lc_built
 	touch $@
 
 obj_llvm/.lc_built_3: | $(foreach t,$(TARGETS),obj_musl/$(t)/.lc_built \
-							obj_sysroot/$(t)/.lc_crt_workaround \
-							obj_sysroot/$(t)/.lc_linux_headers)
+						obj_sysroot/$(t)/.lc_crt_workaround \
+						obj_sysroot/$(t)/.lc_linux_headers) \
+						$(foreach t,$(MINGW_TARGETS),obj_sysroot/$(t)/.lc_mingw_crt)
 	cd obj_llvm && ninja runtimes
 	touch $@
 
 install-llvm: | obj_llvm/.lc_built_3
 	cd obj_llvm && DESTDIR=$(DESTDIR)$(OUTPUT) ninja install-distribution install-builtins install-runtimes
+
+# ---- windows-hosted clang (cross-compiled from the toolchain just built) ----
+# CLANG_HOST_TRIPLE selects a mingw host (x86_64/aarch64-w64-mingw32); LLVM is
+# then cross-compiled with the installed <triple>-clang wrappers and linked
+# against the libc++/libunwind runtimes already built for that triple -- the
+# same bootstrap llvm-mingw uses for its Windows distributions. Host-side
+# zlib/zstd/libxml2 stay off, matching llvm-mingw's Windows builds.
+CLANG_HOST_TRIPLE ?=
+CLANG_HOST_SYSPROC_x86_64 = AMD64
+CLANG_HOST_SYSPROC_aarch64 = ARM64
+
+ifneq ($(CLANG_HOST_TRIPLE),)
+
+CLANG_HOST_ARCH = $(firstword $(subst -, ,$(CLANG_HOST_TRIPLE)))
+WIN_OUTPUT ?= $(OUTPUT)-win-$(CLANG_HOST_ARCH)
+
+WIN_LLVM_CONFIG = $(filter-out -DBUILTINS_% -DRUNTIMES_% -DZLIB_% -Dzstd_% -DLIBXML2_% \
+	-DLLVM_BUILTIN_TARGETS=% -DLLVM_RUNTIME_TARGETS=% -DLLVM_ENABLE_RUNTIMES=% \
+	-DLLVM_ENABLE_ZLIB=% -DLLVM_ENABLE_ZSTD=% -DLLVM_ENABLE_LIBXML2=%,$(FULL_LLVM_CONFIG)) \
+	-DCMAKE_SYSTEM_NAME=Windows \
+	-DCMAKE_SYSTEM_PROCESSOR=$(CLANG_HOST_SYSPROC_$(CLANG_HOST_ARCH)) \
+	-DCMAKE_C_COMPILER='$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang' \
+	-DCMAKE_CXX_COMPILER='$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang++' \
+	-DCMAKE_ASM_COMPILER='$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang' \
+	-DCMAKE_C_COMPILER_TARGET=$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_CXX_COMPILER_TARGET=$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_ASM_COMPILER_TARGET=$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_RC_COMPILER='$(DESTDIR)$(OUTPUT)/clang/bin/llvm-windres' \
+	-DCMAKE_RC_FLAGS='--target=$(CLANG_HOST_TRIPLE)' \
+	-DLLVM_HOST_TRIPLE=$(CLANG_HOST_TRIPLE) \
+	-DLLVM_NATIVE_TOOL_DIR=$(CURDIR)/obj_llvm/bin \
+	-DCMAKE_FIND_ROOT_PATH=$(CURDIR)/obj_sysroot/$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+	-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+	-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+	-DLLVM_ENABLE_ZLIB=OFF \
+	-DLLVM_ENABLE_ZSTD=OFF \
+	-DLLVM_ENABLE_LIBXML2=OFF \
+	-DCMAKE_STRIP='$(CURDIR)/obj_llvm/bin/llvm-strip'
+
+obj_llvm_win/.lc_configured: | obj_llvm_win/ src_llvm install-llvm install-configs_$(CLANG_HOST_TRIPLE) install-mingw_$(CLANG_HOST_TRIPLE) install-symlinks_$(CLANG_HOST_TRIPLE)
+	cd obj_llvm_win && cmake -G "Ninja" $(WIN_LLVM_CONFIG) ../src_llvm/llvm
+	touch $@
+
+obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
+	cd obj_llvm_win && ninja distribution
+	touch $@
+
+# The per-target sysroots, cfg files and runtime libraries are host-agnostic:
+# copy the regular distribution, swap the native clang/bin for the cross-
+# compiled .exe set and rebuild bin/ from exe copies (no symlinks on Windows).
+WIN_OUTPUT_ABS = $(abspath $(WIN_OUTPUT))
+install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
+	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
+	mkdir -p $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
+	cp -a $(DESTDIR)$(OUTPUT)/. $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/
+	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/clang/bin $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/bin
+	cd obj_llvm_win && DESTDIR=$(if $(DESTDIR),$(DESTDIR),$(CURDIR)/)$(WIN_OUTPUT_ABS) ninja install-distribution
+	set -e; \
+	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
+	mkdir -p bin; \
+	for t in $(TARGETS) $(MINGW_TARGETS); do \
+		cp clang/bin/clang.exe bin/$$t-clang.exe; \
+		cp clang/bin/clang++.exe bin/$$t-clang++.exe; \
+		cp clang/bin/clang.exe bin/$$t-gcc.exe; \
+		cp clang/bin/clang++.exe bin/$$t-g++.exe; \
+		cp clang/bin/clang-cpp.exe bin/$$t-cpp.exe; \
+		cp clang/bin/ld.lld.exe bin/$$t-ld.exe; \
+		for tool in $(TOOLS); do \
+			short=$${tool\#llvm-}; \
+			cp clang/bin/$$tool.exe bin/$$t-$$short.exe; \
+		done; \
+	done
+
+install: install-win
+
+endif
 
 install-musl_%: | obj_musl/%/.lc_built
 	cd obj_musl/$* && $(MAKE) $(MUSL_VARS) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
@@ -376,13 +551,131 @@ install-kernel-headers_%: | obj_kernel_headers/%/.lc_built
 	mkdir -p $(DESTDIR)$(OUTPUT)/$*/include
 	cp -R obj_kernel_headers/$*/staged/include/* $(DESTDIR)$(OUTPUT)/$*/include
 
-install-configs_%: | $(DESDIR)$(OUTPUT)/clang/bin/
-	echo "--target=$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$*-clang.cfg
-	echo "--target=$* $(TARGET_CONFIG_$*)" > $(DESTDIR)$(OUTPUT)/clang/bin/$*-clang++.cfg
+# Real-file anchor so install-configs never races install-llvm under -j
+$(DESTDIR)$(OUTPUT)/clang/bin/clang: install-llvm
+	@test -f $@ || { echo "expected $@ after install-llvm" >&2; exit 1; }
+
+# llvm 16+ has only the major version number in the resource dir
+WIN_RESOURCE_VER = $(if $(intcmp $(call fn_major_version,$(LLVM_VER)),16),$(LLVM_VER),$(call fn_major_version,$(LLVM_VER)))
+
+obj_winbuiltins/%/.lc_built: | obj_winbuiltins/%/ src_llvm obj_llvm/.lc_built_1
+	cd obj_winbuiltins/$* && \
+	printf 'void __compilerrt_abort_impl(const char*f,int l,const char*fn){__builtin_trap();}\n' > int_abort.c && \
+	../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin -c -o int_abort.obj int_abort.c && \
+	for n in $(WIN_BUILTIN_GENERIC_SRCS); do \
+		../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$n.c || exit 1; \
+	done && \
+	for n in $(WIN_BUILTIN_SRCS_$(WIN_BUILTIN_ARCH_$*)); do \
+		../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$(WIN_BUILTIN_ARCH_$*)/$$n.c || exit 1; \
+	done && \
+	for s in $(WIN_BUILTIN_EXTRA_SRCS_$*); do \
+		n=$$(basename $$s .c); \
+		../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin $(WIN_BUILTIN_EXTRA_CFLAGS_$*) -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$s || exit 1; \
+	done && \
+	../../obj_llvm/bin/llvm-ar rc clang_rt.builtins.lib *.obj
+	touch $@
+
+$(XWIN_SDK)/.lc_ready:
+	bash $(CURDIR)/../../scripts/build.sh --winsdk "$(XWIN_SDK)"
+
+obj_winbuiltins/aarch64-pc-windows-msvc/.lc_built: | $(XWIN_SDK)/.lc_ready
+
+install-winbuiltins_%: | obj_winbuiltins/%/.lc_built
+	mkdir -p $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$*
+	cp obj_winbuiltins/$*/clang_rt.builtins.lib $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$*/
+
+# ---- mingw-w64 (windows-gnu) ----
+
+# llvm-windres is not a distribution component upstream, so build it in the
+# LLVM tree on demand; install-mingw copies it next to the clang binaries
+$(CURDIR)/obj_llvm/bin/llvm-windres: | obj_llvm/.lc_built_1
+	cd obj_llvm && ninja llvm-windres
+
+# Point every autotools probe at the built LLVM tools
+# absolute tool paths: mingw-w64's make recurses into subdirectories where
+# ../../ relative paths would break
+MINGW_CROSSVARS = \
+	CC='$(CCACHE) $(CURDIR)/obj_llvm/bin/clang --target=$*' \
+	CFLAGS='$(COMMON_FLAGS)' \
+	CPPFLAGS='-I$(CURDIR)/obj_sysroot/$*/include' \
+	LDFLAGS='-L$(CURDIR)/obj_sysroot/$*/lib' \
+	AR='$(CURDIR)/obj_llvm/bin/llvm-ar' \
+	RANLIB='$(CURDIR)/obj_llvm/bin/llvm-ranlib' \
+	NM='$(CURDIR)/obj_llvm/bin/llvm-nm' \
+	AS='$(CURDIR)/obj_llvm/bin/clang --target=$*' \
+	LD='$(CURDIR)/obj_llvm/bin/ld.lld' \
+	DLLTOOL='$(CURDIR)/obj_llvm/bin/llvm-dlltool' \
+	RC='$(CURDIR)/obj_llvm/bin/llvm-windres --target=$* --include $(CURDIR)/obj_sysroot/$*/include' \
+	STRIP='$(CURDIR)/obj_llvm/bin/llvm-strip' \
+	OBJDUMP='$(CURDIR)/obj_llvm/bin/llvm-objdump'
+
+obj_mingw_headers/%/.lc_configured: | obj_mingw_headers/%/ src_mingw
+	cd obj_mingw_headers/$* && sh ../../src_mingw/mingw-w64-headers/configure \
+		--prefix= --host=$* --enable-sdk=all --enable-idl \
+		--with-default-msvcrt=ucrt --with-default-win32-winnt=0x601 --with-sysroot=/ \
+		|| (cat config.log && exit 1)
+	touch $@
+
+obj_sysroot/%/.lc_mingw_headers: | obj_mingw_headers/%/.lc_configured
+	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install
+	touch $@
+
+obj_mingw_crt/%/.lc_configured: $(CURDIR)/obj_llvm/bin/llvm-windres | obj_mingw_crt/%/ src_mingw obj_sysroot/%/.lc_mingw_headers obj_llvm/.lc_built_1
+	cd obj_mingw_crt/$* && sh ../../src_mingw/mingw-w64-crt/configure \
+		--prefix= --host=$* --with-sysroot=/ --with-default-msvcrt=ucrt \
+		--with-default-win32-winnt=0x601 $(MINGW_CRT_CONFIG_$*) $(MINGW_CROSSVARS) \
+		|| (cat config.log && exit 1)
+	touch $@
+
+obj_mingw_crt/%/.lc_built: | obj_mingw_crt/%/.lc_configured
+	cd obj_mingw_crt/$* && $(MAKE)
+	touch $@
+
+obj_sysroot/%/.lc_mingw_crt: | obj_mingw_crt/%/.lc_built
+	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install
+	touch $@
+
+obj_mingw_pthreads/%/.lc_configured: $(CURDIR)/obj_llvm/bin/llvm-windres | obj_mingw_pthreads/%/ src_mingw obj_sysroot/%/.lc_mingw_crt
+	cd obj_mingw_pthreads/$* && sh ../../src_mingw/mingw-w64-libraries/winpthreads/configure \
+		--prefix= --host=$* --with-sysroot=/ --with-default-msvcrt=ucrt $(MINGW_CROSSVARS) \
+		|| (cat config.log && exit 1)
+	touch $@
+
+obj_mingw_pthreads/%/.lc_built: | obj_mingw_pthreads/%/.lc_configured
+	cd obj_mingw_pthreads/$* && $(MAKE)
+	touch $@
+
+install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj_mingw_pthreads/%/.lc_built $(DESTDIR)$(OUTPUT)/bin/ $(DESTDIR)$(OUTPUT)/clang/bin/
+	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
+	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
+	cd obj_mingw_pthreads/$* && $(MAKE) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install
+	# the real ssp symbols live in the CRT; the driver adds -lssp/-lssp_nonshared
+	# under -fstack-protector, so ship empty archives like llvm-mingw does
+	printf "" | $(CURDIR)/obj_llvm/bin/llvm-ar rc $(DESTDIR)$(OUTPUT)/$*/lib/libssp.a
+	printf "" | $(CURDIR)/obj_llvm/bin/llvm-ar rc $(DESTDIR)$(OUTPUT)/$*/lib/libssp_nonshared.a
+	cp $(CURDIR)/obj_llvm/bin/llvm-windres $(DESTDIR)$(OUTPUT)/clang/bin/
+	ln -sf ../clang/bin/llvm-windres $(DESTDIR)$(OUTPUT)/bin/$*-windres
+
+
+# The driver looks up implicit config files by the *normalized* form of the
+# triple the wrapper was invoked as (arm-linux-musleabihf-clang reads
+# arm-unknown-linux-musleabihf-clang.cfg next to the real binary), so ask
+# clang itself for the exact name it will search for. <CFGDIR> expands to the
+# directory holding the .cfg, keeping the sysroot next to the install and the
+# toolchain relocatable; this replaces the DEFAULT_SYSROOT patch.
+install-configs_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang
+	triple=$$($(DESTDIR)$(OUTPUT)/clang/bin/clang --target=$* -print-target-triple); \
+	extra="$(TARGET_CONFIG_$*)"; \
+	case "$*" in *-w64-mingw32) extra="$$extra -stdlib=libc++ -isystem<CFGDIR>/../include/$$triple/c++/v1 -isystem<CFGDIR>/../include/c++/v1";; esac; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang.cfg; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang++.cfg; \
+	echo "--target=$* --sysroot=<CFGDIR>/../../$* $$extra" > $(DESTDIR)$(OUTPUT)/clang/bin/$$triple-clang-cpp.cfg
 
 install-symlinks_%: | $(DESTDIR)$(OUTPUT)/bin/
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-clang
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang++ $*-clang++
+	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-gcc
+	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang++ $*-g++
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang-cpp $*-cpp
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang $*-cc
 	cd $(DESTDIR)$(OUTPUT)/bin && ln -sf ../clang/bin/clang++ $*-c++

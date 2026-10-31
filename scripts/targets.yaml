@@ -5,7 +5,7 @@
 # Default versions (used when not specified per-target)
 defaults:
   GCC_VER: "15.2.0"
-  BINUTILS_VER: "2.45.1"
+  BINUTILS_VER: "2.47"
   GMP_VER: "6.3.0"
   MPC_VER: "1.3.1"
   MPFR_VER: "4.2.2"
@@ -15,8 +15,12 @@ defaults:
   MUSL_VER: "1.2.6"
   GLIBC_VER: "2.42"
   MINGW_VER: "v14.0.0"
-  FREEBSD_VER: "14.3"
+  FREEBSD_VER: "14.5"
   NETBSD_VER: "10.1"
+  # clang toolchain mode (scripts/build.sh -e clang, litecross/Makefile.clang)
+  LLVM_VER: "23.1.4"
+  ZLIB_VER: "1.3.2"
+  LIBXML2_VER: "2.15.1"
 
 targets:
   # ============================================================================
@@ -340,6 +344,133 @@ targets:
   - ID: x86_64-linux-gnux32-2.43
     TARGET: x86_64-linux-gnux32
     GLIBC_VER: "2.43"
+
+
+# glibc 2.44 (latest)
+
+  - ID: aarch64-linux-gnu-2.44
+    TARGET: aarch64-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: aarch64_be-linux-gnu-2.44
+    TARGET: aarch64_be-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: arm-linux-gnueabi-2.44
+    TARGET: arm-linux-gnueabi
+    GLIBC_VER: "2.44"
+
+  - ID: arm-linux-gnueabihf-2.44
+    TARGET: arm-linux-gnueabihf
+    GLIBC_VER: "2.44"
+
+  - ID: armv5-linux-gnueabi-2.44
+    TARGET: armv5-linux-gnueabi
+    GLIBC_VER: "2.44"
+
+  - ID: armv6-linux-gnueabi-2.44
+    TARGET: armv6-linux-gnueabi
+    GLIBC_VER: "2.44"
+
+  - ID: armv6-linux-gnueabihf-2.44
+    TARGET: armv6-linux-gnueabihf
+    GLIBC_VER: "2.44"
+
+  - ID: armv7-linux-gnueabi-2.44
+    TARGET: armv7-linux-gnueabi
+    GLIBC_VER: "2.44"
+
+  - ID: armv7-linux-gnueabihf-2.44
+    TARGET: armv7-linux-gnueabihf
+    GLIBC_VER: "2.44"
+
+  - ID: loongarch64-linux-gnu-2.44
+    TARGET: loongarch64-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mips-linux-gnu-2.44
+    TARGET: mips-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mips-linux-gnusf-2.44
+    TARGET: mips-linux-gnusf
+    GLIBC_VER: "2.44"
+
+  - ID: mipsel-linux-gnu-2.44
+    TARGET: mipsel-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mipsel-linux-gnusf-2.44
+    TARGET: mipsel-linux-gnusf
+    GLIBC_VER: "2.44"
+
+  - ID: mipsisa32r6-linux-gnu-2.44
+    TARGET: mipsisa32r6-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mipsisa32r6el-linux-gnu-2.44
+    TARGET: mipsisa32r6el-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mips64-linux-gnu-2.44
+    TARGET: mips64-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mips64-linux-gnusf-2.44
+    TARGET: mips64-linux-gnusf
+    GLIBC_VER: "2.44"
+
+  - ID: mips64el-linux-gnu-2.44
+    TARGET: mips64el-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mips64el-linux-gnusf-2.44
+    TARGET: mips64el-linux-gnusf
+    GLIBC_VER: "2.44"
+
+  - ID: mipsisa64r6-linux-gnu-2.44
+    TARGET: mipsisa64r6-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: mipsisa64r6el-linux-gnu-2.44
+    TARGET: mipsisa64r6el-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: powerpc64-linux-gnu-2.44
+    TARGET: powerpc64-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: powerpc64le-linux-gnu-2.44
+    TARGET: powerpc64le-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: riscv32-linux-gnu-2.44
+    TARGET: riscv32-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: riscv64-linux-gnu-2.44
+    TARGET: riscv64-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: s390x-linux-gnu-2.44
+    TARGET: s390x-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: i586-linux-gnu-2.44
+    TARGET: i586-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: i686-linux-gnu-2.44
+    TARGET: i686-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: x86_64-linux-gnu-2.44
+    TARGET: x86_64-linux-gnu
+    GLIBC_VER: "2.44"
+
+  - ID: x86_64-linux-gnux32-2.44
+    TARGET: x86_64-linux-gnux32
+    GLIBC_VER: "2.44"
 
   - ID: aarch64-linux-gnu-2.42
     TARGET: aarch64-linux-gnu
@@ -2229,66 +2360,71 @@ targets:
   - TARGET: x86_64-w64-mingw32
     MINGW_VER: "v14.0.0"
 
+  # Requires GCC 16.2+: aarch64 mingw long double ABI fix (aarch64-abi-ms.h)
+  - TARGET: aarch64-w64-mingw32
+    MINGW_VER: "v14.0.0"
+    GCC_VER: "16.2.0"
+
   # ============================================================================
-  # FreeBSD 13 targets (FREEBSD_VER: 13.5)
+  # FreeBSD 13 targets (13.x EOL, pruned from mirrors; sources on 14.5)
   # ============================================================================
   - TARGET: x86_64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: aarch64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64le-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   - TARGET: riscv64-unknown-freebsd13
-    FREEBSD_VER: "13.5"
+    FREEBSD_VER: "14.5"
 
   # ============================================================================
-  # FreeBSD 14 targets (FREEBSD_VER: 14.3)
+  # FreeBSD 14 targets (FREEBSD_VER: 14.5)
   # ============================================================================
   - TARGET: x86_64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: aarch64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: powerpc64le-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   - TARGET: riscv64-unknown-freebsd14
-    FREEBSD_VER: "14.3"
+    FREEBSD_VER: "14.5"
 
   # ============================================================================
-  # FreeBSD 15 targets (FREEBSD_VER: 15.0)
+  # FreeBSD 15 targets (FREEBSD_VER: 15.1)
   # Note: FreeBSD 15 dropped support for i386 and 32-bit powerpc
   # ============================================================================
   - TARGET: x86_64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: aarch64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: powerpc64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: powerpc64le-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   - TARGET: riscv64-unknown-freebsd15
-    FREEBSD_VER: "15.0"
+    FREEBSD_VER: "15.1"
 
   # ============================================================================
   # NetBSD 10 targets (NETBSD_VER: 10.1)

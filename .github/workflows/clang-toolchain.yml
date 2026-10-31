@@ -1,0 +1,307 @@
+name: Clang Toolchain Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform"
+        required: true
+        type: choice
+        options:
+          - linux-x86_64
+          - linux-aarch64
+          - linux-armv7
+          - darwin-aarch64
+          - darwin-x86_64
+      extra-build-flags:
+        description: "Extra flags for build.sh"
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      platform:
+        description: "Platform identifier (e.g., linux-x86_64, darwin-aarch64)"
+        required: true
+        type: string
+      extra-build-flags:
+        description: "Extra flags for build.sh"
+        required: false
+        type: string
+        default: ""
+      sources-cache-key:
+        description: "Pre-computed sources cache key (skip calculation if provided)"
+        required: false
+        type: string
+        default: ""
+      sources-artifact:
+        description: "Artifact name to download sources from (if provided, skip cache and download from artifact)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  setup:
+    name: Setup clang
+    runs-on: ubuntu-24.04
+    outputs:
+      runs-on: ${{ steps.config.outputs.runs-on }}
+      docker-platform: ${{ steps.config.outputs.docker-platform }}
+      docker-image: ${{ steps.config.outputs.docker-image }}
+      sources-cache-key: ${{ inputs.sources-cache-key || steps.cache-key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        if: inputs.sources-cache-key == ''
+        run: |
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate sources cache key
+        if: inputs.sources-cache-key == ''
+        id: cache-key
+        run: |
+          KEY=$(./scripts/sources.sh cache-key -T clang)
+          # Scope the cache to the clang toolchain source set, mirroring the
+          # per-target scoping of single-target.yml
+          echo "key=sources-${KEY}-clang" >> $GITHUB_OUTPUT
+          echo "Sources cache key: sources-${KEY}-clang"
+
+      - name: Determine platform config
+        id: config
+        run: |
+          case "${{ inputs.platform }}" in
+            linux-x86_64)
+              echo "runs-on=ubuntu-24.04" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/amd64" >> $GITHUB_OUTPUT
+              echo "docker-image=amd64/alpine:latest" >> $GITHUB_OUTPUT
+              ;;
+            linux-aarch64)
+              echo "runs-on=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/arm64" >> $GITHUB_OUTPUT
+              echo "docker-image=arm64v8/alpine:latest" >> $GITHUB_OUTPUT
+              ;;
+            linux-armv7)
+              echo "runs-on=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/arm/v7" >> $GITHUB_OUTPUT
+              echo "docker-image=arm32v7/alpine:latest" >> $GITHUB_OUTPUT
+              ;;
+            darwin-aarch64)
+              echo "runs-on=macos-26" >> $GITHUB_OUTPUT
+              ;;
+            darwin-x86_64)
+              echo "runs-on=macos-26-intel" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+  build:
+    name: Build clang (${{ inputs.platform }})
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # For macOS: Install dependencies via brew
+      - name: Init Dependencies (macOS)
+        if: startsWith(inputs.platform, 'darwin')
+        run: |
+          xcrun simctl delete all || true
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* || true
+          sudo defaults -currentHost write /Library/Preferences/com.apple.powerlogd SMCMonitorCadence 0 || true
+          sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.PerfPowerServices.plist || true
+          sudo killall PerfPowerServices || true
+          sudo launchctl bootout system/com.apple.PerfPowerServices 2>/dev/null || true
+          sudo launchctl bootout system/com.apple.metadata.mds 2>/dev/null || true
+
+          wget https://github.com/biscuitehh/yeetd/releases/download/1.0/yeetd-normal.pkg
+          sudo installer -pkg yeetd-normal.pkg -target /
+          defaults write dev.biscuit.yeetd killapsd true
+          yeetd &
+
+          brew install \
+            bash \
+            make \
+            gnu-sed \
+            gawk \
+            gpatch \
+            coreutils \
+            findutils \
+            gcc@14 \
+            perl \
+            libtool \
+            bison \
+            texinfo \
+            yq \
+            rsync \
+            vmtouch \
+            cmake \
+            ninja
+
+          # Lock gcc/g++ in memory for faster access
+          GCC_PREFIX=$(brew --prefix gcc@14)
+          sudo vmtouch -l -h -f -d "$GCC_PREFIX"
+
+      # Try cache first
+      - name: Restore sources cache
+        id: cache
+        timeout-minutes: 10
+        uses: actions/cache/restore@v5
+        with:
+          path: sources
+          key: ${{ needs.setup.outputs.sources-cache-key }}
+
+      # If cache miss, try artifact
+      - name: Download sources from artifact
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact != ''
+        timeout-minutes: 10
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.sources-artifact }}
+          path: sources
+
+      # If cache miss and no artifact, download directly
+      - name: Download sources (Linux)
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'linux')
+        run: |
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64) YQ=yq_linux_amd64;;
+            Linux-ARM64) YQ=yq_linux_arm64;;
+            macOS-ARM64) YQ=yq_darwin_arm64;;
+            macOS-X64) YQ=yq_darwin_amd64;;
+          esac
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/$YQ"
+          sudo chmod +x /usr/local/bin/yq
+          bash ./scripts/sources.sh download -S sources -T clang
+
+      - name: Download sources (macOS)
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'darwin')
+        run: |
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64) YQ=yq_linux_amd64;;
+            Linux-ARM64) YQ=yq_linux_arm64;;
+            macOS-ARM64) YQ=yq_darwin_arm64;;
+            macOS-X64) YQ=yq_darwin_amd64;;
+          esac
+          sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/$YQ"
+          sudo chmod +x /usr/local/bin/yq
+          bash ./scripts/sources.sh download -S sources -T clang
+
+      # Save cache if we downloaded (not from artifact, to avoid redundant cache)
+      - name: Save sources cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        uses: actions/cache/save@v5
+        with:
+          path: sources
+          key: ${{ needs.setup.outputs.sources-cache-key }}
+
+      # For macOS: LLVM builds are large; use case-sensitive volumes on disk
+      # (not a RAM disk) on both darwin architectures
+      - name: Create Case-sensitive volumes (macOS)
+        if: startsWith(inputs.platform, 'darwin')
+        run: |
+          diskutil list
+          # Locate the APFS container backing the system volume; hard-coded
+          # disk numbers rot as runner images change layout
+          DISK=$(diskutil info / | awk '/Part of Whole/ {print $4}')
+          echo "Using APFS container: $DISK"
+          diskutil apfs addVolume $DISK "Case-sensitive APFS" cross
+          # Physical volume for orig directory (case-sensitive)
+          diskutil apfs addVolume $DISK "Case-sensitive APFS" orig
+          rsync -a --exclude=sources ./ /Volumes/cross/
+
+      # Build on Linux (Docker). LLVM build dirs exceed the tmpfs budget used
+      # by gcc builds, so /work is disk-backed here.
+      - name: Build (Linux)
+        if: startsWith(inputs.platform, 'linux')
+        run: |
+          docker run --rm \
+            --platform ${{ needs.setup.outputs.docker-platform }} \
+            --cap-add=IPC_LOCK \
+            --volume "${PWD}/work:/work" \
+            --volume "${PWD}:/src:ro" \
+            --volume "${PWD}/sources:/sources" \
+            --volume "${PWD}/dist:/dist" \
+            --volume "${PWD}/orig:/orig" \
+            ${{ needs.setup.outputs.docker-image }} \
+            /bin/sh -c '
+              apk add --no-cache \
+                coreutils \
+                curl \
+                bzip2 \
+                xz \
+                make \
+                bison \
+                rsync \
+                patch \
+                perl \
+                flex \
+                g++ \
+                texinfo \
+                python3 \
+                gawk \
+                grep \
+                bash \
+                tar \
+                file \
+                zip \
+                yq \
+                findutils \
+                cmake \
+                ninja && \
+              apk add --no-cache vmtouch --repository=https://dl-cdn.alpinelinux.org/alpine/edge/testing && \
+              vmtouch -l -h -f -d /usr/bin/g++ /usr/libexec/gcc /usr/lib/gcc && \
+              rsync -a --exclude=sources --exclude=work /src/ /work/ && \
+              find /sources -type f -exec touch {} + && \
+              cd /work && \
+              bash scripts/build.sh \
+                -LDPl \
+                -a \
+                -S /sources \
+                -R /orig \
+                -o /dist \
+                ${{ inputs.extra-build-flags }} \
+                -e clang && \
+              echo "--- smoke: MSVC-ABI tools ---" && \
+              /dist/clang/bin/clang-cl --version && \
+              /dist/clang/bin/lld-link --version && \
+              /dist/clang/bin/llvm-rc --version && \
+              printf "int main(void){return 0;}\n" > /tmp/smoke.c && \
+              /dist/clang/bin/clang-cl /c /Fo:/tmp/smoke.obj -- /tmp/smoke.c && \
+              echo "clang-cl compile smoke OK" && \
+              file /tmp/smoke.obj'
+
+      - name: Build (macOS)
+        if: startsWith(inputs.platform, 'darwin')
+        working-directory: /Volumes/cross
+        run: |
+          find "${{ github.workspace }}/sources" -type f -exec touch {} +
+          bash scripts/build.sh \
+            -LDPl \
+            -c "gcc-14" \
+            -x "g++-14" \
+            -a \
+            -S "${{ github.workspace }}/sources" \
+            -R /Volumes/orig \
+            -o "${{ github.workspace }}/dist" \
+            ${{ inputs.extra-build-flags }} \
+            -e clang
+
+      # MSVC-ABI smoke test on the host binary (macOS)
+      - name: MSVC tools smoke (macOS)
+        if: startsWith(inputs.platform, 'darwin')
+        run: |
+          ./dist/clang/bin/clang-cl --version
+          ./dist/clang/bin/lld-link --version
+          printf 'int main(void){return 0;}\n' > /tmp/smoke.c
+          ./dist/clang/bin/clang-cl /c /Fo:/tmp/smoke.obj -- /tmp/smoke.c
+          echo "clang-cl compile smoke OK"
+
+      - name: Upload dist
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v6
+        with:
+          name: clang-${{ inputs.platform }}
+          if-no-files-found: error
+          path: dist/*.*

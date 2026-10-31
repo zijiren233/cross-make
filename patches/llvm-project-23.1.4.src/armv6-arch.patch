@@ -1,0 +1,26 @@
+compiler-rt: do not force a march in the arm/armhf target tests
+
+The march baseline is injected per-target through TARGET_CONFIG in
+litecross/Makefile.clang (armv6kz for arm-/armv6-, matching the Alpine
+armhf baseline; default v7 for armv7). Upstream forced armv7-a here
+because its optimized arm FP assembly needs ARMv6T2; the v6 targets
+instead build builtins with COMPILER_RT_ARM_OPTIMIZED_FP=OFF (Alpine's
+approach), which falls back to the portable C implementations. The ABI
+split stays.
+diff --git a/compiler-rt/cmake/base-config-ix.cmake b/compiler-rt/cmake/base-config-ix.cmake
+index 1b66dec..b3e0314 100644
+--- a/compiler-rt/cmake/base-config-ix.cmake
++++ b/compiler-rt/cmake/base-config-ix.cmake
+@@ -302,10 +302,8 @@ macro(test_targets)
+       if(WIN32)
+         test_target_arch(arm "" "" "")
+       else()
+-        test_target_arch(armv4t "" "-march=armv4t" "-mfloat-abi=soft")
+-        test_target_arch(armv6m "" "-march=armv6m" "-mfloat-abi=soft")
+-        test_target_arch(arm "" "-march=armv7-a" "-mfloat-abi=soft")
+-        test_target_arch(armhf "" "-march=armv7-a" "-mfloat-abi=hard")
++        test_target_arch(arm "" "" "-mfloat-abi=soft")
++        test_target_arch(armhf "" "" "-mfloat-abi=hard")
+       endif()
+     elseif("${COMPILER_RT_DEFAULT_TARGET_ARCH}" MATCHES "avr")
+       test_target_arch(avr "__AVR__" "--target=avr")

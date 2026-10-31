@@ -9,6 +9,83 @@ function ChToScriptFileDir() {
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGETS_YAML="${SCRIPT_DIR}/targets.yaml"
 
+XWIN_VER="0.10.0"
+
+# Provision the Windows SDK headers/libs (build-time only, never shipped in
+# the artifacts) with xwin, for the windows-msvc cpu_model builtins and the
+# clang-cl link smoke test. Idempotent: a directory with .lc_ready is reused.
+# Usage: GetWinSDK <sdk_dir>
+function Sha256File() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  else
+    shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
+function GetWinSDK() {
+  local SDK_DIR="$1"
+  if [ -e "${SDK_DIR}/.lc_ready" ]; then
+    echo "windows sdk already provisioned: ${SDK_DIR}"
+    return 0
+  fi
+
+  local XWIN=""
+  if command -v xwin >/dev/null 2>&1; then
+    XWIN="$(command -v xwin)"
+  else
+    mkdir -p "${SDK_DIR}/dl"
+    local ASSET=""
+    case "$(uname -s)/$(uname -m)" in
+    Linux/x86_64) ASSET="xwin-${XWIN_VER}-x86_64-unknown-linux-musl.tar.gz" ;;
+    Linux/aarch64) ASSET="xwin-${XWIN_VER}-aarch64-unknown-linux-musl.tar.gz" ;;
+    esac
+    if [ -n "${ASSET}" ]; then
+      local URL="https://github.com/Jake-Shadle/xwin/releases/download/${XWIN_VER}"
+      curl -sSfL --retry 5 -o "${SDK_DIR}/dl/${ASSET}" "${URL}/${ASSET}"
+      curl -sSfL --retry 5 -o "${SDK_DIR}/dl/${ASSET}.sha256" "${URL}/${ASSET}.sha256"
+      local WANT GOT
+      WANT="$(awk '{print $1}' "${SDK_DIR}/dl/${ASSET}.sha256")"
+      GOT="$(Sha256File "${SDK_DIR}/dl/${ASSET}")"
+      if [ "${WANT}" != "${GOT}" ]; then
+        echo "error: xwin checksum mismatch for ${ASSET} (want ${WANT}, got ${GOT})"
+        return 1
+      fi
+      tar -xzf "${SDK_DIR}/dl/${ASSET}" -C "${SDK_DIR}/dl"
+      XWIN="$(find "${SDK_DIR}/dl" -type f -name xwin | head -n1)"
+    elif command -v cargo >/dev/null 2>&1; then
+      # no prebuilt for this host (darwin, other linux arches); build it once
+      # into the sdk dir
+      echo "installing xwin ${XWIN_VER} via cargo (one-time)"
+      cargo install --root "${SDK_DIR}/cargo-root" --version "${XWIN_VER}" --locked xwin
+      XWIN="${SDK_DIR}/cargo-root/bin/xwin"
+    fi
+    if [ -n "${XWIN}" ]; then
+      chmod +x "${XWIN}"
+    fi
+  fi
+  if [ -z "${XWIN}" ] || [ ! -x "${XWIN}" ]; then
+    echo "error: xwin unavailable on this host; install xwin or cargo, or pre-provision a splat and export XWIN_SDK at it"
+    return 1
+  fi
+
+  # x86_64+aarch64: headers are shared; libs are needed for the clang-cl
+  # link smoke and cpu_model on both arches
+  "${XWIN}" --accept-license --arch aarch64 --arch x86_64 -t 300 --http-retry 5 \
+    --cache-dir "${SDK_DIR}/cache" splat --output "${SDK_DIR}/splat"
+  rm -rf "${SDK_DIR}/cache" "${SDK_DIR}/dl"
+  touch "${SDK_DIR}/.lc_ready"
+  echo "windows sdk provisioned: ${SDK_DIR}"
+}
+
+# Standalone provisioning entry for the makefiles: scripts/build.sh --winsdk <dir>
+if [ "$1" = "--winsdk" ]; then
+  ChToScriptFileDir
+  cd ..
+  GetWinSDK "$2"
+  exit $?
+fi
+
 # Parse YAML defaults section to get a default value
 # Usage: GetYamlDefault KEY
 function GetYamlDefault() {
@@ -193,6 +270,9 @@ function Init() {
     DEFAULT_MINGW_VER="$(GetYamlDefault MINGW_VER)"
     DEFAULT_FREEBSD_VER="$(GetYamlDefault FREEBSD_VER)"
     DEFAULT_NETBSD_VER="$(GetYamlDefault NETBSD_VER)"
+    DEFAULT_LLVM_VER="$(GetYamlDefault LLVM_VER)"
+    DEFAULT_ZLIB_VER="$(GetYamlDefault ZLIB_VER)"
+    DEFAULT_LIBXML2_VER="$(GetYamlDefault LIBXML2_VER)"
 
     if [ ! "$CONFIG_SUB_REV" ]; then
       CONFIG_SUB_REV="$DEFAULT_CONFIG_SUB_REV"
@@ -236,12 +316,23 @@ function Init() {
     if [ -z "${NETBSD_VER+x}" ]; then
       NETBSD_VER="$DEFAULT_NETBSD_VER"
     fi
+    if [ -z "${LLVM_VER+x}" ]; then
+      LLVM_VER="$DEFAULT_LLVM_VER"
+    fi
+    if [ -z "${ZLIB_VER+x}" ]; then
+      ZLIB_VER="$DEFAULT_ZLIB_VER"
+    fi
+    if [ -z "${LIBXML2_VER+x}" ]; then
+      LIBXML2_VER="$DEFAULT_LIBXML2_VER"
+    fi
   }
 }
 
 function Help() {
   echo "-h: help"
   echo "-a: enable archive"
+  echo "-e: set compiler (gcc/clang; clang builds the LLVM toolchain)"
+  echo "--winsdk <dir>: provision the build-time windows sdk via xwin and exit"
   echo "-T: targets file path or targets string"
   echo "-S: sources directory path"
   echo "-o: output dist directory path"
@@ -267,7 +358,7 @@ function Help() {
 }
 
 function ParseArgs() {
-  while getopts "haT:S:o:IR:Cc:x:d:nNH:KLlO:j:DPb" arg; do
+  while getopts "hae:T:S:o:IR:Cc:x:d:nNH:KLlO:j:DPb" arg; do
     case $arg in
     h)
       Help
@@ -275,6 +366,9 @@ function ParseArgs() {
       ;;
     a)
       ENABLE_ARCHIVE="true"
+      ;;
+    e)
+      COMPILER_MODE="$OPTARG"
       ;;
     T)
       TARGETS_FILE="$OPTARG"
@@ -405,6 +499,12 @@ function WriteConfig() {
   local YAML_FREEBSD_VER="$(GetTargetConfig "$BUILD_ID" FREEBSD_VER)"
   local YAML_NETBSD_VER="$(GetTargetConfig "$BUILD_ID" NETBSD_VER)"
   local YAML_MINGW_VER="$(GetTargetConfig "$BUILD_ID" MINGW_VER)"
+  local YAML_GCC_VER="$(GetTargetConfig "$BUILD_ID" GCC_VER)"
+
+  # Per-target GCC version override (takes precedence over default/CLI)
+  if [ -n "$YAML_GCC_VER" ]; then
+    GCC_VER="$YAML_GCC_VER"
+  fi
 
   # Use YAML values if available, otherwise use defaults based on target type
   if [ -n "$YAML_MUSL_VER" ]; then
@@ -474,6 +574,48 @@ $(if [ -n "$OPTIMIZE_LEVEL" ] && [ "$OPTIMIZE_LEVEL" != "2" ]; then
 $(if [ -n "$LINKER" ] && [ -z "$NATIVE" ] && [ -z "$HOST" ]; then
     echo "# Use custom linker for cross build only"
     echo "LDFLAGS += -fuse-ld=${LINKER}"
+  fi)
+
+CCACHE = ${CCACHE}
+
+$(if [ -n "$COWPATCH_SYMLINK" ]; then echo "COWPATCH_EXTRACT = -I"; fi)
+$(if [ -n "$ORIG_DIR" ]; then echo "ORIG_DIR = ${ORIG_DIR}"; fi)
+
+EOF
+  for arg in "$@"; do
+    echo "$arg" >>config.mak
+  done
+}
+
+# Write config.mak for the clang (LLVM) toolchain build.
+# Clang mode is multi-target: the root Makefile nulls TARGET/GCC_VER/... when
+# COMPILER=clang, so only the LLVM-side versions matter here.
+function WriteClangConfig() {
+  cat >config.mak <<EOF
+COMPILER = clang
+CONFIG_SUB_REV = ${CONFIG_SUB_REV}
+OUTPUT = ${OUTPUT}
+$(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
+LLVM_VER = ${LLVM_VER}
+MUSL_VER = ${MUSL_VER}
+MINGW_VER = ${MINGW_VER}
+$(if [ -n "$CANADIAN_HOST" ]; then echo "CLANG_HOST_TRIPLE = ${CANADIAN_HOST}"; fi)
+LINUX_VER = ${LINUX_VER}
+ZSTD_VER = ${ZSTD_VER}
+ZLIB_VER = ${ZLIB_VER}
+LIBXML2_VER = ${LIBXML2_VER}
+
+# only work in cross build
+# native build will find ${TARGET}-gcc ${TARGET}-g++ in env to build
+ifneq (${CC}${CXX},)
+CC = ${CC}
+CXX = ${CXX}
+endif
+
+CHINA = ${USE_CHINA_MIRROR}
+
+$(if [ -n "$OPTIMIZE_LEVEL" ] && [ "$OPTIMIZE_LEVEL" != "2" ]; then
+    echo "COMMON_FLAGS += -O${OPTIMIZE_LEVEL}"
   fi)
 
 CCACHE = ${CCACHE}
@@ -804,6 +946,144 @@ function Build() {
   fi
 }
 
+# Build the multi-target LLVM/clang toolchain (COMPILER=clang).
+# The artifact carries clang-cl/lld-link (MSVC ABI capable) plus the
+# per-target musl sysroots and llvm binutils symlinks.
+function BuildClang() {
+  local DIST_NAME="${DIST}/clang"
+
+  # -H selects the windows host for the cross-compiled distribution
+  if [ -n "$CANADIAN_HOST" ]; then
+    case "$CANADIAN_HOST" in
+    x86_64-w64-mingw32 | aarch64-w64-mingw32) ;;
+    *)
+      echo "error: clang mode -H must be a mingw host (x86_64-w64-mingw32 or aarch64-w64-mingw32), got: ${CANADIAN_HOST}"
+      exit 1
+      ;;
+    esac
+  fi
+
+  echo "========================================"
+  echo "Clang Toolchain Build (LLVM ${LLVM_VER})"
+  echo "========================================"
+  echo "build clang toolchain to ${DIST_NAME}"
+  OUTPUT="${DIST_NAME}" WriteClangConfig "export PATH=$PATH"
+
+  # Windows SDK (headers + import libs) for the msvc-target cpu_model
+  # builtins and the clang-cl link smoke; used at build time only. A
+  # pre-provisioned XWIN_SDK (e.g. for hosts without an xwin prebuilt) is
+  # honored as-is.
+  export XWIN_SDK="${XWIN_SDK:-${PWD}/xwin-sdk}"
+  GetWinSDK "${XWIN_SDK}"
+
+  if RunMake "${DIST_NAME}" "${DIST_NAME}.log" "clang"; then
+    echo "build clang toolchain success"
+    for tool in clang-cl lld-link ld.lld llvm-rc llvm-dlltool; do
+      if [ ! -e "${DIST_NAME}/clang/bin/${tool}" ]; then
+        echo "warning: ${tool} missing from clang/bin"
+      fi
+    done
+    # MSVC-ABI smoke: link a real exe per msvc target against the build-time
+    # xwin SDK so the resource-dir builtins and the CRT link set are exercised.
+    # '--' stops clang-cl from parsing the leading-slash absolute path as an
+    # MSVC option.
+    local SPLAT="${XWIN_SDK}/splat"
+    local sm_arch sm_machine
+    for t in x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+      case "$t" in
+      x86_64*) sm_arch=x86_64 sm_machine=x64 ;;
+      aarch64*) sm_arch=aarch64 sm_machine=arm64 ;;
+      esac
+      printf 'int main(void){return 0;}\n' >"${DIST_NAME}/clangcl-smoke.c"
+      "${DIST_NAME}/clang/bin/clang-cl" /nologo --target=$t /c "/Fo:${DIST_NAME}/clangcl-smoke.obj" -- "${DIST_NAME}/clangcl-smoke.c"
+      "${DIST_NAME}/clang/bin/lld-link" /nologo /machine:$sm_machine /subsystem:console /entry:mainCRTStartup \
+        "/out:${DIST_NAME}/clangcl-smoke.exe" "${DIST_NAME}/clangcl-smoke.obj" \
+        "${DIST_NAME}/clang/lib/clang/${LLVM_VER%%.*}/lib/$t/clang_rt.builtins.lib" \
+        "/libpath:${SPLAT}/crt/lib/${sm_arch}" "/libpath:${SPLAT}/sdk/lib/ucrt/${sm_arch}" "/libpath:${SPLAT}/sdk/lib/um/${sm_arch}" \
+        libcmt.lib libvcruntime.lib libucrt.lib
+      file "${DIST_NAME}/clangcl-smoke.exe" | grep -q "PE.*Windows" || {
+        echo "clang-cl link smoke: $t output is not a PE executable"
+        rm -f "${DIST_NAME}/clangcl-smoke.c" "${DIST_NAME}/clangcl-smoke.obj" "${DIST_NAME}/clangcl-smoke.exe"
+        return 1
+      }
+      rm -f "${DIST_NAME}/clangcl-smoke.c" "${DIST_NAME}/clangcl-smoke.obj" "${DIST_NAME}/clangcl-smoke.exe"
+    done
+    echo "clang-cl link smoke OK"
+    TestCrossCC "${DIST_NAME}/bin/x86_64-linux-musl-clang"
+    TestCrossCXX "${DIST_NAME}/bin/x86_64-linux-musl-clang++"
+    # mingw (windows-gnu) smoke: the toolchain ships its own CRT, so these
+    # link complete PE executables with no external SDK
+    for tgt in i586-w64-mingw32 i686-w64-mingw32 x86_64-w64-mingw32 aarch64-w64-mingw32; do
+      if ! echo 'int main(void){return 0;}' >mingw-smoke.c; then
+        echo "mingw smoke: cannot write source"
+        return 1
+      fi
+      if ! "${DIST_NAME}/bin/${tgt}-clang" mingw-smoke.c -o mingw-smoke.exe; then
+        echo "mingw smoke error: ${tgt}"
+        rm -f mingw-smoke.c mingw-smoke.exe
+        return 1
+      fi
+      if ! file mingw-smoke.exe | grep -q "PE.*Windows"; then
+        echo "mingw smoke error: ${tgt} output is not a PE executable"
+        rm -f mingw-smoke.c mingw-smoke.exe
+        return 1
+      fi
+      rm -f mingw-smoke.c mingw-smoke.exe
+    done
+    echo "mingw PE link smoke OK"
+    # mingw C++ smoke: libc++/libc++abi/libunwind link a full program
+    printf '#include <iostream>\n#include <thread>\nint main(){std::thread t([]{});t.join();std::cout<<"ok"<<std::endl;}\n' >mingw-smoke.cc
+    if ! "${DIST_NAME}/bin/x86_64-w64-mingw32-clang++" -pthread mingw-smoke.cc -o mingw-smoke.exe || ! file mingw-smoke.exe | grep -q "PE.*Windows"; then
+      echo "mingw C++ smoke error"
+      rm -f mingw-smoke.cc mingw-smoke.exe
+      return 1
+    fi
+    rm -f mingw-smoke.cc mingw-smoke.exe
+    echo "mingw C++ smoke OK"
+  else
+    local EXIT_CODE=$?
+    if [ ! "$LOG_TO_STD" ]; then
+      tail -n 3000 "${DIST_NAME}.log"
+      echo "full build log: ${DIST_NAME}.log"
+    fi
+    echo "build clang toolchain error"
+    exit $EXIT_CODE
+  fi
+
+  if [ -n "$CANADIAN_HOST" ]; then
+    # windows-hosted distribution: cross-compiled clang.exe + the shared
+    # sysroots; runtime behavior is exercised on windows runners in CI
+    local WIN_ARCH="${CANADIAN_HOST%%-*}"
+    local WIN_DIST="${DIST_NAME}-win-${WIN_ARCH}"
+    for f in \
+      "${WIN_DIST}/clang/bin/clang.exe" \
+      "${WIN_DIST}/clang/bin/clang-cl.exe" \
+      "${WIN_DIST}/clang/bin/lld-link.exe" \
+      "${WIN_DIST}/bin/${CANADIAN_HOST}-clang.exe" \
+      "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
+      "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-linux-musl/libclang_rt.builtins.a"; do
+      if [ ! -e "$f" ]; then
+        echo "windows-hosted clang: missing $f"
+        return 1
+      fi
+    done
+    file "${WIN_DIST}/clang/bin/clang.exe" | grep -q "PE.*Windows" || {
+      echo "windows-hosted clang: clang.exe is not a PE executable"
+      return 1
+    }
+    echo "windows-hosted clang layout OK (${WIN_DIST})"
+    if [ "$ENABLE_ARCHIVE" ]; then
+      tar -zcf "${WIN_DIST}.tgz" -C "${WIN_DIST}" .
+      echo "package ${WIN_DIST} to ${WIN_DIST}.tgz success"
+    fi
+  fi
+
+  if [ "$ENABLE_ARCHIVE" ]; then
+    tar -zcf "${DIST_NAME}.tgz" -C "${DIST_NAME}" .
+    echo "package ${DIST_NAME} to ${DIST_NAME}.tgz success"
+  fi
+}
+
 # ALL_TARGETS is now read from targets.yaml via GetAllTargets function
 
 function BuildAll() {
@@ -842,4 +1122,15 @@ ChToScriptFileDir
 Init
 ParseArgs "$@"
 FixArgs
-BuildAll
+case "${COMPILER_MODE:-gcc}" in
+gcc)
+  BuildAll
+  ;;
+clang)
+  BuildClang
+  ;;
+*)
+  echo "unknown compiler: ${COMPILER_MODE} (supported: gcc, clang)"
+  exit 1
+  ;;
+esac

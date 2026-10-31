@@ -4,7 +4,7 @@ COMPILER = gcc
 
 CONFIG_SUB_REV = a2287c3041a3
 CONFIG_GUESS_REV = a2287c3041a3
-LLVM_VER = 21.1.7
+LLVM_VER = 23.1.4
 GCC_VER = 15.2.0
 MUSL_VER = 1.2.6
 GLIBC_VER = 2.42
@@ -104,7 +104,6 @@ override MPC_VER =
 override MPFR_VER =
 override ISL_VER =
 override BINUTILS_VER =
-override MINGW_VER =
 
 endif
 
@@ -232,29 +231,38 @@ $(SOURCES):
 
 $(SOURCES)/config.sub: | $(SOURCES)
 	mkdir -p $@.tmp
-	cd $@.tmp && $(DL_CMD) $(notdir $@) "https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=$(CONFIG_SUB_REV)"
-	cd $@.tmp && touch $(notdir $@)
-	cd $@.tmp && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_SUB_REV).sha1
+	cd $@.tmp && ok=0; for url in \
+		"https://raw.githubusercontent.com/GitMirroring/config/$(CONFIG_SUB_REV)/config.sub" \
+		"https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=$(CONFIG_SUB_REV)" \
+		"https://git.savannah.gnu.org/cgit/config.git/plain/config.sub?id=$(CONFIG_SUB_REV)"; do \
+		if $(DL_CMD) $(notdir $@) "$$url" && touch $(notdir $@) && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_SUB_REV).sha1; then ok=1; break; fi; \
+	done; [ "$$ok" = 1 ]
 	mv $@.tmp/$(notdir $@) $@
 	rm -rf $@.tmp
 
 $(SOURCES)/config.guess: | $(SOURCES)
 	mkdir -p $@.tmp
-	cd $@.tmp && $(DL_CMD) $(notdir $@) "https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=$(CONFIG_GUESS_REV)"
-	cd $@.tmp && touch $(notdir $@)
-	cd $@.tmp && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_GUESS_REV).sha1
+	cd $@.tmp && ok=0; for url in \
+		"https://raw.githubusercontent.com/GitMirroring/config/$(CONFIG_GUESS_REV)/config.guess" \
+		"https://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=$(CONFIG_GUESS_REV)" \
+		"https://git.savannah.gnu.org/cgit/config.git/plain/config.guess?id=$(CONFIG_GUESS_REV)"; do \
+		if $(DL_CMD) $(notdir $@) "$$url" && touch $(notdir $@) && $(SHA1_CMD) $(CURDIR)/hashes/$(notdir $@).$(CONFIG_GUESS_REV).sha1; then ok=1; break; fi; \
+	done; [ "$$ok" = 1 ]
 	mv $@.tmp/$(notdir $@) $@
 	rm -rf $@.tmp
 
 # Define template for FreeBSD base.txz download rules
 # $(1) = architecture suffix (e.g., amd64, aarch64, powerpc64le)
 # $(2) = download path (e.g., amd64, arm64/aarch64, powerpc/powerpc64le)
+# EOL releases are removed from FREEBSD_SITE and only remain on ftp-archive.
 define FREEBSD_DOWNLOAD_RULE
 $$(SOURCES)/freebsd-%-$(1).tar.xz: hashes/freebsd-%-$(1).tar.xz.sha1 | $$(SOURCES)
 	mkdir -p $$@.tmp
-	cd $$@.tmp && $$(DL_CMD) $$(notdir $$@) $$(FREEBSD_SITE)/$(2)/$$*-RELEASE/base.txz
-	cd $$@.tmp && touch $$(notdir $$@)
-	cd $$@.tmp && $$(SHA1_CMD) $$(CURDIR)/hashes/$$(notdir $$@).sha1
+	cd $$@.tmp && ok=0; for url in \
+		"$$(FREEBSD_SITE)/$(2)/$$*-RELEASE/base.txz" \
+		"https://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/$(2)/$$*-RELEASE/base.txz"; do \
+		if $$(DL_CMD) $$(notdir $$@) "$$$$url" && touch $$(notdir $$@) && $$(SHA1_CMD) $$(CURDIR)/hashes/$$(notdir $$@).sha1; then ok=1; break; fi; \
+	done; [ "$$$$ok" = 1 ]
 	mv $$@.tmp/$$(notdir $$@) $$@
 	rm -rf $$@.tmp
 endef
@@ -409,7 +417,7 @@ netbsd-%: COWPATCH_EXTRACT = -l
 	mv $@.tmp $@
 
 ifeq ($(COMPILER),clang)
-extract_all: | $(filter-out mingw-w64-% glibc-% freebsd-% netbsd-%,$(SRC_DIRS))
+extract_all: | $(filter-out glibc-% freebsd-% netbsd-%,$(SRC_DIRS))
 else ifneq ($(findstring mingw,$(TARGET)),)
 extract_all: | $(filter-out linux-% musl-% glibc-% freebsd-% netbsd-%,$(SRC_DIRS))
 else ifneq ($(findstring freebsd,$(TARGET)),)
@@ -437,7 +445,9 @@ $(BUILD_DIR):
 $(BUILD_DIR)/Makefile: | $(BUILD_DIR)
 	ln -sf $(REL_TOP)/litecross/Makefile.$(COMPILER) $@
 
-$(BUILD_DIR)/config.mak: | $(BUILD_DIR)
+# regenerate when the top-level config.mak changes, so persistent build
+# volumes (darwin CI) pick up new SRCDIR entries instead of reusing stale ones
+$(BUILD_DIR)/config.mak: config.mak | $(BUILD_DIR)
 	printf >$@ '%s\n' \
 	$(if $(filter-out local,$(HOST)),"HOST = $(HOST)") \
 	$(if $(NATIVE),"NATIVE = $(NATIVE)") \
