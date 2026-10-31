@@ -536,10 +536,7 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 		cp clang/bin/clang++.exe bin/$$t-g++.exe; \
 		cp clang/bin/clang-cpp.exe bin/$$t-cpp.exe; \
 		cp clang/bin/ld.lld.exe bin/$$t-ld.exe; \
-		for tool in $(TOOLS); do \
-			short=$${tool\#llvm-}; \
-			cp clang/bin/$$tool.exe bin/$$t-$$short.exe; \
-		done; \
+		$(foreach tool,$(TOOLS),cp clang/bin/$(tool).exe bin/$$t-$(subst llvm-,,$(tool)).exe; ) \
 	done
 
 install: install-win
