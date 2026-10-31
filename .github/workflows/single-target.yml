@@ -307,7 +307,7 @@ jobs:
               EXTRA_FLAGS="-H ${{ needs.setup.outputs.clang-host }}"
             fi
           fi
-          export APK_EXTRA
+          export APK_EXTRA EXTRA_FLAGS
           docker run --rm \
             --platform ${{ needs.setup.outputs.docker-platform }} \
             --cap-add=IPC_LOCK \
@@ -384,7 +384,7 @@ jobs:
 
   # Windows-hosted clang: run the cross-compiled toolchain natively
   windows-test:
-    name: Windows test (${{ inputs.platform }})
+    name: Windows test (${{ needs.setup.outputs.test-runner }})
     needs: [setup, build]
     if: startsWith(inputs.platform, 'windows') && inputs.target == 'clang'
     runs-on: ${{ needs.setup.outputs.test-runner }}
