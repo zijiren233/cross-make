@@ -20,6 +20,8 @@ on:
           - linux-s390x
           - darwin-aarch64
           - darwin-x86_64
+          - windows-x86_64
+          - windows-arm64
       tag:
         description: "Release tag (optional, defaults to current ref)"
         required: false
@@ -65,6 +67,8 @@ jobs:
       docker-platform: ${{ steps.config.outputs.docker-platform }}
       docker-image: ${{ steps.config.outputs.docker-image }}
       use-qemu: ${{ steps.config.outputs.use-qemu }}
+      clang-host: ${{ steps.config.outputs.clang-host }}
+      test-runner: ${{ steps.config.outputs.test-runner }}
       sources-cache-key: ${{ inputs.sources-cache-key || steps.cache-key.outputs.key }}
     steps:
       - uses: actions/checkout@v4
@@ -134,6 +138,23 @@ jobs:
               ;;
             darwin-x86_64)
               echo "runs-on=macos-26-intel" >> $GITHUB_OUTPUT
+              ;;
+            # windows-hosted clang: cross-build on linux, test on windows
+            windows-x86_64)
+              echo "runs-on=ubuntu-24.04" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/amd64" >> $GITHUB_OUTPUT
+              echo "docker-image=amd64/alpine:latest" >> $GITHUB_OUTPUT
+              echo "use-qemu=false" >> $GITHUB_OUTPUT
+              echo "clang-host=x86_64-w64-mingw32" >> $GITHUB_OUTPUT
+              echo "test-runner=windows-latest" >> $GITHUB_OUTPUT
+              ;;
+            windows-arm64)
+              echo "runs-on=ubuntu-24.04" >> $GITHUB_OUTPUT
+              echo "docker-platform=linux/amd64" >> $GITHUB_OUTPUT
+              echo "docker-image=amd64/alpine:latest" >> $GITHUB_OUTPUT
+              echo "use-qemu=false" >> $GITHUB_OUTPUT
+              echo "clang-host=aarch64-w64-mingw32" >> $GITHUB_OUTPUT
+              echo "test-runner=windows-11-arm" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -208,7 +229,7 @@ jobs:
 
       # If cache miss and no artifact, download directly
       - name: Download sources (Linux)
-        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && startsWith(inputs.platform, 'linux')
+        if: steps.cache.outputs.cache-hit != 'true' && inputs.sources-artifact == '' && (startsWith(inputs.platform, 'linux') || startsWith(inputs.platform, 'windows'))
         run: |
           case "${{ runner.os }}-${{ runner.arch }}" in
             Linux-X64) YQ=yq_linux_amd64;;
@@ -272,15 +293,19 @@ jobs:
 
       # Build on Linux (Docker with tmpfs)
       - name: Build (Linux)
-        if: startsWith(inputs.platform, 'linux')
+        if: startsWith(inputs.platform, 'linux') || startsWith(inputs.platform, 'windows')
         run: |
           WORK_OPTS="--tmpfs /work:exec,size=8G"
           APK_EXTRA=""
+          EXTRA_FLAGS=""
           if [ "${{ inputs.target }}" = "clang" ]; then
             # LLVM build dirs exceed the tmpfs budget, and the clang build
             # needs cmake/ninja in the container
             WORK_OPTS="--volume ${PWD}/work:/work"
             APK_EXTRA="cmake ninja"
+            if [ -n "${{ needs.setup.outputs.clang-host }}" ]; then
+              EXTRA_FLAGS="-H ${{ needs.setup.outputs.clang-host }}"
+            fi
           fi
           export APK_EXTRA
           docker run --rm \
@@ -288,6 +313,7 @@ jobs:
             --cap-add=IPC_LOCK \
             $WORK_OPTS \
             --env APK_EXTRA \
+            --env EXTRA_FLAGS \
             --volume "${PWD}:/src:ro" \
             --volume "${PWD}/sources:/sources" \
             --volume "${PWD}/dist:/dist" \
@@ -329,6 +355,7 @@ jobs:
                 -R /orig \
                 -o /dist \
                 ${{ inputs.extra-build-flags }} \
+                ${EXTRA_FLAGS} \
                 -T "${{ inputs.target }}"'
 
       - name: Build (macOS)
@@ -353,7 +380,61 @@ jobs:
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
           if-no-files-found: error
-          path: dist/*.*
+          path: ${{ startsWith(inputs.platform, 'windows') && 'dist/clang-win-*.tgz' || 'dist/*.*' }}
+
+  # Windows-hosted clang: run the cross-compiled toolchain natively
+  windows-test:
+    name: Windows test (${{ inputs.platform }})
+    needs: [setup, build]
+    if: startsWith(inputs.platform, 'windows') && inputs.target == 'clang'
+    runs-on: ${{ needs.setup.outputs.test-runner }}
+    steps:
+      - name: Download toolchain
+        timeout-minutes: 10
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.target }}-${{ inputs.platform }}
+
+      - name: Extract
+        shell: pwsh
+        run: |
+          $tgz = Get-ChildItem *.tgz | Select-Object -First 1
+          tar -xzf $tgz.Name
+
+      - name: clang --version
+        shell: pwsh
+        run: ./clang/bin/clang.exe --version
+
+      - name: Native PE build and run (host triple)
+        shell: pwsh
+        run: |
+          Set-Content -Path smoke.c -Value 'int main(void){return 42;}'
+          ./bin/${{ needs.setup.outputs.clang-host }}-clang.exe smoke.c -o smoke.exe
+          if (-not (Test-Path smoke.exe)) { throw "link failed" }
+          ./smoke.exe
+          if ($LASTEXITCODE -ne 42) { throw "smoke.exe returned $LASTEXITCODE" }
+
+      - name: Native C++ (libc++/threads)
+        shell: pwsh
+        run: |
+          Set-Content -Path smoke.cc -Value "#include <iostream>`n#include <thread>`nint main(){std::thread t([]{});t.join();std::cout<<`"ok`"<<std::endl;}"
+          ./bin/${{ needs.setup.outputs.clang-host }}-clang++.exe -pthread smoke.cc -o smokepp.exe
+          ./smokepp.exe
+          if ($LASTEXITCODE -ne 0) { throw "smokepp.exe returned $LASTEXITCODE" }
+
+      - name: Cross out to linux-musl (canadian check)
+        shell: pwsh
+        run: |
+          Set-Content -Path hello.c -Value 'int main(void){return 0;}'
+          ./bin/x86_64-linux-musl-clang.exe hello.c -o hello-musl
+          $fmt = ./clang/bin/llvm-readobj.exe --file-headers hello-musl | Select-String 'Format:'
+          if (-not ($fmt -match 'elf64')) { throw "musl output is not ELF64: $fmt" }
+
+      - name: clang-cl compile smoke
+        shell: pwsh
+        run: |
+          ./clang/bin/clang-cl.exe /nologo /c /Fo:cl-smoke.obj -- smoke.c
+          if (-not (Test-Path cl-smoke.obj)) { throw "clang-cl compile failed" }
 
   # Release job uses reusable workflow
   release:
