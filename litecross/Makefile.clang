@@ -524,7 +524,7 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 	mkdir -p $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
 	cp -a $(DESTDIR)$(OUTPUT)/. $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/
 	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/clang/bin $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/bin
-	cd obj_llvm_win && DESTDIR=$(if $(DESTDIR),$(DESTDIR),$(CURDIR)/)$(WIN_OUTPUT_ABS) ninja install-distribution
+	cd obj_llvm_win && DESTDIR=$(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)) ninja install-distribution
 	set -e; \
 	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
 	mkdir -p bin; \
