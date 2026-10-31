@@ -317,7 +317,7 @@ install-winbuiltins: $(foreach t,$(WIN_BUILTIN_TARGETS),install-winbuiltins_$(t)
 install-symlinks: $(foreach t,$(TARGETS) $(MINGW_TARGETS),install-symlinks_$(t))
 install-mingw: $(foreach t,$(MINGW_TARGETS),install-mingw_$(t))
 
-.PHONY: all llvm musl mingw install-llvm install-musl install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks clean
+.PHONY: all llvm musl mingw install-llvm install-musl install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks install-win clean
 
 src_llvm: | $(LLVM_SRCDIR)
 	ln -sf $(LLVM_SRCDIR) $@
@@ -462,6 +462,83 @@ obj_llvm/.lc_built_3: | $(foreach t,$(TARGETS),obj_musl/$(t)/.lc_built \
 
 install-llvm: | obj_llvm/.lc_built_3
 	cd obj_llvm && DESTDIR=$(DESTDIR)$(OUTPUT) ninja install-distribution install-builtins install-runtimes
+
+# ---- windows-hosted clang (cross-compiled from the toolchain just built) ----
+# CLANG_HOST_TRIPLE selects a mingw host (x86_64/aarch64-w64-mingw32); LLVM is
+# then cross-compiled with the installed <triple>-clang wrappers and linked
+# against the libc++/libunwind runtimes already built for that triple -- the
+# same bootstrap llvm-mingw uses for its Windows distributions. Host-side
+# zlib/zstd/libxml2 stay off, matching llvm-mingw's Windows builds.
+CLANG_HOST_TRIPLE ?=
+CLANG_HOST_SYSPROC_x86_64 = AMD64
+CLANG_HOST_SYSPROC_aarch64 = ARM64
+
+ifneq ($(CLANG_HOST_TRIPLE),)
+
+CLANG_HOST_ARCH = $(firstword $(subst -, ,$(CLANG_HOST_TRIPLE)))
+WIN_OUTPUT ?= $(OUTPUT)-win-$(CLANG_HOST_ARCH)
+
+WIN_LLVM_CONFIG = $(filter-out -DBUILTINS_% -DRUNTIMES_% -DZLIB_% -Dzstd_% -DLIBXML2_% \
+	-DLLVM_BUILTIN_TARGETS=% -DLLVM_RUNTIME_TARGETS=% -DLLVM_ENABLE_RUNTIMES=% \
+	-DLLVM_ENABLE_ZLIB=% -DLLVM_ENABLE_ZSTD=% -DLLVM_ENABLE_LIBXML2=%,$(FULL_LLVM_CONFIG)) \
+	-DCMAKE_SYSTEM_NAME=Windows \
+	-DCMAKE_SYSTEM_PROCESSOR=$(CLANG_HOST_SYSPROC_$(CLANG_HOST_ARCH)) \
+	-DCMAKE_C_COMPILER='$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang' \
+	-DCMAKE_CXX_COMPILER='$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang++' \
+	-DCMAKE_ASM_COMPILER='$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang' \
+	-DCMAKE_C_COMPILER_TARGET=$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_CXX_COMPILER_TARGET=$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_ASM_COMPILER_TARGET=$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_RC_COMPILER='$(DESTDIR)$(OUTPUT)/clang/bin/llvm-windres' \
+	-DCMAKE_RC_FLAGS='--target=$(CLANG_HOST_TRIPLE)' \
+	-DLLVM_HOST_TRIPLE=$(CLANG_HOST_TRIPLE) \
+	-DLLVM_NATIVE_TOOL_DIR=$(CURDIR)/obj_llvm/bin \
+	-DCMAKE_FIND_ROOT_PATH=$(CURDIR)/obj_sysroot/$(CLANG_HOST_TRIPLE) \
+	-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+	-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+	-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+	-DLLVM_ENABLE_ZLIB=OFF \
+	-DLLVM_ENABLE_ZSTD=OFF \
+	-DLLVM_ENABLE_LIBXML2=OFF \
+	-DCMAKE_STRIP='$(CURDIR)/obj_llvm/bin/llvm-strip'
+
+obj_llvm_win/.lc_configured: | obj_llvm_win/ src_llvm install-llvm install-configs_$(CLANG_HOST_TRIPLE) install-mingw_$(CLANG_HOST_TRIPLE) install-symlinks_$(CLANG_HOST_TRIPLE)
+	cd obj_llvm_win && cmake -G "Ninja" $(WIN_LLVM_CONFIG) ../src_llvm/llvm
+	touch $@
+
+obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
+	cd obj_llvm_win && ninja distribution
+	touch $@
+
+# The per-target sysroots, cfg files and runtime libraries are host-agnostic:
+# copy the regular distribution, swap the native clang/bin for the cross-
+# compiled .exe set and rebuild bin/ from exe copies (no symlinks on Windows).
+WIN_OUTPUT_ABS = $(abspath $(WIN_OUTPUT))
+install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
+	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
+	mkdir -p $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
+	cp -a $(DESTDIR)$(OUTPUT)/. $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/
+	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/clang/bin $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/bin
+	cd obj_llvm_win && DESTDIR=$(if $(DESTDIR),$(DESTDIR),$(CURDIR)/)$(WIN_OUTPUT_ABS) ninja install-distribution
+	set -e; \
+	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
+	mkdir -p bin; \
+	for t in $(TARGETS) $(MINGW_TARGETS); do \
+		cp clang/bin/clang.exe bin/$$t-clang.exe; \
+		cp clang/bin/clang++.exe bin/$$t-clang++.exe; \
+		cp clang/bin/clang.exe bin/$$t-gcc.exe; \
+		cp clang/bin/clang++.exe bin/$$t-g++.exe; \
+		cp clang/bin/clang-cpp.exe bin/$$t-cpp.exe; \
+		cp clang/bin/ld.lld.exe bin/$$t-ld.exe; \
+		for tool in $(TOOLS); do \
+			short=$${tool\#llvm-}; \
+			cp clang/bin/$$tool.exe bin/$$t-$$short.exe; \
+		done; \
+	done
+
+install: install-win
+
+endif
 
 install-musl_%: | obj_musl/%/.lc_built
 	cd obj_musl/$* && $(MAKE) $(MUSL_VARS) DESTDIR=$(DESTDIR)$(OUTPUT)/$* install

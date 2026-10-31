@@ -599,6 +599,7 @@ $(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
 LLVM_VER = ${LLVM_VER}
 MUSL_VER = ${MUSL_VER}
 MINGW_VER = ${MINGW_VER}
+$(if [ -n "$CANADIAN_HOST" ]; then echo "CLANG_HOST_TRIPLE = ${CANADIAN_HOST}"; fi)
 LINUX_VER = ${LINUX_VER}
 ZSTD_VER = ${ZSTD_VER}
 ZLIB_VER = ${ZLIB_VER}
@@ -951,6 +952,17 @@ function Build() {
 function BuildClang() {
   local DIST_NAME="${DIST}/clang"
 
+  # -H selects the windows host for the cross-compiled distribution
+  if [ -n "$CANADIAN_HOST" ]; then
+    case "$CANADIAN_HOST" in
+    x86_64-w64-mingw32 | aarch64-w64-mingw32) ;;
+    *)
+      echo "error: clang mode -H must be a mingw host (x86_64-w64-mingw32 or aarch64-w64-mingw32), got: ${CANADIAN_HOST}"
+      exit 1
+      ;;
+    esac
+  fi
+
   echo "========================================"
   echo "Clang Toolchain Build (LLVM ${LLVM_VER})"
   echo "========================================"
@@ -1036,6 +1048,34 @@ function BuildClang() {
     fi
     echo "build clang toolchain error"
     exit $EXIT_CODE
+  fi
+
+  if [ -n "$CANADIAN_HOST" ]; then
+    # windows-hosted distribution: cross-compiled clang.exe + the shared
+    # sysroots; runtime behavior is exercised on windows runners in CI
+    local WIN_ARCH="${CANADIAN_HOST%%-*}"
+    local WIN_DIST="${DIST_NAME}-win-${WIN_ARCH}"
+    for f in \
+      "${WIN_DIST}/clang/bin/clang.exe" \
+      "${WIN_DIST}/clang/bin/clang-cl.exe" \
+      "${WIN_DIST}/clang/bin/lld-link.exe" \
+      "${WIN_DIST}/bin/${CANADIAN_HOST}-clang.exe" \
+      "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
+      "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-linux-musl/libclang_rt.builtins.a"; do
+      if [ ! -e "$f" ]; then
+        echo "windows-hosted clang: missing $f"
+        return 1
+      fi
+    done
+    file "${WIN_DIST}/clang/bin/clang.exe" | grep -q "PE.*Windows" || {
+      echo "windows-hosted clang: clang.exe is not a PE executable"
+      return 1
+    }
+    echo "windows-hosted clang layout OK (${WIN_DIST})"
+    if [ "$ENABLE_ARCHIVE" ]; then
+      tar -zcf "${WIN_DIST}.tgz" -C "${WIN_DIST}" .
+      echo "package ${WIN_DIST} to ${WIN_DIST}.tgz success"
+    fi
   fi
 
   if [ "$ENABLE_ARCHIVE" ]; then
