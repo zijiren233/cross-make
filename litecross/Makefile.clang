@@ -356,8 +356,11 @@ obj_llvm/.lc_configured: | obj_llvm/ src_llvm obj_zlib/.lc_built obj_zstd/.lc_bu
 	cd obj_llvm && cmake -G "Ninja" $(FULL_LLVM_CONFIG) ../src_llvm/llvm
 	touch $@
 
+# llvm 23.1.4 clang targets miss a dependency edge on the analysis_gen
+# tablegen umbrella (TargetLibraryInfo.inc), so a scheduling race fails
+# CodeGenModule.cpp builds; materialize the generated headers first.
 obj_llvm/.lc_built_1: | obj_llvm/.lc_configured
-	cd obj_llvm && ninja distribution
+	cd obj_llvm && ninja intrinsics_gen analysis_gen && ninja distribution
 	touch $@
 
 # llvm 16+ has only the major version number in the LIBCC path
@@ -515,7 +518,7 @@ obj_llvm_win/.lc_configured: | obj_llvm_win/ src_llvm install-llvm install-confi
 	touch $@
 
 obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
-	cd obj_llvm_win && ninja distribution
+	cd obj_llvm_win && ninja intrinsics_gen analysis_gen && ninja distribution
 	touch $@
 
 # The per-target sysroots, cfg files and runtime libraries are host-agnostic:
