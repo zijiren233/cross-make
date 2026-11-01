@@ -1063,6 +1063,8 @@ function BuildClang() {
       "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
       "${WIN_DIST}/bin/ld.lld.exe" \
       "${WIN_DIST}/bin/x86_64-unknown-linux-musl-clang.cfg" \
+      "${WIN_DIST}/lib/x86_64-w64-mingw32/libunwind.a" \
+      "${WIN_DIST}/lib/x86_64-unknown-linux-musl/libc++.a" \
       "${WIN_DIST}/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a" \
       "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a"; do
       if [ ! -e "$f" ]; then

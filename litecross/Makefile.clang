@@ -519,10 +519,13 @@ obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
 # The per-target sysroots, cfg files and runtime libraries are host-agnostic:
 # copy the regular distribution, swap the native clang/bin for the cross-
 # compiled .exe set and rebuild bin/ from exe copies (no symlinks on Windows).
-# On Windows the driver resolves its implicit cfg, resource dir and -fuse-ld
-# linker against the *copy's* own directory (no symlink canonicalisation), so
-# bin/ additionally carries the per-target cfg files (paths one level
-# shallower), a lib/clang mirror and the unprefixed lld/binutils frontends.
+# On Windows the driver resolves its implicit cfg, resource dir, the per-target
+# runtime libs (-lunwind/-lc++) and the -fuse-ld=lld linker against the *copy's*
+# own directory (no symlink canonicalisation), so bin/ additionally carries the
+# per-target cfg files (paths one level shallower), a full clang/lib mirror
+# (resource dir + clang/lib/<triple> runtimes) and unprefixed lld/binutils
+# frontends. musl cfgs gain -rtlib/-fuse-ld: a windows host has no gcc
+# installation to fall back on.
 WIN_OUTPUT_ABS = $(abspath $(WIN_OUTPUT))
 install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
 	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
@@ -543,11 +546,11 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 		$(foreach tool,$(TOOLS),cp clang/bin/$(tool).exe bin/$$t-$(subst llvm-,,$(tool)).exe; ) \
 	done; \
 	for f in ld.lld lld-link llvm-ar llvm-ranlib; do cp clang/bin/$$f.exe bin/$$f.exe; done; \
-	cp -a clang/lib/clang lib/; \
+	cp -a clang/lib/. lib/; \
 	for f in $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg; do \
 		sed -e 's|<CFGDIR>/../../|<CFGDIR>/../|g' \
 			-e 's|<CFGDIR>/../include/|<CFGDIR>/../clang/include/|g' \
-			-e '/rtlib=compiler-rt/!s|$$| -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld|' \
+			-e '/rtlib=compiler-rt/!s|$$| -rtlib=compiler-rt -fuse-ld=lld|' \
 			"$$f" > bin/$$(basename "$$f"); \
 	done
 
