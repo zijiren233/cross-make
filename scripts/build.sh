@@ -1031,10 +1031,17 @@ function BuildClang() {
       rm -f mingw-smoke.c mingw-smoke.exe
     done
     echo "mingw PE link smoke OK"
-    # mingw C++ smoke: libc++/libc++abi/libunwind link a full program
+    # mingw C++ smoke: libc++/libc++abi/libunwind link a full program; the
+    # mingw runtimes are built static-only, so the output must not import
+    # any of our runtime DLLs (they would not ship next to user binaries)
     printf '#include <iostream>\n#include <thread>\nint main(){std::thread t([]{});t.join();std::cout<<"ok"<<std::endl;}\n' >mingw-smoke.cc
     if ! "${DIST_NAME}/bin/x86_64-w64-mingw32-clang++" -pthread mingw-smoke.cc -o mingw-smoke.exe || ! file mingw-smoke.exe | grep -q "PE.*Windows"; then
       echo "mingw C++ smoke error"
+      rm -f mingw-smoke.cc mingw-smoke.exe
+      return 1
+    fi
+    if grep -qa 'libc++.dll\|libunwind.dll' mingw-smoke.exe; then
+      echo "mingw C++ smoke error: output imports libc++/libunwind DLLs"
       rm -f mingw-smoke.cc mingw-smoke.exe
       return 1
     fi
@@ -1083,6 +1090,14 @@ function BuildClang() {
         echo "windows-hosted clang: missing -fuse-ld=lld in $cfg"
         return 1
       }
+    done
+    # the mingw runtimes are static-only: an import library here would make
+    # every default-linked user binary depend on DLLs we do not ship
+    for t in x86_64-w64-windows-gnu aarch64-w64-windows-gnu; do
+      if [ -e "${WIN_DIST}/lib/${t}/libc++.dll.a" ] || [ -e "${WIN_DIST}/lib/${t}/libunwind.dll.a" ]; then
+        echo "windows-hosted clang: shared runtime import libs present for ${t}"
+        return 1
+      fi
     done
     file "${WIN_DIST}/clang/bin/clang.exe" | grep -q "PE.*Windows" || {
       echo "windows-hosted clang: clang.exe is not a PE executable"
