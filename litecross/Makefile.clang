@@ -519,6 +519,10 @@ obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
 # The per-target sysroots, cfg files and runtime libraries are host-agnostic:
 # copy the regular distribution, swap the native clang/bin for the cross-
 # compiled .exe set and rebuild bin/ from exe copies (no symlinks on Windows).
+# On Windows the driver resolves its implicit cfg, resource dir and -fuse-ld
+# linker against the *copy's* own directory (no symlink canonicalisation), so
+# bin/ additionally carries the per-target cfg files (paths one level
+# shallower), a lib/clang mirror and the unprefixed lld/binutils frontends.
 WIN_OUTPUT_ABS = $(abspath $(WIN_OUTPUT))
 install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
 	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
@@ -528,7 +532,7 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 	cd obj_llvm_win && DESTDIR=$(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)) ninja install-distribution
 	set -e; \
 	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
-	mkdir -p bin; \
+	mkdir -p bin lib; \
 	for t in $(TARGETS) $(MINGW_TARGETS); do \
 		cp clang/bin/clang.exe bin/$$t-clang.exe; \
 		cp clang/bin/clang++.exe bin/$$t-clang++.exe; \
@@ -537,6 +541,14 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 		cp clang/bin/clang-cpp.exe bin/$$t-cpp.exe; \
 		cp clang/bin/ld.lld.exe bin/$$t-ld.exe; \
 		$(foreach tool,$(TOOLS),cp clang/bin/$(tool).exe bin/$$t-$(subst llvm-,,$(tool)).exe; ) \
+	done; \
+	for f in ld.lld lld-link llvm-ar llvm-ranlib; do cp clang/bin/$$f.exe bin/$$f.exe; done; \
+	cp -a clang/lib/clang lib/; \
+	for f in $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg; do \
+		sed -e 's|<CFGDIR>/../../|<CFGDIR>/../|g' \
+			-e 's|<CFGDIR>/../include/|<CFGDIR>/../clang/include/|g' \
+			-e '/rtlib=compiler-rt/!s|$$| -rtlib=compiler-rt -unwindlib=libunwind -fuse-ld=lld|' \
+			"$$f" > bin/$$(basename "$$f"); \
 	done
 
 install: install-win

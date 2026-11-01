@@ -1061,11 +1061,26 @@ function BuildClang() {
       "${WIN_DIST}/clang/bin/lld-link.exe" \
       "${WIN_DIST}/bin/${CANADIAN_HOST}-clang.exe" \
       "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
+      "${WIN_DIST}/bin/ld.lld.exe" \
+      "${WIN_DIST}/bin/x86_64-unknown-linux-musl-clang.cfg" \
+      "${WIN_DIST}/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a" \
       "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a"; do
       if [ ! -e "$f" ]; then
         echo "windows-hosted clang: missing $f"
         return 1
       fi
+    done
+    # every regenerated wrapper cfg must resolve its sysroot inside the dist
+    # and pin the hermetic linker/rtlib set (no host gcc fallback on Windows)
+    for cfg in "${WIN_DIST}/bin/"*.cfg; do
+      grep -q -- '--sysroot=<CFGDIR>/../' "$cfg" || {
+        echo "windows-hosted clang: bad sysroot in $cfg"
+        return 1
+      }
+      grep -q -- '-fuse-ld=lld' "$cfg" || {
+        echo "windows-hosted clang: missing -fuse-ld=lld in $cfg"
+        return 1
+      }
     done
     file "${WIN_DIST}/clang/bin/clang.exe" | grep -q "PE.*Windows" || {
       echo "windows-hosted clang: clang.exe is not a PE executable"
