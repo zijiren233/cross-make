@@ -1061,7 +1061,7 @@ function BuildClang() {
       "${WIN_DIST}/clang/bin/lld-link.exe" \
       "${WIN_DIST}/bin/${CANADIAN_HOST}-clang.exe" \
       "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
-      "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-linux-musl/libclang_rt.builtins.a"; do
+      "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a"; do
       if [ ! -e "$f" ]; then
         echo "windows-hosted clang: missing $f"
         return 1
