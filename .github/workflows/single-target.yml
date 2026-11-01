@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ""
+      debug-run-id:
+        description: "Reuse the artifacts of this run id and skip the build (windows-test debugging)"
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       target:
@@ -161,6 +166,7 @@ jobs:
   build:
     name: Build ${{ inputs.target }}
     needs: setup
+    if: inputs.debug-run-id == ''
     runs-on: ${{ needs.setup.outputs.runs-on }}
     steps:
       - uses: actions/checkout@v4
@@ -386,7 +392,7 @@ jobs:
   windows-test:
     name: Windows test (${{ needs.setup.outputs.test-runner }})
     needs: [setup, build]
-    if: startsWith(inputs.platform, 'windows') && inputs.target == 'clang'
+    if: always() && startsWith(inputs.platform, 'windows') && inputs.target == 'clang' && needs.setup.result == 'success' && (needs.build.result == 'success' || inputs.debug-run-id != '')
     runs-on: ${{ needs.setup.outputs.test-runner }}
     steps:
       - name: Download toolchain
@@ -394,6 +400,8 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
+          run-id: ${{ inputs.debug-run-id != '' && inputs.debug-run-id || github.run_id }}
+          github-token: ${{ github.token }}
 
       - name: Extract
         shell: pwsh
@@ -405,11 +413,36 @@ jobs:
         shell: pwsh
         run: ./clang/bin/clang.exe --version
 
+      # Discriminates binary-level, cfg-level and driver-init failures of the
+      # bin/ wrappers before the real smoke steps run. Informational only.
+      - name: Wrapper diagnostics
+        shell: pwsh
+        run: |
+          $w = "./bin/${{ needs.setup.outputs.clang-host }}-clang.exe"
+          "bin entries: $((Get-ChildItem bin).Count)"
+          $h1 = (Get-FileHash $w -Algorithm SHA256).Hash
+          $h2 = (Get-FileHash ./clang/bin/clang.exe -Algorithm SHA256).Hash
+          "wrapper is a byte-identical copy of clang.exe: $($h1 -eq $h2)"
+          Get-ChildItem bin -Filter "*-clang.cfg" | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName }
+          & $w --version 2>&1 | ForEach-Object { "$_" }
+          "wrapper --version exit: $LASTEXITCODE"
+          & $w --no-default-config --version 2>&1 | ForEach-Object { "$_" }
+          "wrapper --no-default-config --version exit: $LASTEXITCODE"
+          & ./bin/ld.lld.exe --version 2>&1 | ForEach-Object { "$_" }
+          "bin/ld.lld exit: $LASTEXITCODE"
+          Set-Content -Path diag.c -Value 'int main(void){return 0;}'
+          & $w -v -c diag.c -o diag.o 2>&1 | ForEach-Object { "$_" }
+          "wrapper -c exit: $LASTEXITCODE"
+          & $w --no-default-config -v -c diag.c -o diag-nocfg.o 2>&1 | ForEach-Object { "$_" }
+          "wrapper --no-default-config -c exit: $LASTEXITCODE"
+          exit 0
+
       - name: Native PE build and run (host triple)
         shell: pwsh
         run: |
           Set-Content -Path smoke.c -Value 'int main(void){return 42;}'
-          ./bin/${{ needs.setup.outputs.clang-host }}-clang.exe smoke.c -o smoke.exe
+          & ./bin/${{ needs.setup.outputs.clang-host }}-clang.exe -v smoke.c -o smoke.exe 2>&1 | ForEach-Object { "$_" }
+          "wrapper exit: $LASTEXITCODE"
           if (-not (Test-Path smoke.exe)) { throw "link failed" }
           ./smoke.exe
           if ($LASTEXITCODE -ne 42) { throw "smoke.exe returned $LASTEXITCODE" }
