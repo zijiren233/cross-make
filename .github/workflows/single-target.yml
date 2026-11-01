@@ -435,39 +435,67 @@ jobs:
           "wrapper -c exit: $LASTEXITCODE"
           & $w --no-default-config -v -c diag.c -o diag-nocfg.o 2>&1 | ForEach-Object { "$_" }
           "wrapper --no-default-config -c exit: $LASTEXITCODE"
+          # full wrapper link + PE inspection + isolated run (Start-Process
+          # keeps the runner's exit-code propagation out of the measurement)
+          & $w diag.c -o diag.exe 2>&1 | ForEach-Object { "$_" }
+          "wrapper link exit: $LASTEXITCODE"
+          if (Test-Path diag.exe) {
+            "diag.exe size: $((Get-Item diag.exe).Length)"
+            & ./clang/bin/llvm-readobj.exe --file-headers diag.exe 2>&1 | ForEach-Object { "$_" } | Select-Object -First 30
+            $p = Start-Process -FilePath (Resolve-Path diag.exe) -NoNewWindow -Wait -PassThru
+            "diag.exe Start-Process exit code: $($p.ExitCode)"
+          } else {
+            "diag.exe was not produced"
+          }
           exit 0
 
       - name: Native PE build and run (host triple)
         shell: pwsh
         run: |
           Set-Content -Path smoke.c -Value 'int main(void){return 42;}'
-          & ./bin/${{ needs.setup.outputs.clang-host }}-clang.exe -v smoke.c -o smoke.exe 2>&1 | ForEach-Object { "$_" }
+          & ./bin/${{ needs.setup.outputs.clang-host }}-clang.exe smoke.c -o smoke.exe 2>&1 | ForEach-Object { "$_" }
           "wrapper exit: $LASTEXITCODE"
-          if (-not (Test-Path smoke.exe)) { throw "link failed" }
-          ./smoke.exe
-          if ($LASTEXITCODE -ne 42) { throw "smoke.exe returned $LASTEXITCODE" }
+          if (-not (Test-Path smoke.exe)) { "link failed: no smoke.exe"; exit 1 }
+          & ./smoke.exe
+          "smoke exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 42) { "smoke.exe returned $LASTEXITCODE, want 42"; exit 1 }
+          "PE smoke OK"
+          exit 0
 
       - name: Native C++ (libc++/threads)
         shell: pwsh
         run: |
           Set-Content -Path smoke.cc -Value "#include <iostream>`n#include <thread>`nint main(){std::thread t([]{});t.join();std::cout<<`"ok`"<<std::endl;}"
-          ./bin/${{ needs.setup.outputs.clang-host }}-clang++.exe -pthread smoke.cc -o smokepp.exe
-          ./smokepp.exe
-          if ($LASTEXITCODE -ne 0) { throw "smokepp.exe returned $LASTEXITCODE" }
+          & ./bin/${{ needs.setup.outputs.clang-host }}-clang++.exe -pthread smoke.cc -o smokepp.exe 2>&1 | ForEach-Object { "$_" }
+          "clang++ exit: $LASTEXITCODE"
+          if (-not (Test-Path smokepp.exe)) { "no smokepp.exe"; exit 1 }
+          & ./smokepp.exe
+          "smokepp exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { "smokepp.exe returned $LASTEXITCODE"; exit 1 }
+          "C++ smoke OK"
+          exit 0
 
       - name: Cross out to linux-musl (canadian check)
         shell: pwsh
         run: |
           Set-Content -Path hello.c -Value 'int main(void){return 0;}'
-          ./bin/x86_64-linux-musl-clang.exe hello.c -o hello-musl
-          $fmt = ./clang/bin/llvm-readobj.exe --file-headers hello-musl | Select-String 'Format:'
-          if (-not ($fmt -match 'elf64')) { throw "musl output is not ELF64: $fmt" }
+          & ./bin/x86_64-linux-musl-clang.exe hello.c -o hello-musl 2>&1 | ForEach-Object { "$_" }
+          "musl wrapper exit: $LASTEXITCODE"
+          if (-not (Test-Path hello-musl)) { "no hello-musl"; exit 1 }
+          $fmt = & ./clang/bin/llvm-readobj.exe --file-headers hello-musl 2>&1 | Select-String 'Format:'
+          "musl format: $fmt"
+          if (-not ($fmt -match 'elf64')) { "musl output is not ELF64: $fmt"; exit 1 }
+          "musl cross OK"
+          exit 0
 
       - name: clang-cl compile smoke
         shell: pwsh
         run: |
-          ./clang/bin/clang-cl.exe /nologo /c /Fo:cl-smoke.obj -- smoke.c
-          if (-not (Test-Path cl-smoke.obj)) { throw "clang-cl compile failed" }
+          & ./clang/bin/clang-cl.exe /nologo /c /Fo:cl-smoke.obj -- smoke.c 2>&1 | ForEach-Object { "$_" }
+          "clang-cl exit: $LASTEXITCODE"
+          if (-not (Test-Path cl-smoke.obj)) { "clang-cl compile failed"; exit 1 }
+          "clang-cl smoke OK"
+          exit 0
 
   # Release job uses reusable workflow
   release:
