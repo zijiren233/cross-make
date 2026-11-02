@@ -532,6 +532,8 @@ obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
 # derives the triple and the tool from its own name and starts the real
 # clang/bin tool with --target=<triple>; the driver then resolves its cfg,
 # resource dir, runtimes and lld from clang/bin exactly like on linux.
+# llvm-windres is an argv[0]-dispatched alias of llvm-rc rather than a
+# distribution component, so the win clang/bin gets it as a copy of llvm-rc.exe.
 obj_llvm_win/launcher.exe: $(LITECROSS_DIR)/win-launcher.c | obj_llvm_win/ install-llvm install-configs_$(CLANG_HOST_TRIPLE) install-mingw_$(CLANG_HOST_TRIPLE) install-symlinks_$(CLANG_HOST_TRIPLE)
 	$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang -O2 -municode -s -o $@ $<
 
@@ -545,8 +547,6 @@ install-win: | obj_llvm_win/.lc_built obj_llvm_win/launcher.exe install-llvm ins
 	set -e; \
 	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
 	mkdir -p bin; \
-	# llvm-windres is an argv[0]-dispatched alias of llvm-rc, not its own
-	# distribution component; the native install-mingw copy is an ELF binary
 	cp clang/bin/llvm-rc.exe clang/bin/llvm-windres.exe; \
 	cp $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg clang/bin/; \
 	for t in $(TARGETS) $(MINGW_TARGETS); do \
