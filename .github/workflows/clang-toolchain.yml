@@ -10,7 +10,6 @@ on:
         options:
           - linux-x86_64
           - linux-aarch64
-          - linux-armv7
           - darwin-aarch64
           - darwin-x86_64
       extra-build-flags:
@@ -81,11 +80,6 @@ jobs:
               echo "runs-on=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
               echo "docker-platform=linux/arm64" >> $GITHUB_OUTPUT
               echo "docker-image=arm64v8/alpine:latest" >> $GITHUB_OUTPUT
-              ;;
-            linux-armv7)
-              echo "runs-on=ubuntu-24.04-arm" >> $GITHUB_OUTPUT
-              echo "docker-platform=linux/arm/v7" >> $GITHUB_OUTPUT
-              echo "docker-image=arm32v7/alpine:latest" >> $GITHUB_OUTPUT
               ;;
             darwin-aarch64)
               echo "runs-on=macos-26" >> $GITHUB_OUTPUT

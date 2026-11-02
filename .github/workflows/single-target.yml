@@ -309,8 +309,9 @@ jobs:
             # needs cmake/ninja in the container
             WORK_OPTS="--volume ${PWD}/work:/work"
             APK_EXTRA="cmake ninja"
+            EXTRA_FLAGS="-e clang"
             if [ -n "${{ needs.setup.outputs.clang-host }}" ]; then
-              EXTRA_FLAGS="-H ${{ needs.setup.outputs.clang-host }}"
+              EXTRA_FLAGS="${EXTRA_FLAGS} -H ${{ needs.setup.outputs.clang-host }}"
             fi
           fi
           export APK_EXTRA EXTRA_FLAGS
@@ -377,6 +378,7 @@ jobs:
             -S "${{ github.workspace }}/sources" \
             -R /Volumes/orig \
             -o "${{ github.workspace }}/dist" \
+            ${{ inputs.target == 'clang' && '-e clang' || '' }} \
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
 
@@ -386,7 +388,7 @@ jobs:
         with:
           name: ${{ inputs.target }}-${{ inputs.platform }}
           if-no-files-found: error
-          path: ${{ startsWith(inputs.platform, 'windows') && 'dist/clang-win-*.tgz' || 'dist/*.*' }}
+          path: ${{ startsWith(inputs.platform, 'windows') && 'dist/clang-win-*.zip' || 'dist/*.*' }}
 
   # Windows-hosted clang: run the cross-compiled toolchain natively
   windows-test:
@@ -406,8 +408,8 @@ jobs:
       - name: Extract
         shell: pwsh
         run: |
-          $tgz = Get-ChildItem *.tgz | Select-Object -First 1
-          tar -xzf $tgz.Name
+          $archive = Get-ChildItem *.zip | Select-Object -First 1
+          tar -xf $archive.Name
 
       - name: clang --version
         shell: pwsh
@@ -486,6 +488,29 @@ jobs:
           "musl format: $fmt"
           if (-not ($fmt -match 'elf64')) { "musl output is not ELF64: $fmt"; exit 1 }
           "musl cross OK"
+          exit 0
+
+      - name: Cross C++ out to linux-musl (libc++, link only)
+        shell: pwsh
+        run: |
+          Set-Content -Path hello.cc -Value "#include <iostream>`nint main(){std::cout<<`"ok`"<<std::endl;}"
+          & ./bin/x86_64-linux-musl-clang++.exe hello.cc -o hello-musl-cc 2>&1 | ForEach-Object { "$_" }
+          "musl clang++ exit: $LASTEXITCODE"
+          if (-not (Test-Path hello-musl-cc)) { "no hello-musl-cc"; exit 1 }
+          $fmt = & ./clang/bin/llvm-readobj.exe --file-headers hello-musl-cc 2>&1 | Select-String 'Format:'
+          "musl C++ format: $fmt"
+          if (-not ($fmt -match 'elf64')) { "musl C++ output is not ELF64: $fmt"; exit 1 }
+          "musl C++ cross OK"
+          exit 0
+
+      - name: windres resource smoke
+        shell: pwsh
+        run: |
+          Set-Content -Path smoke.rc -Value 'STRINGTABLE { 1 "hello" }'
+          & ./bin/${{ needs.setup.outputs.clang-host }}-windres.exe smoke.rc smoke.res 2>&1 | ForEach-Object { "$_" }
+          "windres exit: $LASTEXITCODE"
+          if (-not (Test-Path smoke.res)) { "windres produced no .res"; exit 1 }
+          "windres smoke OK"
           exit 0
 
       - name: clang-cl compile smoke
