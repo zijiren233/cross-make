@@ -104,6 +104,7 @@ override MPC_VER =
 override MPFR_VER =
 override ISL_VER =
 override BINUTILS_VER =
+override GLIBC_VER =
 
 endif
 
@@ -447,7 +448,7 @@ $(BUILD_DIR)/Makefile: | $(BUILD_DIR)
 
 # regenerate when the top-level config.mak changes, so persistent build
 # volumes (darwin CI) pick up new SRCDIR entries instead of reusing stale ones
-$(BUILD_DIR)/config.mak: config.mak | $(BUILD_DIR)
+$(BUILD_DIR)/config.mak: $(wildcard config.mak) | $(BUILD_DIR)
 	printf >$@ '%s\n' \
 	$(if $(filter-out local,$(HOST)),"HOST = $(HOST)") \
 	$(if $(NATIVE),"NATIVE = $(NATIVE)") \

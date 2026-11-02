@@ -80,6 +80,8 @@ TOOLS = \
 	llvm-readobj \
 	llvm-strings \
 	llvm-rc \
+	llvm-ml \
+	llvm-symbolizer \
 	# end
 
 -include config.mak
@@ -360,7 +362,8 @@ obj_llvm/.lc_configured: | obj_llvm/ src_llvm obj_zlib/.lc_built obj_zstd/.lc_bu
 # tablegen umbrella (TargetLibraryInfo.inc), so a scheduling race fails
 # CodeGenModule.cpp builds; materialize the generated headers first.
 obj_llvm/.lc_built_1: | obj_llvm/.lc_configured
-	cd obj_llvm && ninja intrinsics_gen analysis_gen && ninja distribution
+	# llvm-windres is an alias target, not a distribution component
+	cd obj_llvm && ninja intrinsics_gen analysis_gen llvm-windres && ninja distribution
 	touch $@
 
 # llvm 16+ has only the major version number in the LIBCC path
@@ -507,6 +510,8 @@ WIN_LLVM_CONFIG = $(LLVM_CORE_CONFIG) \
 	-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
 	-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
 	-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+	-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=ONLY \
+	-DLLVM_USE_SYMLINKS=OFF \
 	-DLLVM_ENABLE_ZLIB=OFF \
 	-DLLVM_ENABLE_ZSTD=OFF \
 	-DLLVM_ENABLE_LIBXML2=OFF \
@@ -541,6 +546,12 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 	set -e; \
 	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
 	mkdir -p bin lib; \
+	# the implicit cfgs load next to the real driver; llvm-windres dispatches \
+	# on argv[0] like llvm-rc's own alias; libc++ headers for the bin/ copies \
+	# resolve from <dir>/../include/<triple> \
+	cp $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg clang/bin/; \
+	cp clang/bin/llvm-rc.exe clang/bin/llvm-windres.exe; \
+	cp -a clang/include/. include/; \
 	for t in $(TARGETS) $(MINGW_TARGETS); do \
 		cp clang/bin/clang.exe bin/$$t-clang.exe; \
 		cp clang/bin/clang++.exe bin/$$t-clang++.exe; \
@@ -548,6 +559,7 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 		cp clang/bin/clang++.exe bin/$$t-g++.exe; \
 		cp clang/bin/clang-cpp.exe bin/$$t-cpp.exe; \
 		cp clang/bin/ld.lld.exe bin/$$t-ld.exe; \
+		cp clang/bin/llvm-windres.exe bin/$$t-windres.exe; \
 		$(foreach tool,$(TOOLS),cp clang/bin/$(tool).exe bin/$$t-$(subst llvm-,,$(tool)).exe; ) \
 	done; \
 	for f in ld.lld lld-link llvm-ar llvm-ranlib; do cp clang/bin/$$f.exe bin/$$f.exe; done; \
@@ -595,6 +607,7 @@ obj_winbuiltins/%/.lc_built: | obj_winbuiltins/%/ src_llvm obj_llvm/.lc_built_1
 		n=$$(basename $$s .c); \
 		../../obj_llvm/bin/clang --target=$* -O2 -ffreestanding -fno-builtin $(WIN_BUILTIN_EXTRA_CFLAGS_$*) -c -o $$n.obj ../../src_llvm/compiler-rt/lib/builtins/$$s || exit 1; \
 	done && \
+	rm -f clang_rt.builtins.lib && \
 	../../obj_llvm/bin/llvm-ar rc clang_rt.builtins.lib *.obj
 	touch $@
 
@@ -608,11 +621,6 @@ install-winbuiltins_%: | obj_winbuiltins/%/.lc_built
 	cp obj_winbuiltins/$*/clang_rt.builtins.lib $(DESTDIR)$(OUTPUT)/clang/lib/clang/$(WIN_RESOURCE_VER)/lib/$*/
 
 # ---- mingw-w64 (windows-gnu) ----
-
-# llvm-windres is not a distribution component upstream, so build it in the
-# LLVM tree on demand; install-mingw copies it next to the clang binaries
-$(CURDIR)/obj_llvm/bin/llvm-windres: | obj_llvm/.lc_built_1
-	cd obj_llvm && ninja llvm-windres
 
 # Point every autotools probe at the built LLVM tools
 # absolute tool paths: mingw-w64's make recurses into subdirectories where
@@ -643,7 +651,7 @@ obj_sysroot/%/.lc_mingw_headers: | obj_mingw_headers/%/.lc_configured
 	cd obj_mingw_headers/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install
 	touch $@
 
-obj_mingw_crt/%/.lc_configured: $(CURDIR)/obj_llvm/bin/llvm-windres | obj_mingw_crt/%/ src_mingw obj_sysroot/%/.lc_mingw_headers obj_llvm/.lc_built_1
+obj_mingw_crt/%/.lc_configured: | obj_mingw_crt/%/ src_mingw obj_sysroot/%/.lc_mingw_headers obj_llvm/.lc_built_1
 	cd obj_mingw_crt/$* && sh ../../src_mingw/mingw-w64-crt/configure \
 		--prefix= --host=$* --with-sysroot=/ --with-default-msvcrt=ucrt \
 		--with-default-win32-winnt=0x601 $(MINGW_CRT_CONFIG_$*) $(MINGW_CROSSVARS) \
@@ -658,7 +666,7 @@ obj_sysroot/%/.lc_mingw_crt: | obj_mingw_crt/%/.lc_built
 	cd obj_mingw_crt/$* && $(MAKE) DESTDIR=$(CURDIR)/obj_sysroot/$* install
 	touch $@
 
-obj_mingw_pthreads/%/.lc_configured: $(CURDIR)/obj_llvm/bin/llvm-windres | obj_mingw_pthreads/%/ src_mingw obj_sysroot/%/.lc_mingw_crt
+obj_mingw_pthreads/%/.lc_configured: | obj_mingw_pthreads/%/ src_mingw obj_sysroot/%/.lc_mingw_crt
 	cd obj_mingw_pthreads/$* && sh ../../src_mingw/mingw-w64-libraries/winpthreads/configure \
 		--prefix= --host=$* --with-sysroot=/ --with-default-msvcrt=ucrt $(MINGW_CROSSVARS) \
 		|| (cat config.log && exit 1)
@@ -678,6 +686,11 @@ install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj
 	printf "" | $(CURDIR)/obj_llvm/bin/llvm-ar rc $(DESTDIR)$(OUTPUT)/$*/lib/libssp_nonshared.a
 	cp $(CURDIR)/obj_llvm/bin/llvm-windres $(DESTDIR)$(OUTPUT)/clang/bin/
 	ln -sf ../clang/bin/llvm-windres $(DESTDIR)$(OUTPUT)/bin/$*-windres
+	# ship the mingw-w64 runtime/headers/winpthreads license texts with the sysroot
+	cd src_mingw && find . -maxdepth 3 -type f \( -iname 'COPYING*' -o -iname 'LICENSE*' -o -iname 'DISCLAIMER*' \) | while read -r f; do \
+		mkdir -p "$(abspath $(DESTDIR)$(OUTPUT))/$*/share/doc/mingw-w64/$$(dirname "$$f")" && cp "$$f" "$(abspath $(DESTDIR)$(OUTPUT))/$*/share/doc/mingw-w64/$$f" || exit 1; \
+	done
+	test -d "$(abspath $(DESTDIR)$(OUTPUT))/$*/share/doc/mingw-w64"
 
 
 # The driver looks up implicit config files by the *normalized* form of the

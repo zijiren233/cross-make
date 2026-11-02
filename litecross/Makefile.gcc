@@ -1294,6 +1294,11 @@ install-mingw-pthreads: | obj_mingw_pthreads/.lc_built
 	cd obj_mingw_pthreads && $(MAKE) $(MAKE_ARGS) $(MINGW_MAKE_ARGS) DESTDIR=$(DESTDIR)$(OUTPUT)$(SYSROOT) install
 
 install-mingw: | install-mingw-headers install-mingw-crt install-mingw-pthreads
+	# ship the mingw-w64 runtime/headers/winpthreads license texts with the sysroot
+	cd src_mingw && find . -maxdepth 3 -type f \( -iname 'COPYING*' -o -iname 'LICENSE*' -o -iname 'DISCLAIMER*' \) | while read -r f; do \
+		mkdir -p "$(abspath $(DESTDIR)$(OUTPUT)$(SYSROOT))/share/doc/mingw-w64/$$(dirname "$$f")" && cp "$$f" "$(abspath $(DESTDIR)$(OUTPUT)$(SYSROOT))/share/doc/mingw-w64/$$f" || exit 1; \
+	done
+	test -d "$(abspath $(DESTDIR)$(OUTPUT)$(SYSROOT))/share/doc/mingw-w64"
 endif
 
 ifneq ($(LINUX_SRCDIR),)
