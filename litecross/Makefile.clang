@@ -84,7 +84,6 @@ TOOLS = \
 	llvm-readobj \
 	llvm-strings \
 	llvm-rc \
-	llvm-windres \
 	# end
 
 -include config.mak
@@ -546,6 +545,9 @@ install-win: | obj_llvm_win/.lc_built obj_llvm_win/launcher.exe install-llvm ins
 	set -e; \
 	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
 	mkdir -p bin; \
+	# llvm-windres is an argv[0]-dispatched alias of llvm-rc, not its own
+	# distribution component; the native install-mingw copy is an ELF binary
+	cp clang/bin/llvm-rc.exe clang/bin/llvm-windres.exe; \
 	cp $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg clang/bin/; \
 	for t in $(TARGETS) $(MINGW_TARGETS); do \
 		for a in clang clang++ gcc g++ cpp ld; do \
