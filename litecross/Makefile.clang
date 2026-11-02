@@ -1,4 +1,8 @@
 
+# directory holding this makefile's companions (win-launcher.c); the build
+# tree reaches it through the Makefile symlink
+LITECROSS_DIR := $(patsubst %/,%,$(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
+
 OUTPUT = $(CURDIR)/output-clang
 CCACHE =
 LLVM_SRCDIR = LLVM_SRCDIR_not_set
@@ -80,6 +84,7 @@ TOOLS = \
 	llvm-readobj \
 	llvm-strings \
 	llvm-rc \
+	llvm-windres \
 	# end
 
 -include config.mak
@@ -523,16 +528,16 @@ obj_llvm_win/.lc_built: | obj_llvm_win/.lc_configured
 
 # The per-target sysroots, cfg files and runtime libraries are host-agnostic:
 # copy the regular distribution, swap the native clang/bin for the cross-
-# compiled .exe set and rebuild bin/ from exe copies (no symlinks on Windows).
-# On Windows the driver resolves its implicit cfg, resource dir, the per-target
-# runtime libs (-lunwind/-lc++) and the -fuse-ld=lld linker against the *copy's*
-# own directory (no symlink canonicalisation), so bin/ additionally carries the
-# per-target cfg files (paths one level shallower), a full clang/lib mirror
-# (resource dir + clang/lib/<triple> runtimes) and unprefixed lld/binutils
-# frontends. musl cfgs gain -rtlib/-fuse-ld: a windows host has no gcc
-# installation to fall back on.
+# compiled .exe set and rebuild bin/ from launcher copies. Windows has no
+# symlinks, so every bin/<triple>-<tool>.exe is one small launcher that
+# derives the triple and the tool from its own name and starts the real
+# clang/bin tool with --target=<triple>; the driver then resolves its cfg,
+# resource dir, runtimes and lld from clang/bin exactly like on linux.
+obj_llvm_win/launcher.exe: $(LITECROSS_DIR)/win-launcher.c | obj_llvm_win/ install-llvm install-configs_$(CLANG_HOST_TRIPLE) install-mingw_$(CLANG_HOST_TRIPLE) install-symlinks_$(CLANG_HOST_TRIPLE)
+	$(DESTDIR)$(OUTPUT)/bin/$(CLANG_HOST_TRIPLE)-clang -O2 -municode -s -o $@ $<
+
 WIN_OUTPUT_ABS = $(abspath $(WIN_OUTPUT))
-install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
+install-win: | obj_llvm_win/.lc_built obj_llvm_win/launcher.exe install-llvm install-musl install-zlib install-kernel-headers install-configs install-winbuiltins install-mingw install-symlinks
 	rm -rf $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
 	mkdir -p $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))
 	cp -a $(DESTDIR)$(OUTPUT)/. $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS))/
@@ -540,23 +545,13 @@ install-win: | obj_llvm_win/.lc_built install-llvm install-musl install-zlib ins
 	cd obj_llvm_win && DESTDIR=$(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)) ninja install-distribution
 	set -e; \
 	cd $(if $(DESTDIR),$(DESTDIR)$(WIN_OUTPUT_ABS),$(WIN_OUTPUT_ABS)); \
-	mkdir -p bin lib; \
+	mkdir -p bin; \
+	cp $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg clang/bin/; \
 	for t in $(TARGETS) $(MINGW_TARGETS); do \
-		cp clang/bin/clang.exe bin/$$t-clang.exe; \
-		cp clang/bin/clang++.exe bin/$$t-clang++.exe; \
-		cp clang/bin/clang.exe bin/$$t-gcc.exe; \
-		cp clang/bin/clang++.exe bin/$$t-g++.exe; \
-		cp clang/bin/clang-cpp.exe bin/$$t-cpp.exe; \
-		cp clang/bin/ld.lld.exe bin/$$t-ld.exe; \
-		$(foreach tool,$(TOOLS),cp clang/bin/$(tool).exe bin/$$t-$(subst llvm-,,$(tool)).exe; ) \
-	done; \
-	for f in ld.lld lld-link llvm-ar llvm-ranlib; do cp clang/bin/$$f.exe bin/$$f.exe; done; \
-	cp -a clang/lib/. lib/; \
-	for f in $(abspath $(DESTDIR)$(OUTPUT))/clang/bin/*.cfg; do \
-		sed -e 's|<CFGDIR>/../../|<CFGDIR>/../|g' \
-			-e 's|<CFGDIR>/../include/|<CFGDIR>/../clang/include/|g' \
-			-e '/rtlib=compiler-rt/!s|$$| -rtlib=compiler-rt -fuse-ld=lld|' \
-			"$$f" > bin/$$(basename "$$f"); \
+		for a in clang clang++ gcc g++ cpp ld; do \
+			cp $(CURDIR)/obj_llvm_win/launcher.exe bin/$$t-$$a.exe; \
+		done; \
+		$(foreach tool,$(TOOLS),cp $(CURDIR)/obj_llvm_win/launcher.exe bin/$$t-$(subst llvm-,,$(tool)).exe; ) \
 	done
 
 install: install-win
@@ -685,7 +680,10 @@ install-mingw_%: | obj_sysroot/%/.lc_mingw_headers obj_mingw_crt/%/.lc_built obj
 # arm-unknown-linux-musleabihf-clang.cfg next to the real binary), so ask
 # clang itself for the exact name it will search for. <CFGDIR> expands to the
 # directory holding the .cfg, keeping the sysroot next to the install and the
-# toolchain relocatable; this replaces the DEFAULT_SYSROOT patch.
+# toolchain relocatable; this replaces the DEFAULT_SYSROOT patch. The cfgs
+# are host-agnostic (lld, compiler-rt and libc++ are the baked-in
+# CLANG_DEFAULT_* choices, so no link depends on a host gcc) and serve the
+# linux, darwin and windows-hosted distributions unchanged.
 install-configs_%: $(DESTDIR)$(OUTPUT)/clang/bin/clang
 	triple=$$($(DESTDIR)$(OUTPUT)/clang/bin/clang --target=$* -print-target-triple); \
 	extra="$(TARGET_CONFIG_$*)"; \

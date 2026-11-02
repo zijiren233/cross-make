@@ -420,16 +420,18 @@ jobs:
         run: |
           $w = "./bin/${{ needs.setup.outputs.clang-host }}-clang.exe"
           "bin entries: $((Get-ChildItem bin).Count)"
-          $h1 = (Get-FileHash $w -Algorithm SHA256).Hash
-          $h2 = (Get-FileHash ./clang/bin/clang.exe -Algorithm SHA256).Hash
-          "wrapper is a byte-identical copy of clang.exe: $($h1 -eq $h2)"
-          Get-ChildItem bin -Filter "*-clang.cfg" | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName }
+          "launcher size: $((Get-Item $w).Length) bytes; clang.exe size: $((Get-Item ./clang/bin/clang.exe).Length) bytes"
+          Get-ChildItem clang/bin -Filter "*-clang.cfg" | Select-Object -First 4 | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName }
           & $w --version 2>&1 | ForEach-Object { "$_" }
           "wrapper --version exit: $LASTEXITCODE"
           & $w --no-default-config --version 2>&1 | ForEach-Object { "$_" }
           "wrapper --no-default-config --version exit: $LASTEXITCODE"
-          & ./bin/ld.lld.exe --version 2>&1 | ForEach-Object { "$_" }
-          "bin/ld.lld exit: $LASTEXITCODE"
+          & ./clang/bin/ld.lld.exe --version 2>&1 | ForEach-Object { "$_" }
+          "clang/bin/ld.lld exit: $LASTEXITCODE"
+          # quoted arguments must reach the real driver verbatim through the launcher
+          Set-Content -Path diag-q.c -Value 'static const char *m = MSG; int main(void){return m[0] == 0;}'
+          & $w -c -DMSG="""hello world""" diag-q.c -o diag-q.o 2>&1 | ForEach-Object { "$_" }
+          "launcher quoted-arg exit: $LASTEXITCODE"
           Set-Content -Path diag.c -Value 'int main(void){return 0;}'
           & $w -v -c diag.c -o diag.o 2>&1 | ForEach-Object { "$_" }
           "wrapper -c exit: $LASTEXITCODE"

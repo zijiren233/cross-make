@@ -1058,47 +1058,55 @@ function BuildClang() {
   fi
 
   if [ -n "$CANADIAN_HOST" ]; then
-    # windows-hosted distribution: cross-compiled clang.exe + the shared
-    # sysroots; runtime behavior is exercised on windows runners in CI
+    # windows-hosted distribution: cross-compiled clang/bin .exe set, the
+    # shared sysroots/cfgs/runtimes and bin/ launcher aliases; runtime
+    # behavior is exercised on windows runners in CI
     local WIN_ARCH="${CANADIAN_HOST%%-*}"
     local WIN_DIST="${DIST_NAME}-win-${WIN_ARCH}"
     for f in \
       "${WIN_DIST}/clang/bin/clang.exe" \
       "${WIN_DIST}/clang/bin/clang-cl.exe" \
       "${WIN_DIST}/clang/bin/lld-link.exe" \
+      "${WIN_DIST}/clang/bin/ld.lld.exe" \
+      "${WIN_DIST}/clang/bin/llvm-windres.exe" \
+      "${WIN_DIST}/clang/bin/x86_64-unknown-linux-musl-clang.cfg" \
+      "${WIN_DIST}/clang/bin/${CANADIAN_HOST%-mingw32}-windows-gnu-clang++.cfg" \
       "${WIN_DIST}/bin/${CANADIAN_HOST}-clang.exe" \
+      "${WIN_DIST}/bin/${CANADIAN_HOST}-windres.exe" \
       "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
-      "${WIN_DIST}/bin/ld.lld.exe" \
-      "${WIN_DIST}/bin/x86_64-unknown-linux-musl-clang.cfg" \
-      "${WIN_DIST}/lib/x86_64-w64-windows-gnu/libunwind.a" \
-      "${WIN_DIST}/lib/x86_64-unknown-linux-musl/libc++.a" \
-      "${WIN_DIST}/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a" \
-      "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a"; do
+      "${WIN_DIST}/bin/x86_64-linux-musl-ar.exe" \
+      "${WIN_DIST}/clang/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a" \
+      "${WIN_DIST}/clang/lib/${CANADIAN_HOST%-mingw32}-windows-gnu/libunwind.a"; do
       if [ ! -e "$f" ]; then
         echo "windows-hosted clang: missing $f"
         return 1
       fi
     done
-    # every regenerated wrapper cfg must resolve its sysroot inside the dist
-    # and pin the hermetic linker/rtlib set (no host gcc fallback on Windows)
-    for cfg in "${WIN_DIST}/bin/"*.cfg; do
-      grep -q -- '--sysroot=<CFGDIR>/../' "$cfg" || {
+    # bin/ aliases are small launchers, never copies of the LLVM executables
+    local alias_size
+    alias_size=$(wc -c <"${WIN_DIST}/bin/x86_64-linux-musl-clang.exe")
+    if [ "${alias_size}" -gt 262144 ]; then
+      echo "windows-hosted clang: bin alias is ${alias_size} bytes, expected a launcher"
+      return 1
+    fi
+    file "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" | grep -q "PE.*Windows" || {
+      echo "windows-hosted clang: launcher is not a PE executable"
+      return 1
+    }
+    # the cfgs are the host-agnostic originals next to the real driver
+    for cfg in "${WIN_DIST}/clang/bin/"*.cfg; do
+      grep -q -- '--sysroot=<CFGDIR>/../../' "$cfg" || {
         echo "windows-hosted clang: bad sysroot in $cfg"
         return 1
       }
-      grep -q -- '-fuse-ld=lld' "$cfg" || {
-        echo "windows-hosted clang: missing -fuse-ld=lld in $cfg"
-        return 1
-      }
     done
-    # the mingw runtimes are static-only: an import library here would make
-    # every default-linked user binary depend on DLLs we do not ship
-    for t in x86_64-w64-windows-gnu aarch64-w64-windows-gnu; do
-      if [ -e "${WIN_DIST}/lib/${t}/libc++.dll.a" ] || [ -e "${WIN_DIST}/lib/${t}/libunwind.dll.a" ]; then
-        echo "windows-hosted clang: shared runtime import libs present for ${t}"
-        return 1
-      fi
-    done
+    # the mingw runtimes are static-only: an import library would make every
+    # default-linked user binary depend on DLLs we do not ship
+    if find "${WIN_DIST}" \( -name 'libc++.dll.a' -o -name 'libc++abi.dll.a' -o -name 'libunwind.dll.a' \) | grep -q .; then
+      echo "windows-hosted clang: shared runtime import libs present"
+      find "${WIN_DIST}" \( -name 'libc++.dll.a' -o -name 'libc++abi.dll.a' -o -name 'libunwind.dll.a' \)
+      return 1
+    fi
     file "${WIN_DIST}/clang/bin/clang.exe" | grep -q "PE.*Windows" || {
       echo "windows-hosted clang: clang.exe is not a PE executable"
       return 1
