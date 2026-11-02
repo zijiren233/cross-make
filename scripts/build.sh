@@ -501,9 +501,12 @@ function WriteConfig() {
   local YAML_MINGW_VER="$(GetTargetConfig "$BUILD_ID" MINGW_VER)"
   local YAML_GCC_VER="$(GetTargetConfig "$BUILD_ID" GCC_VER)"
 
-  # Per-target GCC version override (takes precedence over default/CLI)
+  # Per-target GCC version override (takes precedence over default/CLI).
+  # Kept in a local: mutating GCC_VER here would leak into every later
+  # target of a multi-target run (and into the outer canadian config).
+  local CFG_GCC_VER="$GCC_VER"
   if [ -n "$YAML_GCC_VER" ]; then
-    GCC_VER="$YAML_GCC_VER"
+    CFG_GCC_VER="$YAML_GCC_VER"
   fi
 
   # Use YAML values if available, otherwise use defaults based on target type
@@ -543,7 +546,7 @@ $(if [ -n "$HOST" ]; then echo "HOST = ${HOST}"; fi)
 NATIVE = ${NATIVE}
 OUTPUT = ${OUTPUT}
 $(if [ -n "$SOURCES_DIR" ]; then echo "SOURCES = ${SOURCES_DIR}"; fi)
-GCC_VER = ${GCC_VER}
+GCC_VER = ${CFG_GCC_VER}
 MUSL_VER = ${USE_MUSL}
 GLIBC_VER = ${USE_GLIBC}
 FREEBSD_VER = ${USE_FREEBSD}
@@ -732,6 +735,34 @@ int main()
   fi
 }
 
+# gcc-mode smoke: the shipped <target>-gcc must compile and link a program
+# (mingw output must be a PE executable). Cross dists only: canadian dists
+# are host-foreign binaries and cannot run here.
+# Usage: GccSmoke <dist_dir>
+function GccSmoke() {
+  local SMOKE_CC="$1/bin/${TARGET}-gcc"
+  if [ ! -x "$SMOKE_CC" ]; then
+    echo "gcc smoke: ${SMOKE_CC} not found, skipping"
+    return 0
+  fi
+  if ! echo 'int main(void){return 0;}' | "$SMOKE_CC" -x c - -o gcc-smoke.out; then
+    echo "gcc smoke error: ${TARGET}-gcc cannot compile and link"
+    rm -f gcc-smoke.out
+    return 1
+  fi
+  case "$TARGET" in
+  *-w64-mingw32)
+    if ! file gcc-smoke.out | grep -q "PE.*Windows"; then
+      echo "gcc smoke error: ${TARGET} output is not a PE executable"
+      rm -f gcc-smoke.out
+      return 1
+    fi
+    ;;
+  esac
+  rm -f gcc-smoke.out
+  echo "gcc smoke OK (${TARGET})"
+}
+
 function TestCrossCXX() {
   COMPILER="$@"
   if [ -z "$COMPILER" ]; then
@@ -896,6 +927,7 @@ function Build() {
 
     if RunMake "${CROSS_DIST_NAME}" "${CROSS_DIST_NAME}.log" "${DIST_NAME_PREFIX}${TARGET}-cross"; then
       echo "build cross ${DIST_NAME_PREFIX}${TARGET} success"
+      GccSmoke "${CROSS_DIST_NAME}"
       TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc"
       TestCrossCXX "${CROSS_DIST_NAME}/bin/${TARGET}-g++"
       TestCrossCC "${CROSS_DIST_NAME}/bin/${TARGET}-gcc -static --static"
@@ -1070,6 +1102,11 @@ function BuildClang() {
       "${WIN_DIST}/bin/x86_64-linux-musl-clang.exe" \
       "${WIN_DIST}/bin/ld.lld.exe" \
       "${WIN_DIST}/bin/x86_64-unknown-linux-musl-clang.cfg" \
+      "${WIN_DIST}/bin/x86_64-linux-musl-windres.exe" \
+      "${WIN_DIST}/bin/${CANADIAN_HOST}-windres.exe" \
+      "${WIN_DIST}/clang/bin/llvm-windres.exe" \
+      "${WIN_DIST}/clang/bin/x86_64-unknown-linux-musl-clang.cfg" \
+      "${WIN_DIST}/include/x86_64-unknown-linux-musl/c++/v1/__config_site" \
       "${WIN_DIST}/lib/x86_64-w64-windows-gnu/libunwind.a" \
       "${WIN_DIST}/lib/x86_64-unknown-linux-musl/libc++.a" \
       "${WIN_DIST}/lib/clang/${LLVM_VER%%.*}/lib/x86_64-unknown-linux-musl/libclang_rt.builtins.a" \
@@ -1086,6 +1123,10 @@ function BuildClang() {
         echo "windows-hosted clang: bad sysroot in $cfg"
         return 1
       }
+      if grep -q -- '<CFGDIR>/\.\./\.\./' "$cfg"; then
+        echo "windows-hosted clang: cfg path not rewritten for bin/ in $cfg"
+        return 1
+      fi
       grep -q -- '-fuse-ld=lld' "$cfg" || {
         echo "windows-hosted clang: missing -fuse-ld=lld in $cfg"
         return 1
@@ -1093,20 +1134,20 @@ function BuildClang() {
     done
     # the mingw runtimes are static-only: an import library here would make
     # every default-linked user binary depend on DLLs we do not ship
-    for t in x86_64-w64-windows-gnu aarch64-w64-windows-gnu; do
-      if [ -e "${WIN_DIST}/lib/${t}/libc++.dll.a" ] || [ -e "${WIN_DIST}/lib/${t}/libunwind.dll.a" ]; then
-        echo "windows-hosted clang: shared runtime import libs present for ${t}"
-        return 1
-      fi
-    done
+    if find "${WIN_DIST}" \( -name 'libc++.dll.a' -o -name 'libc++abi.dll.a' -o -name 'libunwind.dll.a' \) | grep -q .; then
+      echo "windows-hosted clang: shared runtime import libs present"
+      find "${WIN_DIST}" \( -name 'libc++.dll.a' -o -name 'libc++abi.dll.a' -o -name 'libunwind.dll.a' \)
+      return 1
+    fi
     file "${WIN_DIST}/clang/bin/clang.exe" | grep -q "PE.*Windows" || {
       echo "windows-hosted clang: clang.exe is not a PE executable"
       return 1
     }
     echo "windows-hosted clang layout OK (${WIN_DIST})"
     if [ "$ENABLE_ARCHIVE" ]; then
-      tar -zcf "${WIN_DIST}.tgz" -C "${WIN_DIST}" .
-      echo "package ${WIN_DIST} to ${WIN_DIST}.tgz success"
+      find "${WIN_DIST}" -type l -lname '.' -delete
+      (cd "${WIN_DIST}" && zip -rq "${WIN_DIST}.zip" .)
+      echo "package ${WIN_DIST} to ${WIN_DIST}.zip success"
     fi
   fi
 
