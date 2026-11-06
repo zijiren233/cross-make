@@ -25,6 +25,10 @@ jobs:
   dispatch:
     name: Dispatch clang (${{ matrix.platform }})
     runs-on: ubuntu-24.04
+    permissions:
+      # org default token is read-only; spawning single-target needs actions:write
+      actions: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:

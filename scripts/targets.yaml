@@ -16,7 +16,7 @@ defaults:
   GLIBC_VER: "2.42"
   MINGW_VER: "v14.0.0"
   FREEBSD_VER: "14.5"
-  NETBSD_VER: "10.1"
+  NETBSD_VER: "10.2"
   # clang toolchain mode (scripts/build.sh -e clang, litecross/Makefile.clang)
   LLVM_VER: "23.1.5"
   ZLIB_VER: "1.3.2"
@@ -2427,22 +2427,22 @@ targets:
     FREEBSD_VER: "15.1"
 
   # ============================================================================
-  # NetBSD 10 targets (NETBSD_VER: 10.1)
+  # NetBSD 10 targets (NETBSD_VER: 10.2)
   # ============================================================================
   - TARGET: x86_64-unknown-netbsd
-    NETBSD_VER: "10.1"
+    NETBSD_VER: "10.2"
 
   - TARGET: i586-unknown-netbsdelf
-    NETBSD_VER: "10.1"
+    NETBSD_VER: "10.2"
 
   - TARGET: i686-unknown-netbsdelf
-    NETBSD_VER: "10.1"
+    NETBSD_VER: "10.2"
 
   - TARGET: sparc64-unknown-netbsd
-    NETBSD_VER: "10.1"
+    NETBSD_VER: "10.2"
 
   - TARGET: mipsel-unknown-netbsd
-    NETBSD_VER: "10.1"
+    NETBSD_VER: "10.2"
 
   - TARGET: powerpc-unknown-netbsd
-    NETBSD_VER: "10.1"
+    NETBSD_VER: "10.2"
