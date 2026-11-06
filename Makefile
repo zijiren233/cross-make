@@ -86,7 +86,7 @@ SOURCEFORGE_MIRROR ?= https://downloads.sourceforge.net
 ISL_SITE ?= $(SOURCEFORGE_MIRROR)/project/libisl
 MINGW_SITE ?= $(SOURCEFORGE_MIRROR)/project/mingw-w64/mingw-w64/mingw-w64-release
 LLVM_SITE ?= $(GITHUB)/llvm/llvm-project/releases/download
-ZLIB_SITE ?= https://zlib.net
+ZLIB_SITE ?= $(GITHUB)/madler/zlib/releases/download/v$(ZLIB_VER)
 ZSTD_SITE ?= $(GITHUB)/facebook/zstd/releases/download
 
 ifeq ($(COMPILER),gcc)
