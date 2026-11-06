@@ -382,6 +382,10 @@ jobs:
             ${{ inputs.extra-build-flags }} \
             -T "${{ inputs.target }}"
 
+      - name: Name clang artifact after the platform
+        if: inputs.target == 'clang' && !startsWith(inputs.platform, 'windows')
+        run: mv dist/clang.tgz "dist/clang-${{ inputs.platform }}.tgz"
+
       - name: Upload dist
         timeout-minutes: 10
         uses: actions/upload-artifact@v6
