@@ -358,7 +358,7 @@ obj_llvm/.lc_configured: | obj_llvm/ src_llvm obj_zlib/.lc_built obj_zstd/.lc_bu
 	cd obj_llvm && cmake -G "Ninja" $(FULL_LLVM_CONFIG) ../src_llvm/llvm
 	touch $@
 
-# llvm 23.1.4 clang targets miss a dependency edge on the analysis_gen
+# llvm 23.1.x clang targets miss a dependency edge on the analysis_gen
 # tablegen umbrella (TargetLibraryInfo.inc), so a scheduling race fails
 # CodeGenModule.cpp builds; materialize the generated headers first.
 obj_llvm/.lc_built_1: | obj_llvm/.lc_configured
