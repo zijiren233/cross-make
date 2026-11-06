@@ -1,0 +1,14 @@
+--- a/gas/config/tc-ppc.c
++++ b/gas/config/tc-ppc.c
+@@ -1550,7 +1550,10 @@ ppc_target_format (void)
+ #endif
+ #ifdef OBJ_ELF
+ # ifdef TE_FreeBSD
+-  return (ppc_obj64 ? "elf64-powerpc-freebsd" : "elf32-powerpc-freebsd");
++  return (target_big_endian
++	  ? (ppc_obj64 ? "elf64-powerpc-freebsd" : "elf32-powerpc-freebsd")
++	  : (ppc_obj64 ? "elf64-powerpcle-freebsd" : "elf32-powerpcle-freebsd"));
++
+ # elif defined (TE_VXWORKS)
+   return "elf32-powerpc-vxworks";
+ # else

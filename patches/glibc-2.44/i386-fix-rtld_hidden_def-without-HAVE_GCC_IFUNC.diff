@@ -1,0 +1,45 @@
+Subject: [PATCH] i386: Remove rtld_hidden_proto/def for IFUNC ___tls_get_addr
+
+The commit 848f0e46f0 ("i386: Update ___tls_get_addr to preserve vector
+registers") introduced an IFUNC for ___tls_get_addr but incorrectly kept
+rtld_hidden_proto/def macros.
+
+This causes build failure:
+
+  error: '__EI____tls_get_addr' aliased to undefined symbol '__GI____tls_get_addr'
+
+The problem is that libc_ifunc_redirected() creates an IFUNC resolver
+that defines the symbol ___tls_get_addr directly. However, hidden_def()
+expects __GI____tls_get_addr to exist (created when a function is defined
+with hidden_proto in scope), but IFUNC mechanism doesn't create this
+__GI_ prefixed symbol.
+
+The rtld_hidden_proto/def macros are meant to optimize internal rtld calls
+by bypassing PLT. However, for IFUNC symbols this optimization doesn't
+apply - IFUNC calls must go through the resolver regardless. The actual
+TLS implementation (___tls_get_addr_internal) is called directly from
+assembly wrappers, not through the IFUNC.
+
+Simply remove these incompatible macros. This has no functional or
+performance impact since:
+1. IFUNC calls inherently go through resolver, hidden_def doesn't help
+2. Internal calls use ___tls_get_addr_internal directly
+
+Fixes: 848f0e46f0 ("i386: Update ___tls_get_addr to preserve vector registers")
+Link: https://sourceware.org/bugzilla/show_bug.cgi?id=32996
+---
+ sysdeps/i386/dl-tls-get-addr.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+--- a/sysdeps/i386/dl-tls-get-addr.c
++++ b/sysdeps/i386/dl-tls-get-addr.c
+@@ -57,9 +57,6 @@ libc_ifunc_redirected (__redirect____tls_get_addr, ___tls_get_addr,
+    an additional underscore at the beginning.  The Sun version uses
+    the normal calling convention.  */
+
+-rtld_hidden_proto (___tls_get_addr)
+-rtld_hidden_def (___tls_get_addr)
+-
+ void *
+ __tls_get_addr (tls_index *ti)
+ {

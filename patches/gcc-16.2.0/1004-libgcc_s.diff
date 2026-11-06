@@ -1,0 +1,37 @@
+--- a/gcc/config/i386/i386-expand.cc
++++ b/gcc/config/i386/i386-expand.cc
+@@ -13089,10 +13089,10 @@ ix86_expand_builtin (tree exp, rtx target, rtx subtarget,
+     {
+     case IX86_BUILTIN_CPU_INIT:
+       {
+-	/* Make it call __cpu_indicator_init in libgcc.  */
++	/* Make it call __cpu_indicator_init in libgcc.a.  */
+ 	tree call_expr, fndecl, type;
+ 	type = build_function_type_list (integer_type_node, NULL_TREE);
+-	fndecl = build_fn_decl ("__cpu_indicator_init", type);
++	fndecl = build_fn_decl ("__cpu_indicator_init_local", type);
+ 	call_expr = build_call_expr (fndecl, 0);
+ 	return expand_expr (call_expr, target, mode, EXPAND_NORMAL);
+       }
+--- a/libgcc/config/i386/cpuinfo.c
++++ b/libgcc/config/i386/cpuinfo.c
+@@ -63,7 +63,7 @@ __cpu_indicator_init (void)
+ 			     __cpu_features2);
+ }
+ 
+-#if defined SHARED && defined USE_ELF_SYMVER
+-__asm__ (".symver __cpu_indicator_init, __cpu_indicator_init@GCC_4.8.0");
+-__asm__ (".symver __cpu_model, __cpu_model@GCC_4.8.0");
++#ifndef SHARED
++int __cpu_indicator_init_local (void)
++  __attribute__ ((weak, alias ("__cpu_indicator_init")));
+ #endif
+--- a/libgcc/config/i386/t-linux
++++ b/libgcc/config/i386/t-linux
+@@ -3,5 +3,5 @@
+ # t-slibgcc-elf-ver and t-linux
+ SHLIB_MAPFILES = libgcc-std.ver $(srcdir)/config/i386/libgcc-glibc.ver
+ 
+-HOST_LIBGCC2_CFLAGS += -mlong-double-80 -DUSE_ELF_SYMVER $(CET_FLAGS)
++HOST_LIBGCC2_CFLAGS += -mlong-double-80 $(CET_FLAGS)
+ CRTSTUFF_T_CFLAGS += $(CET_FLAGS)

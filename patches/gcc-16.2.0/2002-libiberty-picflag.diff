@@ -1,0 +1,8 @@
+diff --git a/libiberty/configure b/libiberty/configure
+--- a/libiberty/configure
++++ b/libiberty/configure
+@@ -5341,3 +5341,4 @@
+ 	;;
+     i[34567]86-*-mingw* | x86_64-*-mingw*)
++	PICFLAG=-fpic
+ 	;;

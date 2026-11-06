@@ -1,0 +1,15 @@
+Backport of llvm/llvm-project#236186: clangCodeGen includes the tablegen-
+generated llvm/Analysis/TargetLibraryInfo.inc but 23.x never declared the
+analysis_gen dependency, so parallel ninja schedules can compile
+CodeGenModule.cpp before the header exists.
+
+--- a/clang/lib/CodeGen/CMakeLists.txt
++++ b/clang/lib/CodeGen/CMakeLists.txt
+@@ -173,6 +173,7 @@
+   ClangDriverOptions
+   # These generated headers are included transitively.
+   target_parser_gen
++  analysis_gen
+ 
+   LINK_LIBS
+   clangAST

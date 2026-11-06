@@ -1,0 +1,17 @@
+Fix s390 backend build on mingw hosts where long is 32-bit but pointers are 64-bit.
+
+The cast from pointer to long loses precision. Use intptr_t instead.
+
+diff --git a/gcc/config/s390/s390.cc b/gcc/config/s390/s390.cc
+--- a/gcc/config/s390/s390.cc
++++ b/gcc/config/s390/s390.cc
+@@ -16258,7 +16258,7 @@
+ 				struct gcc_options */* opts_set */,
+ 				struct cl_target_option *ptr ATTRIBUTE_UNUSED)
+ {
+-  opts->x_s390_cost_pointer = (long)processor_table[opts->x_s390_tune].cost;
++  opts->x_s390_cost_pointer = (intptr_t)processor_table[opts->x_s390_tune].cost;
+ }
+ 
+ static void
+
