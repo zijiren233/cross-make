@@ -393,7 +393,8 @@ jobs:
 
       - name: Name clang artifact after the platform
         if: inputs.target == 'clang' && !startsWith(inputs.platform, 'windows')
-        run: mv dist/clang.tgz "dist/clang-${{ inputs.platform }}.tgz"
+        # the linux build runs in docker and leaves dist/ owned by root
+        run: sudo mv dist/clang.tgz "dist/clang-${{ inputs.platform }}.tgz"
 
       - name: Upload dist
         timeout-minutes: 10
