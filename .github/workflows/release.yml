@@ -36,6 +36,17 @@ jobs:
           name: ${{ inputs.artifact-name != '' && inputs.artifact-name || (inputs.platform != '' && format('{0}-{1}', inputs.target, inputs.platform) || inputs.target) }}
           path: dist
 
+      - name: Split files over the release asset size limit
+        # release assets are hard-capped at 2 GiB each; split bigger files
+        # into numbered parts, rejoin with: cat file.zip.* > file.zip
+        run: |
+          find dist -maxdepth 1 -type f -size +1900M | while read -r f; do
+            echo "Splitting $(basename "$f") ($(du -m "$f" | cut -f1) MiB)"
+            split -b 1900m -d -a 3 "$f" "$f."
+            rm "$f"
+          done
+          ls -l dist
+
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64"
@@ -88,8 +99,8 @@ jobs:
 
           for file in dist/*; do
             if [ -f "$file" ]; then
-              # For Windows platforms, only upload .zip files
-              if [[ "$PLATFORM" == windows-* ]] && [[ "$file" != *.zip ]]; then
+              # For Windows platforms, only upload .zip files (and their split parts)
+              if [[ "$PLATFORM" == windows-* ]] && [[ "$file" != *.zip && "$file" != *.zip.* ]]; then
                 echo "Skipping non-zip file for Windows platform: $file"
                 continue
               fi
