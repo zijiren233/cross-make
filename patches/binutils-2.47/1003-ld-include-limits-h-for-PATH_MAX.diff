@@ -1,0 +1,12 @@
+From: upstream binutils trunk (fix for building ld against glibc, where PATH_MAX
+is not pulled in transitively; set_program_name was added in 2.47 and uses it)
+--- a/ld/ldmain.c	2026-11-07 07:59:27
++++ b/ld/ldmain.c	2026-11-07 07:59:27
+@@ -48,6 +48,7 @@
+ #endif
+ 
+ #include <string.h>
++#include <limits.h>
+ 
+ #if defined (HAVE_GETRUSAGE)
+ #include <sys/resource.h>
