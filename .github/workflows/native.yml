@@ -16,6 +16,10 @@ on:
           - linux-x86_64
         default: linux-aarch64
 
+# explicit grant: org default token is read-only and called workflows cannot elevate
+permissions:
+  contents: write
+
 jobs:
   # Get all targets using shared workflow
   get-targets:

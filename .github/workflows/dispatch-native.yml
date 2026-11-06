@@ -26,6 +26,11 @@ on:
         required: true
         type: string
 
+# explicit grant: org default token is read-only and called workflows cannot elevate
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   dispatch:
     name: Dispatch Native Build

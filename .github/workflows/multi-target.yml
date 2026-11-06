@@ -41,6 +41,10 @@ on:
         type: string
         default: ""
 
+# explicit grant: org default token is read-only and called workflows cannot elevate
+permissions:
+  contents: write
+
 jobs:
   # Get sources cache key first
   cache-key:

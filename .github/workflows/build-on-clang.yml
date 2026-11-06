@@ -21,14 +21,15 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+-beta[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-alpha[0-9]+"
 
+# explicit grant: org default token is read-only; spawning single-target needs actions:write
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   dispatch:
     name: Dispatch clang (${{ matrix.platform }})
     runs-on: ubuntu-24.04
-    permissions:
-      # org default token is read-only; spawning single-target needs actions:write
-      actions: write
-      contents: read
     strategy:
       fail-fast: false
       matrix:
