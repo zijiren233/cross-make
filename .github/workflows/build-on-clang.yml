@@ -1,0 +1,67 @@
+name: build-on-clang
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (optional, empty = build and test only)"
+        required: false
+        type: string
+        default: ""
+      platforms:
+        description: 'Space-separated platforms to build (empty = all)'
+        required: false
+        type: string
+        default: ""
+  push:
+    tags:
+      # Only match version tags like v1.0.0, exclude release tags with suffix like v1.0.0-musl-linux-x86_64
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-alpha[0-9]+"
+
+jobs:
+  dispatch:
+    name: Dispatch clang (${{ matrix.platform }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux-x86_64
+          - linux-aarch64
+          - darwin-aarch64
+          - windows-x86_64
+          - windows-arm64
+    steps:
+      - name: Decide whether to build this platform
+        id: decide
+        run: |
+          # tag push builds every platform; manual dispatch can filter with platforms
+          if [ "${{ github.event_name }}" = "push" ] \
+            || [ -z "${{ inputs.platforms }}" ] \
+            || echo " ${{ inputs.platforms }} " | grep -qw "${{ matrix.platform }}"; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Dispatch clang build
+        if: steps.decide.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # on tag push, ref is the tag so single-target releases from it directly
+          if [ "${{ github.event_name }}" = "push" ]; then
+            REF="${{ github.ref_name }}"
+          else
+            REF="${{ github.ref }}"
+          fi
+          gh workflow run single-target.yml \
+            --repo "${{ github.repository }}" \
+            --ref "$REF" \
+            -f target=clang \
+            -f platform="${{ matrix.platform }}" \
+            -f tag="${{ inputs.tag }}"
+          echo "Dispatched clang for ${{ matrix.platform }} (ref=$REF tag=${{ inputs.tag }})"

@@ -47,6 +47,11 @@ on:
         description: "Platform identifier (e.g., linux-aarch64, darwin-x86_64)"
         required: true
         type: string
+      tag:
+        description: "Release tag (optional, defaults to current ref)"
+        required: false
+        type: string
+        default: ""
       extra-build-flags:
         description: "Extra flags for build.sh"
         required: false

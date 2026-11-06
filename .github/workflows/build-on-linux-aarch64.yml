@@ -75,7 +75,8 @@ jobs:
   # Dispatch Native builds after all cross builds complete
   native:
     needs: [build_1, build_2, build_3, build_4, build_5, build_6, build_7, build_8]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # run even if some chunks failed; missing assets can be refilled later
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
     uses: ./.github/workflows/dispatch-native.yml
     with:
       tag: ${{ github.ref_name }}
@@ -84,7 +85,7 @@ jobs:
   # Dispatch Canadian Cross builds after all cross builds complete
   canadian-cross:
     needs: [build_1, build_2, build_3, build_4, build_5, build_6, build_7, build_8]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
     uses: ./.github/workflows/dispatch-canadian-cross.yml
     with:
       tag: ${{ github.ref_name }}
