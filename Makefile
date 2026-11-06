@@ -23,7 +23,7 @@ LIBXML2_VER = 2.15.1
 CHINA =
 
 # curl --progress-bar -Lo <file> <url>
-DL_CMD = curl --retry 30 --retry-delay 3 --retry-max-time 600 --connect-timeout 10 --max-time 600 --progress-bar -Lo
+DL_CMD = curl -f --retry 30 --retry-delay 3 --retry-max-time 600 --connect-timeout 10 --max-time 600 --progress-bar -Lo
 SHA1_CMD = sha1sum -c
 
 COWPATCH = $(CURDIR)/cowpatch.sh
@@ -86,7 +86,9 @@ SOURCEFORGE_MIRROR ?= https://downloads.sourceforge.net
 ISL_SITE ?= $(SOURCEFORGE_MIRROR)/project/libisl
 MINGW_SITE ?= $(SOURCEFORGE_MIRROR)/project/mingw-w64/mingw-w64/mingw-w64-release
 LLVM_SITE ?= $(GITHUB)/llvm/llvm-project/releases/download
-ZLIB_SITE ?= $(GITHUB)/madler/zlib/releases/download/v$(ZLIB_VER)
+# version is parsed from the tarball name: make may run with ZLIB_VER nulled
+# (the gcc-mode defaults) when sources.sh drives the download rules
+ZLIB_SITE ?= $(GITHUB)/madler/zlib/releases/download
 ZSTD_SITE ?= $(GITHUB)/facebook/zstd/releases/download
 
 ifeq ($(COMPILER),gcc)
@@ -223,7 +225,7 @@ $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-2.6*)): SITE = $(L
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/linux-headers-*)): SITE = $(LINUX_HEADERS_SITE)/$(notdir $@)
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/mingw-w64*)): SITE = $(MINGW_SITE)/$(notdir $@)
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/llvm-project-*)): SITE = $(LLVM_SITE)/llvmorg-$(patsubst llvm-project-%.src,%,$(basename $(basename $(notdir $@))))/$(notdir $@)
-$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zlib-*)): SITE = $(ZLIB_SITE)/$(notdir $@)
+$(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zlib-*)): SITE = $(ZLIB_SITE)/v$(patsubst zlib-%.tar.gz,%,$(notdir $@))/$(notdir $@)
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/zstd-*)): SITE = $(ZSTD_SITE)/v$(patsubst zstd-%.tar.gz,%,$(notdir $@))/$(notdir $@)
 $(patsubst hashes/%.sha1,$(SOURCES)/%,$(wildcard hashes/libxml2-*)): SITE = $(LIBXML2_SITE)/$(shell echo $(patsubst libxml2-%.tar.xz,%,$(notdir $@)) | cut -d. -f1,2)/$(notdir $@)
 
